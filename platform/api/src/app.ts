@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './env.js';
 import { healthRouter } from './routes/health.js';
-import { authRouter } from './routes/auth.js';
+import { createAuthRouter } from './routes/auth.js';
 import { customersRouter } from './routes/customers.js';
 
 export function buildApp() {
@@ -13,7 +13,7 @@ export function buildApp() {
   app.use(express.json());
   app.use(cookieParser());
   app.use(healthRouter);
-  app.use(authRouter);
+  app.use(createAuthRouter());
   app.use(customersRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

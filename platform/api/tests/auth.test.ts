@@ -179,3 +179,19 @@ test('POST /api/auth/logout clears the session', async () => {
   const res = await agent.get('/api/auth/me');
   assert.equal(res.status, 401);
 });
+
+test('POST /api/auth/login is rate-limited after repeated failures', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+
+  let lastStatus = 0;
+  for (let i = 0; i < 12; i++) {
+    const res = await request(app).post('/api/auth/login').send({
+      email: 'jane@acmeprints.co.za',
+      password: 'wrong password entirely',
+    });
+    lastStatus = res.status;
+  }
+
+  assert.equal(lastStatus, 429);
+});
