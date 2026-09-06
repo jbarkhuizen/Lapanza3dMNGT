@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Barkie — run your 3D print shop like a business</title>
+  <meta name="description" content="Barkie is a coming-soon platform for small 3D-printing businesses to manage customers, printers, filament, job costing, and quotes/invoices in one place." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__inner">
+      <span class="wordmark">Barkie</span>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+        <span aria-hidden="true">◐</span>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero wrap">
+      <p class="eyebrow">Coming soon</p>
+      <h1>Run your 3D print shop like a business.</h1>
+      <p class="hero__sub">
+        One place for customers, printers, filament, job costing, and
+        quotes &amp; invoices — built for small 3D-printing businesses.
+      </p>
+      <a class="btn btn--primary" href="#notify">Get notified at launch</a>
+    </section>
+
+    <section class="features wrap" aria-label="Planned features">
+      <div class="card">
+        <h3>True job costing</h3>
+        <p>Filament, print time, electricity, machine wear, labour, and consumables — rolled into one real cost and a suggested sell price.</p>
+      </div>
+      <div class="card">
+        <h3>Quotes &amp; invoices</h3>
+        <p>Build a quote from a saved costing template, send it branded with your logo, and convert it to an invoice in one click.</p>
+      </div>
+      <div class="card">
+        <h3>Printers &amp; filament, tracked</h3>
+        <p>Printer specs and presets, filament spools and stock levels, consumables — all in one record-keeping home.</p>
+      </div>
+    </section>
+
+    <section class="notify wrap" id="notify">
+      <div class="card card--notify">
+        <h2>Be first to know</h2>
+        <p>Leave your email and we'll let you know the moment Barkie is ready.</p>
+        <form id="notify-form" novalidate>
+          <div class="field-row">
+            <label class="sr-only" for="email">Email address</label>
+            <input id="email" name="email" type="email" placeholder="name@yourshop.co.za" autocomplete="email" required />
+            <button class="btn btn--primary" type="submit">Notify me</button>
+          </div>
+          <div class="field-row field-row--company" aria-hidden="true">
+            <label for="company">Company</label>
+            <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+          </div>
+          <label class="consent">
+            <input id="consent" name="consent" type="checkbox" required />
+            <span>Barkie may email me about the launch — no other use.</span>
+          </label>
+          <p id="notify-message" class="notify-message" role="status"></p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>&copy; <span id="year"></span> Barkie</span>
+      <a href="mailto:hello@barkie.co.za">hello@barkie.co.za</a>
+      <span class="site-footer__note">Interim page — full Privacy Policy &amp; Terms will apply before launch.</span>
+    </div>
+  </footer>
+
+  <script src="/main.js"></script>
+</body>
+</html>

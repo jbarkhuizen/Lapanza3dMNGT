@@ -1,0 +1,16 @@
+{
+  "name": "barkie-landing",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Temporary holding page for barkie.co.za",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2"
+  }
+}
