@@ -3,8 +3,11 @@ import { z } from 'zod';
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client.js';
-import { hashPassword } from '../auth/password.js';
+import { hashPassword, verifyPassword } from '../auth/password.js';
 import { sendVerificationEmail } from '../auth/email.js';
+import { createSession, destroySession } from '../auth/session.js';
+import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { env } from '../env.js';
 
 export const authRouter = Router();
 
@@ -80,4 +83,53 @@ authRouter.post('/api/auth/verify-email', async (req, res) => {
   });
 
   res.json({ ok: true });
+});
+
+const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+
+authRouter.post('/api/auth/login', async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'Enter your email and password.' });
+  }
+
+  const tenant = await prisma.tenant.findUnique({ where: { email: parsed.data.email } });
+  const valid = tenant ? await verifyPassword(parsed.data.password, tenant.passwordHash) : false;
+  if (!tenant || !valid) {
+    return res.status(401).json({ ok: false, error: 'Incorrect email or password.' });
+  }
+
+  const { token, expiresAt } = await createSession('tenant', tenant.id);
+  res.cookie(env.sessionCookieName, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: env.nodeEnv === 'production',
+    expires: expiresAt,
+  });
+  res.json({ ok: true });
+});
+
+authRouter.post('/api/auth/logout', async (req, res) => {
+  const token = req.cookies?.[env.sessionCookieName];
+  if (token) {
+    await destroySession(token);
+  }
+  res.clearCookie(env.sessionCookieName);
+  res.json({ ok: true });
+});
+
+authRouter.get('/api/auth/me', requireTenantAuth, async (req, res) => {
+  const tenant = await prisma.tenant.findUnique({ where: { id: req.tenantId } });
+  if (!tenant) {
+    return res.status(401).json({ ok: false, error: 'Log in to continue.' });
+  }
+  res.json({
+    ok: true,
+    tenant: {
+      id: tenant.id,
+      businessName: tenant.businessName,
+      email: tenant.email,
+      emailVerified: tenant.emailVerifiedAt !== null,
+    },
+  });
 });

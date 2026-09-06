@@ -108,3 +108,74 @@ test('POST /api/auth/verify-email rejects an unknown token', async () => {
   assert.equal(res.status, 400);
   assert.equal(res.body.ok, false);
 });
+
+async function registerAndVerify(app: ReturnType<typeof buildApp>, email: string) {
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email,
+    password: 'correct horse battery staple',
+  });
+  const tenant = await prisma.tenant.findUnique({ where: { email } });
+  await request(app).post('/api/auth/verify-email').send({ token: tenant?.verificationToken });
+}
+
+test('POST /api/auth/login sets a session cookie for correct credentials', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+
+  const res = await request(app).post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  const setCookie = res.headers['set-cookie']?.[0] ?? '';
+  assert.match(setCookie, /barkie_session=/);
+  assert.match(setCookie, /HttpOnly/);
+});
+
+test('POST /api/auth/login rejects the wrong password', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+
+  const res = await request(app).post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'wrong password entirely',
+  });
+
+  assert.equal(res.status, 401);
+  assert.equal(res.body.ok, false);
+});
+
+test('GET /api/auth/me returns the tenant when logged in, 401 otherwise', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  const authed = await agent.get('/api/auth/me');
+  assert.equal(authed.status, 200);
+  assert.equal(authed.body.tenant.email, 'jane@acmeprints.co.za');
+
+  const anonymous = await request(app).get('/api/auth/me');
+  assert.equal(anonymous.status, 401);
+});
+
+test('POST /api/auth/logout clears the session', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  await agent.post('/api/auth/logout');
+  const res = await agent.get('/api/auth/me');
+  assert.equal(res.status, 401);
+});
