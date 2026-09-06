@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { hashPassword } from '../auth/password.js';
+import { sendVerificationEmail } from '../auth/email.js';
 
 export const authRouter = Router();
 
@@ -48,5 +49,35 @@ authRouter.post('/api/auth/register', async (req, res) => {
     throw error;
   }
 
+  await sendVerificationEmail(email, verificationToken);
+
   res.status(201).json({ ok: true });
+});
+
+const verifyEmailSchema = z.object({ token: z.string().min(1) });
+
+authRouter.post('/api/auth/verify-email', async (req, res) => {
+  const parsed = verifyEmailSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'A verification token is required.' });
+  }
+
+  const tenant = await prisma.tenant.findFirst({
+    where: { verificationToken: parsed.data.token },
+  });
+
+  if (!tenant || !tenant.verificationTokenExpires || tenant.verificationTokenExpires < new Date()) {
+    return res.status(400).json({ ok: false, error: 'This verification link is invalid or has expired.' });
+  }
+
+  await prisma.tenant.update({
+    where: { id: tenant.id },
+    data: {
+      emailVerifiedAt: new Date(),
+      verificationToken: null,
+      verificationTokenExpires: null,
+    },
+  });
+
+  res.json({ ok: true });
 });

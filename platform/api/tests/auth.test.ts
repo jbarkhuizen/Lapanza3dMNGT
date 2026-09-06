@@ -77,3 +77,34 @@ test('POST /api/auth/register rejects a missing required field', async () => {
   assert.equal(res.status, 400);
   assert.equal(res.body.ok, false);
 });
+
+test('POST /api/auth/verify-email verifies a valid token', async () => {
+  const app = buildApp();
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+
+  const res = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: tenant?.verificationToken });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+
+  const updated = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  assert.ok(updated?.emailVerifiedAt, 'emailVerifiedAt should be set');
+});
+
+test('POST /api/auth/verify-email rejects an unknown token', async () => {
+  const app = buildApp();
+  const res = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: 'not-a-real-token' });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.ok, false);
+});
