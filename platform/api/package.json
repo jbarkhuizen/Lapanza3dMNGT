@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "node --import tsx --test tests/**/*.test.ts",
+    "test": "node --env-file=.env.test --import tsx --test tests/**/*.test.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate"
   },
