@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './env.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
+import { customersRouter } from './routes/customers.js';
 
 export function buildApp() {
   const app = express();
@@ -13,6 +14,7 @@ export function buildApp() {
   app.use(cookieParser());
   app.use(healthRouter);
   app.use(authRouter);
+  app.use(customersRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
