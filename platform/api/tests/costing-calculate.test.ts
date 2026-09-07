@@ -153,3 +153,19 @@ test('zero markup leaves suggested price equal to total cost', () => {
   });
   assert.equal(result.suggestedPrice.toFixed(2), result.totalCost.toFixed(2));
 });
+
+test('the five cost components sum exactly to totalCost, even with fractional inputs that would otherwise drift', () => {
+  const result = calculateCosting({
+    filament: { weightGrams: 128, costPerKg: null, costPerSpool: 425.5, spoolWeightGrams: 750 },
+    printer: { printTimeHours: 7.25, powerDrawWatts: 340, electricityRatePerKwh: 3.175, purchaseCost: 18500, expectedLifetimeHours: 7500 },
+    labourLines: [{ hourlyRate: 45.33, hours: 2.5 }, { hourlyRate: 60, hours: 1.1 }],
+    consumableLines: [{ costPerUnit: 7.25, quantity: 3 }, { costPerUnit: 2.1, quantity: 4 }],
+    markupPercent: 27.5,
+  });
+  const componentSum = result.filamentCost
+    .plus(result.electricityCost)
+    .plus(result.depreciationCost)
+    .plus(result.labourCost)
+    .plus(result.consumablesCost);
+  assert.equal(componentSum.toFixed(2), result.totalCost.toFixed(2));
+});

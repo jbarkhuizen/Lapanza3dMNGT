@@ -53,6 +53,10 @@ function toDecimal(value: number | Prisma.Decimal): Prisma.Decimal {
   return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }
 
+function round(value: Prisma.Decimal, decimalPlaces: number): Prisma.Decimal {
+  return value.toDecimalPlaces(decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
+}
+
 export function calculateCosting(input: CostingInput): CostingResult {
   const { filament, printer, labourLines, consumableLines, markupPercent } = input;
 
@@ -66,31 +70,40 @@ export function calculateCosting(input: CostingInput): CostingResult {
       'Filament has no cost data — set a cost per kg, or a cost per spool and spool weight.',
     );
   }
-  const filamentCost = costPerGram.times(filament.weightGrams);
+  costPerGram = round(costPerGram, 6);
+  const filamentCost = round(costPerGram.times(filament.weightGrams), 2);
 
-  const electricityCost = toDecimal(printer.printTimeHours)
-    .times(toDecimal(printer.powerDrawWatts).dividedBy(1000))
-    .times(toDecimal(printer.electricityRatePerKwh));
+  const electricityCost = round(
+    toDecimal(printer.printTimeHours)
+      .times(toDecimal(printer.powerDrawWatts).dividedBy(1000))
+      .times(toDecimal(printer.electricityRatePerKwh)),
+    2,
+  );
 
   if (!(printer.expectedLifetimeHours > 0)) {
     throw new CostingInputError('Printer is missing a valid expected lifetime (hours) for depreciation.');
   }
-  const depreciationPerHour = toDecimal(printer.purchaseCost).dividedBy(printer.expectedLifetimeHours);
-  const depreciationCost = toDecimal(printer.printTimeHours).times(depreciationPerHour);
+  const depreciationPerHour = round(
+    toDecimal(printer.purchaseCost).dividedBy(printer.expectedLifetimeHours),
+    4,
+  );
+  const depreciationCost = round(toDecimal(printer.printTimeHours).times(depreciationPerHour), 2);
 
-  const labourLineCosts = labourLines.map((line) => toDecimal(line.hourlyRate).times(line.hours));
+  const labourLineCosts = labourLines.map((line) => round(toDecimal(line.hourlyRate).times(line.hours), 2));
   const labourCost = labourLineCosts.reduce((sum, cost) => sum.plus(cost), new Prisma.Decimal(0));
 
-  const consumableLineCosts = consumableLines.map((line) => toDecimal(line.costPerUnit).times(line.quantity));
+  const consumableLineCosts = consumableLines.map((line) => round(toDecimal(line.costPerUnit).times(line.quantity), 2));
   const consumablesCost = consumableLineCosts.reduce((sum, cost) => sum.plus(cost), new Prisma.Decimal(0));
 
-  const totalCost = filamentCost
-    .plus(electricityCost)
-    .plus(depreciationCost)
-    .plus(labourCost)
-    .plus(consumablesCost);
+  const totalCost = round(
+    filamentCost.plus(electricityCost).plus(depreciationCost).plus(labourCost).plus(consumablesCost),
+    2,
+  );
 
-  const suggestedPrice = totalCost.times(new Prisma.Decimal(1).plus(toDecimal(markupPercent).dividedBy(100)));
+  const suggestedPrice = round(
+    totalCost.times(new Prisma.Decimal(1).plus(toDecimal(markupPercent).dividedBy(100))),
+    2,
+  );
 
   return {
     costPerGram,
