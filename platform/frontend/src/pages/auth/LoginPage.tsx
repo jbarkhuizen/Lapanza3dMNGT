@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { apiPost, ApiError } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { FormField } from '../../components/FormField.js';
@@ -55,9 +55,9 @@ export function LoginPage() {
         >
           Log in
         </button>
-        <a href="/app/register" className="text-center text-sm text-slate-500 underline">
+        <Link to="/register" className="text-center text-sm text-slate-500 underline">
           Need an account? Register
-        </a>
+        </Link>
       </form>
     </div>
   );

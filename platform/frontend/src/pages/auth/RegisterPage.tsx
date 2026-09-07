@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { apiPost, ApiError } from '../../api/client.js';
 import { FormField } from '../../components/FormField.js';
 
@@ -81,9 +82,9 @@ export function RegisterPage() {
         >
           Register
         </button>
-        <a href="/app/login" className="text-center text-sm text-slate-500 underline">
+        <Link to="/login" className="text-center text-sm text-slate-500 underline">
           Already have an account? Log in
-        </a>
+        </Link>
       </form>
     </div>
   );
