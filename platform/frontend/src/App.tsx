@@ -8,6 +8,8 @@ import { DashboardHomePage } from './pages/DashboardHomePage.js';
 import { CompanyProfilePage } from './pages/CompanyProfilePage.js';
 import { CustomersListPage } from './pages/customers/CustomersListPage.js';
 import { CustomerFormPage } from './pages/customers/CustomerFormPage.js';
+import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
+import { FilamentFormPage } from './pages/filaments/FilamentFormPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
@@ -63,6 +65,36 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CustomerFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/filaments"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <FilamentsListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/filaments/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <FilamentFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/filaments/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <FilamentFormPage />
               </AppShell>
             </RequireAuth>
           }
