@@ -77,6 +77,36 @@ export interface CreateMaintenanceLogInput {
   performedBy?: string;
 }
 
+export interface CreateFilamentInput {
+  brand: string;
+  materialType: string;
+  diameterMm: number;
+  colour?: string;
+  costPerSpool?: number;
+  costPerKg?: number;
+  spoolWeightGrams?: number;
+  remainingWeightGrams?: number;
+  supplier?: string;
+  purchaseDate?: string;
+  notes?: string;
+  lowStockThresholdGrams?: number;
+}
+
+export interface UpdateFilamentInput {
+  brand?: string;
+  materialType?: string;
+  diameterMm?: number;
+  colour?: string;
+  costPerSpool?: number;
+  costPerKg?: number;
+  spoolWeightGrams?: number;
+  remainingWeightGrams?: number;
+  supplier?: string;
+  purchaseDate?: string;
+  notes?: string;
+  lowStockThresholdGrams?: number;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -146,6 +176,31 @@ export function tenantScope(tenantId: string) {
       create: (printerId: string, data: CreateMaintenanceLogInput) =>
         prisma.printerMaintenanceLog.create({
           data: { ...data, date: new Date(data.date), printerId, tenantId },
+        }),
+    },
+
+    filaments: {
+      findMany: () => prisma.filament.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.filament.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateFilamentInput) =>
+        prisma.filament.create({
+          data: {
+            ...data,
+            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            tenantId,
+          },
+        }),
+
+      update: (id: string, data: UpdateFilamentInput) =>
+        prisma.filament.updateMany({
+          where: { id, tenantId },
+          data: {
+            ...data,
+            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            tenantId: undefined,
+          },
         }),
     },
   };

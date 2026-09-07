@@ -22,6 +22,7 @@ model Tenant {
   printers               Printer[]
   printerPresets         PrinterPreset[]
   printerMaintenanceLogs PrinterMaintenanceLog[]
+  filaments              Filament[]
 
   @@map("tenants")
 }
@@ -127,4 +128,27 @@ model PrinterMaintenanceLog {
   @@index([tenantId])
   @@index([printerId])
   @@map("printer_maintenance_logs")
+}
+
+model Filament {
+  id                     String    @id @default(uuid())
+  tenantId               String
+  brand                  String
+  materialType           String
+  colour                 String?
+  diameterMm             Float
+  costPerSpool           Float?
+  costPerKg              Float?
+  spoolWeightGrams       Float?
+  remainingWeightGrams   Float?
+  supplier               String?
+  purchaseDate           DateTime? @db.Timestamptz(3)
+  notes                  String?
+  lowStockThresholdGrams Float?
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("filaments")
 }

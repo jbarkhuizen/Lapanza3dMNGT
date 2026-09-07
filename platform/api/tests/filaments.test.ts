@@ -1,0 +1,69 @@
+import { test, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
+import { buildApp } from '../src/app.js';
+import { resetTestDatabase } from './helpers/testApp.js';
+import { prisma } from '../src/db/client.js';
+
+beforeEach(resetTestDatabase);
+
+async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acmeprints.co.za') {
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email,
+    password: 'correct horse battery staple',
+  });
+  const tenant = await prisma.tenant.findUnique({ where: { email } });
+  await request(app).post('/api/auth/verify-email').send({ token: tenant?.verificationToken });
+
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({ email, password: 'correct horse battery staple' });
+  return agent;
+}
+
+test('filament endpoints require auth', async () => {
+  const app = buildApp();
+  const res = await request(app).get('/api/filaments');
+  assert.equal(res.status, 401);
+});
+
+test('POST /api/filaments rejects an invalid diameter', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 3.0,
+  });
+  assert.equal(res.status, 400);
+});
+
+test('full create -> list -> get -> update cycle', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    colour: 'Black',
+    diameterMm: 1.75,
+    costPerKg: 350,
+    spoolWeightGrams: 1000,
+    remainingWeightGrams: 1000,
+  });
+  assert.equal(createRes.status, 201);
+  const filamentId = createRes.body.filament.id;
+
+  const listRes = await agent.get('/api/filaments');
+  assert.equal(listRes.status, 200);
+  assert.equal(listRes.body.filaments.length, 1);
+
+  const updateRes = await agent
+    .patch(`/api/filaments/${filamentId}`)
+    .send({ remainingWeightGrams: 640 });
+  assert.equal(updateRes.status, 200);
+
+  const getRes = await agent.get(`/api/filaments/${filamentId}`);
+  assert.equal(getRes.body.filament.remainingWeightGrams, 640);
+});

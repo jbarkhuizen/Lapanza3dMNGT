@@ -9,6 +9,7 @@ import { customersRouter } from './routes/customers.js';
 import { printersRouter } from './routes/printers.js';
 import { printerPresetsRouter } from './routes/printer-presets.js';
 import { printerMaintenanceRouter } from './routes/printer-maintenance.js';
+import { filamentsRouter } from './routes/filaments.js';
 
 export function buildApp() {
   const app = express();
@@ -28,6 +29,7 @@ export function buildApp() {
   app.use(printersRouter);
   app.use(printerPresetsRouter);
   app.use(printerMaintenanceRouter);
+  app.use(filamentsRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
