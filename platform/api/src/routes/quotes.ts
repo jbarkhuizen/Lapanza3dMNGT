@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import type { Quote, QuoteLineItem } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { tenantScope } from '../db/scoped.js';
 import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { prisma } from '../db/client.js';
+import { serializeInvoice } from './invoices.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
@@ -30,8 +32,8 @@ const lineItemSchema = z
   .object({
     costingTemplateId: z.string().min(1).optional(),
     description: z.string().min(1).optional(),
-    unitPrice: z.number().nonnegative().optional(),
-    quantity: z.number().positive().default(1),
+    unitPrice: z.number().nonnegative().max(9999999999.99).optional(),
+    quantity: z.number().positive().max(100000).default(1),
   })
   .refine((data) => data.costingTemplateId != null || (data.description != null && data.unitPrice != null), {
     message: 'Each line item needs either a costingTemplateId, or a description and unitPrice.',
@@ -39,7 +41,7 @@ const lineItemSchema = z
 
 const createQuoteSchema = z.object({
   customerId: z.string().min(1),
-  validUntil: z.string().optional(),
+  validUntil: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.').optional(),
   notes: z.string().optional(),
   lineItems: z.array(lineItemSchema).min(1),
 });
@@ -237,21 +239,13 @@ quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
 
     res.status(201).json({
       ok: true,
-      invoice: {
-        ...invoice,
-        subtotal: invoice.subtotal.toFixed(2),
-        vatAmount: invoice.vatAmount.toFixed(2),
-        total: invoice.total.toFixed(2),
-        amountPaid: invoice.amountPaid.toFixed(2),
-        lineItems: invoice.lineItems.map((line) => ({
-          ...line,
-          unitPrice: line.unitPrice.toFixed(2),
-          lineTotal: line.lineTotal.toFixed(2),
-        })),
-      },
+      invoice: serializeInvoice(invoice),
     });
   } catch (err) {
     if (err instanceof Error && err.message === 'QUOTE_ALREADY_CONVERTED') {
+      return res.status(400).json({ ok: false, error: 'This quote has already been converted to an invoice.' });
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return res.status(400).json({ ok: false, error: 'This quote has already been converted to an invoice.' });
     }
     throw err;

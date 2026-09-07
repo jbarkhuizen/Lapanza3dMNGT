@@ -12,7 +12,7 @@ const updateCompanyProfileSchema = z
     contactName: z.string().min(1).optional(),
     registrationNumber: z.string().optional(),
     vatRegistered: z.boolean().optional(),
-    vatNumber: z.string().optional(),
+    vatNumber: z.string().trim().min(1).optional(),
     logoUrl: z.string().optional(),
     addressLine1: z.string().optional(),
     addressLine2: z.string().optional(),
@@ -27,8 +27,8 @@ const updateCompanyProfileSchema = z
     termsAndConditionsText: z.string().optional(),
     defaultCurrency: z.string().optional(),
     defaultQuoteValidityDays: z.number().int().positive().optional(),
-    quoteNumberPrefix: z.string().min(1).optional(),
-    invoiceNumberPrefix: z.string().min(1).optional(),
+    quoteNumberPrefix: z.string().trim().min(1).optional(),
+    invoiceNumberPrefix: z.string().trim().min(1).optional(),
   })
   .refine((data) => !(data.vatRegistered === true && data.vatNumber === ''), {
     message: 'VAT number is required when VAT-registered.',

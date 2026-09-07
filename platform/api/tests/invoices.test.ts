@@ -86,6 +86,112 @@ test('PATCH /api/invoices/:id/status accepts a valid partial payment', async () 
   assert.equal(res.body.invoice.amountPaid, '40.00');
 });
 
+test('POST /api/invoices rejects a malformed dueDate with 400, and does not burn an invoice number', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const line = { description: 'Part', unitPrice: 10, quantity: 1 };
+
+  const bad = await agent.post('/api/invoices').send({ customerId, dueDate: 'not-a-date', lineItems: [line] });
+  assert.equal(bad.status, 400);
+
+  const good = await agent.post('/api/invoices').send({ customerId, lineItems: [line] });
+  assert.equal(good.status, 201);
+  assert.equal(good.body.invoice.number, 'INV-0001');
+});
+
+test('POST /api/invoices rejects an out-of-range unitPrice with 400, not 500', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 99999999999.99, quantity: 1 }],
+  });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /api/invoices/:id/status rejects a partially_paid amountPaid that rounds up to the full total', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent
+    .patch(`/api/invoices/${invoiceId}/status`)
+    .send({ status: 'partially_paid', amountPaid: 99.999999 });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /api/invoices/:id/status rejects a partially_paid amountPaid that rounds down to zero', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent
+    .patch(`/api/invoices/${invoiceId}/status`)
+    .send({ status: 'partially_paid', amountPaid: 0.0000001 });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /api/invoices/:id/status rejects an amountPaid on an overdue transition', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'overdue', amountPaid: 999999 });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /api/invoices/:id/status accepts an overdue transition with no amountPaid', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'overdue' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.invoice.status, 'overdue');
+});
+
+test('PATCH /api/invoices/:id/status treats paid as a terminal status', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const paid = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'paid', amountPaid: 100 });
+  assert.equal(paid.status, 200);
+
+  const unpay = await agent
+    .patch(`/api/invoices/${invoiceId}/status`)
+    .send({ status: 'partially_paid', amountPaid: 1 });
+  assert.equal(unpay.status, 400);
+});
+
 test('POST /api/quotes/:id/convert-to-invoice requires an accepted quote', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);

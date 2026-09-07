@@ -113,6 +113,32 @@ test('quote numbers increment across successive quotes for the same tenant', asy
   assert.equal(second.body.quote.number, 'QT-0002');
 });
 
+test('POST /api/quotes rejects a malformed validUntil with 400, and does not burn a quote number', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const line = { description: 'Part', unitPrice: 10, quantity: 1 };
+
+  const bad = await agent.post('/api/quotes').send({ customerId, validUntil: 'not-a-date', lineItems: [line] });
+  assert.equal(bad.status, 400);
+
+  const good = await agent.post('/api/quotes').send({ customerId, lineItems: [line] });
+  assert.equal(good.status, 201);
+  assert.equal(good.body.quote.number, 'QT-0001');
+});
+
+test('POST /api/quotes rejects an out-of-range unitPrice with 400, not 500', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 99999999999.99, quantity: 1 }],
+  });
+  assert.equal(res.status, 400);
+});
+
 test('PATCH /api/quotes/:id/status enforces the draft -> sent -> accepted lifecycle', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);

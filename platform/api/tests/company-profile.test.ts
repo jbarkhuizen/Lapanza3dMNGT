@@ -55,6 +55,13 @@ test('PATCH /api/company-profile updates fields', async () => {
   assert.equal(res.body.companyProfile.city, 'Cape Town');
 });
 
+test('PATCH rejects a whitespace-only quoteNumberPrefix', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.patch('/api/company-profile').send({ quoteNumberPrefix: '   ' });
+  assert.equal(res.status, 400);
+});
+
 test('PATCH rejects vatRegistered: true without a vatNumber, on a tenant that has never set one', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);
