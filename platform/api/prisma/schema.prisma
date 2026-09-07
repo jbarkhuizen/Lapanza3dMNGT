@@ -17,6 +17,25 @@ model Tenant {
   verificationToken        String?
   verificationTokenExpires DateTime? @db.Timestamptz(3)
   createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+  registrationNumber       String?
+  vatRegistered            Boolean   @default(false)
+  vatNumber                String?
+  logoUrl                  String?
+  addressLine1             String?
+  addressLine2             String?
+  city                     String?
+  postalCode               String?
+  phone                    String?
+  website                  String?
+  bankName                 String?
+  bankAccountHolder        String?
+  bankAccountNumber        String?
+  bankBranchCode           String?
+  termsAndConditionsText   String?
+  defaultCurrency          String    @default("ZAR")
+  defaultQuoteValidityDays Int?
+  quoteNumberPrefix        String    @default("QT")
+  invoiceNumberPrefix      String    @default("INV")
 
   customers              Customer[]
   printers               Printer[]

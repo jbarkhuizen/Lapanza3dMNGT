@@ -183,6 +183,55 @@ export interface CreateCostingTemplateInput {
   consumableLines: CreateCostingTemplateConsumableLineInput[];
 }
 
+export interface UpdateCompanyProfileInput {
+  businessName?: string;
+  contactName?: string;
+  registrationNumber?: string;
+  vatRegistered?: boolean;
+  vatNumber?: string;
+  logoUrl?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  postalCode?: string;
+  phone?: string;
+  website?: string;
+  bankName?: string;
+  bankAccountHolder?: string;
+  bankAccountNumber?: string;
+  bankBranchCode?: string;
+  termsAndConditionsText?: string;
+  defaultCurrency?: string;
+  defaultQuoteValidityDays?: number;
+  quoteNumberPrefix?: string;
+  invoiceNumberPrefix?: string;
+}
+
+const companyProfileSelect = {
+  businessName: true,
+  contactName: true,
+  email: true,
+  registrationNumber: true,
+  vatRegistered: true,
+  vatNumber: true,
+  logoUrl: true,
+  addressLine1: true,
+  addressLine2: true,
+  city: true,
+  postalCode: true,
+  phone: true,
+  website: true,
+  bankName: true,
+  bankAccountHolder: true,
+  bankAccountNumber: true,
+  bankBranchCode: true,
+  termsAndConditionsText: true,
+  defaultCurrency: true,
+  defaultQuoteValidityDays: true,
+  quoteNumberPrefix: true,
+  invoiceNumberPrefix: true,
+} as const;
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -360,6 +409,13 @@ export function tenantScope(tenantId: string) {
           },
           include: { labourLines: true, consumableLines: true },
         }),
+    },
+
+    companyProfile: {
+      get: () => prisma.tenant.findUnique({ where: { id: tenantId }, select: companyProfileSelect }),
+
+      update: (data: UpdateCompanyProfileInput) =>
+        prisma.tenant.update({ where: { id: tenantId }, data, select: companyProfileSelect }),
     },
   };
 }
