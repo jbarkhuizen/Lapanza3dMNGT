@@ -30,6 +30,10 @@ const baseProfile = {
   invoiceNumberPrefix: 'INV',
 };
 
+// A freshly registered tenant: every optional column is null, exactly as the API returns
+// it for a brand-new signup.
+const freshTenantProfile = { ...baseProfile };
+
 beforeEach(() => {
   vi.restoreAllMocks();
 });
@@ -52,6 +56,12 @@ describe('CompanyProfilePage', () => {
     expect(screen.getByDisplayValue('INV')).toBeInTheDocument();
   });
 
+  it('renders a Logo URL field', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText('Logo URL')).toBeInTheDocument());
+  });
+
   it('saves changes via PATCH and reflects the updated value', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
     const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({
@@ -70,6 +80,58 @@ describe('CompanyProfilePage', () => {
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
   });
 
+  it('a brand-new tenant with every optional field null can save with zero edits (does not send an invalid PATCH)', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: freshTenantProfile });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: freshTenantProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    // None of the 14 nullable fields should be sent as `null` — the PATCH schema's
+    // `z.string().optional()` accepts `string | undefined`, not `null`.
+    for (const value of Object.values(payload)) {
+      expect(value).not.toBeNull();
+    }
+    await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
+  });
+
+  it('sends a blank optional field (not in the omit list) as an empty string, so it can actually be cleared', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      companyProfile: { ...baseProfile, city: 'Cape Town' },
+    });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.city).toBe('');
+  });
+
+  it('omits a blank vatNumber from the PATCH payload instead of sending it as an empty string', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      companyProfile: { ...baseProfile, vatNumber: 'VAT123' },
+    });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('VAT number'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload).not.toHaveProperty('vatNumber');
+  });
+
   it('does not send a blank optional field as an empty string when saving', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({
       ok: true,
@@ -84,11 +146,12 @@ describe('CompanyProfilePage', () => {
 
     await waitFor(() => expect(patchSpy).toHaveBeenCalled());
     const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(payload.registrationNumber).not.toBe('');
-    expect(payload.registrationNumber).toBeUndefined();
+    // registrationNumber isn't in the omit list — the server accepts '' for it fine — so
+    // it's sent as '' rather than being stripped.
+    expect(payload.registrationNumber).toBe('');
   });
 
-  it('checking "VAT registered" reveals the VAT number field as required', async () => {
+  it('toggling "VAT registered" updates the checkbox state', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
     renderPage();
     await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
@@ -111,5 +174,11 @@ describe('CompanyProfilePage', () => {
     await waitFor(() =>
       expect(screen.getByText('VAT number is required when VAT-registered.')).toBeInTheDocument(),
     );
+  });
+
+  it('shows an error instead of loading forever when the initial GET fails', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Something went wrong.', 500));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/couldn't load the company profile/i)).toBeInTheDocument());
   });
 });

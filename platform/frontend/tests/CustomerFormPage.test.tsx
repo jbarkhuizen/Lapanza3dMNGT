@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CustomerFormPage } from '../src/pages/customers/CustomerFormPage.js';
 import * as client from '../src/api/client.js';
 import { createTestQueryClient } from './helpers/queryClient.js';
@@ -10,8 +10,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderAt(path: string) {
-  const queryClient = createTestQueryClient();
+function renderAt(path: string, queryClient: QueryClient = createTestQueryClient()) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <QueryClientProvider client={queryClient}>
@@ -73,21 +72,79 @@ describe('CustomerFormPage — edit mode', () => {
     );
   });
 
-  it('does not flatten an existing null notes field to an empty string when editing an unrelated field', async () => {
+  it('sends a cleared, non-omit-listed field (notes) as an empty string, so it can actually be cleared', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({
       ok: true,
-      customer: { id: '1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' },
+      customer: { id: '1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: 'Call before delivery', createdAt: '2026-01-01T00:00:00.000Z' },
     });
     const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true });
     renderAt('/customers/1');
 
-    await waitFor(() => expect(screen.getByDisplayValue('Bob Client')).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bob Client Jr' } });
+    await waitFor(() => expect(screen.getByDisplayValue('Call before delivery')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(patchSpy).toHaveBeenCalled());
     const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(payload.notes).not.toBe('');
-    expect(payload.notes).toBeUndefined();
+    // notes isn't in the omit list — the server accepts '' for it fine — so clearing it
+    // sends '' rather than silently discarding the edit, unlike email above.
+    expect(payload.notes).toBe('');
+  });
+
+  it('shows a loading state while the existing customer is being fetched', async () => {
+    let resolveGet!: (value: unknown) => void;
+    vi.spyOn(client, 'apiGet').mockReturnValue(new Promise((resolve) => (resolveGet = resolve)));
+    renderAt('/customers/1');
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+
+    resolveGet({
+      ok: true,
+      customer: { id: '1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+    await waitFor(() => expect(screen.getByDisplayValue('Bob Client')).toBeInTheDocument());
+  });
+
+  it('shows an error instead of a blank form when the customer fails to load (e.g. 404)', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Customer not found.', 404));
+    renderAt('/customers/1');
+
+    await waitFor(() => expect(screen.getByText(/couldn't load this customer/i)).toBeInTheDocument());
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+  });
+
+  it('only populates the form once from the fetched customer, even if the query result reference changes', async () => {
+    // Regression test for the ref-guard mechanism: without it, an effect keyed on
+    // `existingCustomer` re-running whenever a referentially-new (but same-data) object
+    // arrives (e.g. a background refetch) would clobber whatever the user has since typed
+    // into the form.
+    const customer = {
+      id: '1',
+      name: 'Bob Client',
+      company: null,
+      email: null,
+      phone: null,
+      billingAddress: '1 Oak St',
+      deliveryAddress: null,
+      vatNumber: null,
+      notes: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, customer });
+    const queryClient = createTestQueryClient();
+    renderAt('/customers/1', queryClient);
+
+    await waitFor(() => expect(screen.getByDisplayValue('Bob Client')).toBeInTheDocument());
+
+    // Simulate the user typing after the initial populate.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bob Client Jr' } });
+    expect(screen.getByDisplayValue('Bob Client Jr')).toBeInTheDocument();
+
+    // Push a referentially-distinct object with the same data directly into the query
+    // cache — the same effect a background refetch would have — and confirm it does not
+    // overwrite the user's edit.
+    queryClient.setQueryData(['customers', '1'], { ...customer });
+    await waitFor(() => expect(screen.getByDisplayValue('Bob Client Jr')).toBeInTheDocument());
   });
 });

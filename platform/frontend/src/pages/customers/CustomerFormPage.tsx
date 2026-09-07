@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
 import { TextareaField } from '../../components/TextareaField.js';
@@ -9,7 +9,7 @@ import {
   useUpdateCustomer,
   type CustomerFormInput,
 } from '../../api/customers.js';
-import { omitBlankStrings } from '../../lib/omitBlankStrings.js';
+import { omitBlankFields } from '../../lib/omitBlankFields.js';
 
 const emptyForm: CustomerFormInput = {
   name: '',
@@ -22,18 +22,25 @@ const emptyForm: CustomerFormInput = {
   notes: '',
 };
 
+// Only `email` has stricter-than-plain-optional validation on the customers route
+// (`.email()`, which rejects ''). Every other optional field accepts '' fine and is sent
+// as-is, so a user can actually clear it.
+const OMIT_WHEN_BLANK: (keyof CustomerFormInput)[] = ['email'];
+
 export function CustomerFormPage() {
   const { id } = useParams();
   const isEditMode = id !== undefined;
   const navigate = useNavigate();
-  const { data: existingCustomer } = useCustomer(id);
+  const { data: existingCustomer, isLoading: isLoadingCustomer, isError: isCustomerError } = useCustomer(id);
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer(id ?? '');
   const [form, setForm] = useState<CustomerFormInput>(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const hasPopulatedRef = useRef(false);
 
   useEffect(() => {
-    if (existingCustomer) {
+    if (existingCustomer && !hasPopulatedRef.current) {
+      hasPopulatedRef.current = true;
       setForm({
         name: existingCustomer.name,
         billingAddress: existingCustomer.billingAddress,
@@ -56,14 +63,25 @@ export function CustomerFormPage() {
     setError(null);
     try {
       if (isEditMode) {
-        await updateMutation.mutateAsync(omitBlankStrings(form));
+        await updateMutation.mutateAsync(omitBlankFields(form, OMIT_WHEN_BLANK));
       } else {
-        await createMutation.mutateAsync(omitBlankStrings(form));
+        // `name` and `billingAddress` are required and never in the omit list, so they're
+        // always present on the result — safe to assert back to the full input type for
+        // the create endpoint, which (unlike update) doesn't accept a partial payload.
+        await createMutation.mutateAsync(omitBlankFields(form, OMIT_WHEN_BLANK) as CustomerFormInput);
       }
       navigate('/customers');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
+  }
+
+  if (isEditMode && isLoadingCustomer) {
+    return <p className="text-slate-500">Loading…</p>;
+  }
+
+  if (isEditMode && isCustomerError) {
+    return <p className="text-red-600">Couldn't load this customer. It may have been deleted.</p>;
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending;

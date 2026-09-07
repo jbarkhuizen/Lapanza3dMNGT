@@ -4,12 +4,17 @@ import { Checkbox } from '../components/Checkbox.js';
 import { TextareaField } from '../components/TextareaField.js';
 import { ApiError } from '../api/client.js';
 import { useCompanyProfile, useUpdateCompanyProfile, type UpdateCompanyProfileInput } from '../api/companyProfile.js';
-import { omitBlankStrings } from '../lib/omitBlankStrings.js';
+import { omitBlankFields } from '../lib/omitBlankFields.js';
 
 type FormState = UpdateCompanyProfileInput;
 
+// Fields the API rejects as invalid when sent as '' (stricter-than-plain-optional
+// validation on the server: `.trim().min(1)` for these three). Every other optional
+// field below accepts '' fine and is sent as-is, so a user can actually clear it.
+const OMIT_WHEN_BLANK: (keyof FormState)[] = ['vatNumber', 'quoteNumberPrefix', 'invoiceNumberPrefix'];
+
 export function CompanyProfilePage() {
-  const { data: profile, isLoading } = useCompanyProfile();
+  const { data: profile, isLoading, isError } = useCompanyProfile();
   const updateMutation = useUpdateCompanyProfile();
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +22,35 @@ export function CompanyProfilePage() {
 
   useEffect(() => {
     if (profile && !form) {
-      setForm(profile);
+      // Built explicitly (not `setForm(profile)`) so every nullable API field becomes ''
+      // instead of null — the PATCH schema's `z.string().optional()` accepts `string |
+      // undefined`, not `null`, so spreading the raw response in would fail validation
+      // on every save for any tenant with an unset optional field.
+      // `email` and `defaultCurrency` are intentionally excluded: `email` isn't part of
+      // UpdateCompanyProfileInput, and `defaultCurrency` isn't editable in this phase
+      // (fixed at "ZAR" for now, per the design spec).
+      setForm({
+        businessName: profile.businessName,
+        contactName: profile.contactName,
+        registrationNumber: profile.registrationNumber ?? '',
+        vatRegistered: profile.vatRegistered,
+        vatNumber: profile.vatNumber ?? '',
+        logoUrl: profile.logoUrl ?? '',
+        addressLine1: profile.addressLine1 ?? '',
+        addressLine2: profile.addressLine2 ?? '',
+        city: profile.city ?? '',
+        postalCode: profile.postalCode ?? '',
+        phone: profile.phone ?? '',
+        website: profile.website ?? '',
+        bankName: profile.bankName ?? '',
+        bankAccountHolder: profile.bankAccountHolder ?? '',
+        bankAccountNumber: profile.bankAccountNumber ?? '',
+        bankBranchCode: profile.bankBranchCode ?? '',
+        termsAndConditionsText: profile.termsAndConditionsText ?? '',
+        quoteNumberPrefix: profile.quoteNumberPrefix,
+        invoiceNumberPrefix: profile.invoiceNumberPrefix,
+        defaultQuoteValidityDays: profile.defaultQuoteValidityDays ?? undefined,
+      });
     }
   }, [profile, form]);
 
@@ -32,11 +65,15 @@ export function CompanyProfilePage() {
     setError(null);
     setSaved(false);
     try {
-      await updateMutation.mutateAsync(omitBlankStrings(form));
+      await updateMutation.mutateAsync(omitBlankFields(form, OMIT_WHEN_BLANK));
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
+  }
+
+  if (isError) {
+    return <p className="text-red-600">Couldn't load the company profile. Try refreshing the page.</p>;
   }
 
   if (isLoading || !form) {
@@ -62,6 +99,7 @@ export function CompanyProfilePage() {
           onChange={(e) => set('contactName', e.target.value)}
         />
         <FormField id="registrationNumber" label="Registration number" value={form.registrationNumber ?? ''} onChange={(e) => set('registrationNumber', e.target.value)} />
+        <FormField id="logoUrl" label="Logo URL" value={form.logoUrl ?? ''} onChange={(e) => set('logoUrl', e.target.value)} />
       </section>
 
       <section className="flex flex-col gap-4">
@@ -108,7 +146,7 @@ export function CompanyProfilePage() {
           label="Default quote validity (days)"
           type="number"
           value={form.defaultQuoteValidityDays ?? ''}
-          onChange={(e) => set('defaultQuoteValidityDays', e.target.value ? Number(e.target.value) : null)}
+          onChange={(e) => set('defaultQuoteValidityDays', e.target.value ? Number(e.target.value) : undefined)}
         />
       </section>
 

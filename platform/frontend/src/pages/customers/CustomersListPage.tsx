@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useCustomers } from '../../api/customers.js';
 
 export function CustomersListPage() {
-  const { data: customers, isLoading } = useCustomers();
+  const { data: customers, isLoading, isError } = useCustomers();
 
   return (
     <div className="flex flex-col gap-4">
@@ -12,9 +12,10 @@ export function CustomersListPage() {
           New Customer
         </Link>
       </div>
+      {isError && <p className="text-red-600">Couldn't load customers. Try refreshing the page.</p>}
       {isLoading && <p className="text-slate-500">Loading…</p>}
-      {!isLoading && customers?.length === 0 && <p className="text-slate-500">No customers yet.</p>}
-      {!isLoading && customers && customers.length > 0 && (
+      {!isLoading && !isError && customers?.length === 0 && <p className="text-slate-500">No customers yet.</p>}
+      {!isLoading && !isError && customers && customers.length > 0 && (
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500">

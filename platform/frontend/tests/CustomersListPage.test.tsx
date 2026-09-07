@@ -44,4 +44,10 @@ describe('CustomersListPage', () => {
     renderPage();
     await waitFor(() => expect(screen.getByRole('link', { name: 'New Customer' })).toHaveAttribute('href', '/customers/new'));
   });
+
+  it('shows an error message when the customers query fails', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Something went wrong.', 500));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/couldn't load customers/i)).toBeInTheDocument());
+  });
 });
