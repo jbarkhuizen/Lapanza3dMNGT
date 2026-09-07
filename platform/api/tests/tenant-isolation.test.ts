@@ -350,3 +350,82 @@ test('a tenant cannot see another tenant\'s costing templates', async () => {
   const bFindById = await scopedB.costingTemplates.findById(aList[0].id);
   assert.equal(bFindById, null);
 });
+
+test('a tenant\'s sequence numbers are independent of another tenant\'s', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+
+  assert.equal(await scopedA.tenantSequences.next('quote'), 1);
+  assert.equal(await scopedB.tenantSequences.next('quote'), 1);
+  assert.equal(await scopedA.tenantSequences.next('quote'), 2);
+});
+
+test('a tenant cannot see another tenant\'s quotes', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const customerA = await prisma.customer.create({
+    data: { tenantId: tenantA.id, name: 'Customer A', billingAddress: '1 Main Rd' },
+  });
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+
+  await scopedA.quotes.create({
+    customerId: customerA.id,
+    number: 'QT-0001',
+    validUntil: null,
+    vatApplied: false,
+    subtotal: '100.00',
+    vatAmount: '0.00',
+    total: '100.00',
+    notes: null,
+    lineItems: [],
+  });
+
+  const aList = await scopedA.quotes.findMany();
+  const bList = await scopedB.quotes.findMany();
+
+  assert.equal(aList.length, 1);
+  assert.equal(bList.length, 0);
+
+  const bFindById = await scopedB.quotes.findById(aList[0].id);
+  assert.equal(bFindById, null);
+});
+
+test('a tenant cannot see another tenant\'s invoices', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const customerA = await prisma.customer.create({
+    data: { tenantId: tenantA.id, name: 'Customer A', billingAddress: '1 Main Rd' },
+  });
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+
+  await scopedA.invoices.create({
+    customerId: customerA.id,
+    quoteId: null,
+    number: 'INV-0001',
+    dueDate: new Date(),
+    vatApplied: false,
+    subtotal: '100.00',
+    vatAmount: '0.00',
+    total: '100.00',
+    notes: null,
+    lineItems: [],
+  });
+
+  const aList = await scopedA.invoices.findMany();
+  const bList = await scopedB.invoices.findMany();
+
+  assert.equal(aList.length, 1);
+  assert.equal(bList.length, 0);
+
+  const bFindById = await scopedB.invoices.findById(aList[0].id);
+  assert.equal(bFindById, null);
+});
