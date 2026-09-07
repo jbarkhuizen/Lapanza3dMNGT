@@ -19,9 +19,10 @@ printers, filament, labour, consumables, job costing, quotes/invoices).
 **Repo:** `github.com/jbarkhuizen/Lapanza3dMNGT`, branch `master` (no PR
 workflow so far — merges go straight in, via git worktrees + subagent-driven
 task review during development)
-**Live site:** https://barkie.co.za — the `landing/` coming-soon page is
-now live (deployed 2026-09-07). `platform/api/` is still not deployed
-anywhere.
+**Live site:** https://barkie.co.za — `landing/` (coming-soon page, at `/`),
+`platform/api/` (at `/api/`), and `platform/frontend/` (at `/app/`) are all
+deployed and live as of 2026-09-07, sharing one nginx server block and
+Certbot cert, path-routed (no subdomains).
 **Backlog board:** https://claude.ai/code/artifact/43333269-4f57-4dd3-8e44-c72367c2525d
 — live, shared, database-backed. Add items here as you find them, the same
 way lapanza3d's admin Todo/Backlog page works (this board's categories/
@@ -44,9 +45,9 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 |---|---|
 | **barkie.co.za (live domain)** | Live: `landing/` coming-soon page, deployed 2026-09-07. Runs as systemd service `barkie-landing.service` on the VPS (`/opt/barkie/app`, `node server.js`, port 4100, `User=deploy`, `Restart=on-failure`), nginx reverse-proxies `barkie.co.za`/`www.barkie.co.za` to it (`/etc/nginx/conf.d/barkie.conf`) — same pattern as `lapanza-admin.service`. Existing Certbot SSL cert untouched. Old placeholder backed up at `/opt/barkie/backup-2026-09-07/` on the VPS. |
 | **`landing/`** | Deployed and verified end-to-end in production (page renders, dark mode, `/api/notify` signup tested live then cleaned up). Deploy access: `ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147` (same key as lapanza3d; `deploy` has passwordless sudo on this box). To redeploy after a code change: `tar` the `landing/` folder (excluding `node_modules`/`data`/`.env`), `scp` it up, extract into `/opt/barkie/app`, `npm install --omit=dev`, `sudo systemctl restart barkie-landing`. |
-| **`platform/api/`** | Foundation + Reference Data Modules + Costing Engine + Company Profile + Quotes + Invoices all merged to `master`, pushed to GitHub. Auth, tenant isolation (`tenantScope`), Customer/Printer/PrinterPreset/PrinterMaintenanceLog/Filament/LabourStep/Consumable CRUD, `CostingTemplate` (money-correct, Decimal-based), Company Profile (VAT/banking/address/numbering config), Quotes (draft/sent/accepted/expired), Invoices (unpaid/partially_paid/paid/overdue, quote-to-invoice conversion), rate limiting. 131 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. No PDF generation or email sending yet (deliberately deferred — needs SMTP infra and a frontend trigger, neither exists). |
-| **Frontend** | Does not exist yet. The API has no UI to log into outside of raw HTTP calls / the test suite. This is the next real gap — see backlog item "Phase 1: Subscriber dashboard frontend". |
-| **Database** | PostgreSQL 18, local dev only (`barkie_dev`/`barkie_test`, role `barkie`). No production database exists. |
+| **`platform/api/`** | Foundation + Reference Data Modules + Costing Engine + Company Profile + Quotes + Invoices all merged to `master`, pushed to GitHub, **and deployed live** at `https://barkie.co.za/api/` (systemd `barkie-api.service`, port 4200, not directly internet-reachable — only via the nginx reverse proxy). Auth, tenant isolation (`tenantScope`), Customer/Printer/PrinterPreset/PrinterMaintenanceLog/Filament/LabourStep/Consumable CRUD, `CostingTemplate` (money-correct, Decimal-based), Company Profile (VAT/banking/address/numbering config), Quotes (draft/sent/accepted/expired), Invoices (unpaid/partially_paid/paid/overdue, quote-to-invoice conversion), rate limiting. 133 tests passing, `tsc --noEmit` clean. No PDF generation or real email sending yet (dev-mode email only — logs to `journalctl -u barkie-api`, doesn't send). |
+| **Frontend** | **`platform/frontend/` exists and is deployed live** at `https://barkie.co.za/app/` (React + Vite + TS + Tailwind + React Router + React Query SPA, static build served by nginx). So far: Login/Register/Verify-Email pages, authenticated app shell (nav + logout), a dashboard home placeholder, a 404 page. 32 tests passing. Every other module (Company Profile, Customers, Printers, Filaments, Labour Steps, Consumables, Costing Templates, Quotes, Invoices) still has no UI — next up, per the frontend design spec's phased execution order. |
+| **Database** | PostgreSQL 16, both local dev (`barkie_dev`/`barkie_test` on this machine, role `barkie`) **and production** (`barkie_prod` on the VPS, PostgreSQL installed 2026-09-07, role `barkie`, password in `/opt/barkie/api/.env` on the VPS only — never committed). All 13 migrations applied to production. |
 | **Domain modules** | `Customer`, `Printer` (+ `PrinterPreset`, `PrinterMaintenanceLog`), `Filament`, `LabourStep`, `Consumable`, `CostingTemplate` (+ `CostingLabourLine`, `CostingConsumableLine`), `Quote` (+ `QuoteLineItem`), `Invoice` (+ `InvoiceLineItem`), `TenantSequence` (numbering) all exist and are tenant-isolated. SRS §8.3's non-negotiable core is now fully built. |
 | **Billing/subscription** | Phase 2, not started. Needs PayFast + PayPal merchant credentials as a dependency. |
 
@@ -67,9 +68,33 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 
 ## What to do next (roughly, per the backlog's priorities)
 
-1. Decide on and build the subscriber dashboard frontend (nothing exists yet — first real UI work; the API has no UI to log into outside raw HTTP calls / tests).
-2. PDF generation + email sending for quotes/invoices — deliberately deferred when Quotes/Invoices were built, since neither SMTP infra nor a frontend trigger existed yet.
-3. Eventually deploy `platform/api/` to the VPS alongside the landing page, once there's a frontend worth serving.
+1. Build out the remaining frontend module pages (Company Profile, Customers, Printers, Filaments, Labour Steps, Consumables, Costing Templates, Quotes, Invoices) — see `docs/superpowers/specs/2026-09-07-frontend-deploy-design.md`'s phased execution order. Frontend Foundation (auth pages, shell, routing) is done and deployed; nothing else has a UI yet.
+2. PDF generation + email sending for quotes/invoices — still deliberately deferred (dev-mode email only). A frontend now exists to trigger it from, but no SMTP credentials exist yet.
+3. Redeploy the frontend after each new module's pages land (see "Deploying" below) — the API redeploy story is already established from Reference Data Modules onward; migrations apply automatically to `barkie_prod` via the same `prisma migrate deploy` step.
+
+## Deploying (established 2026-09-07 — VPS now runs the API and frontend, not just the landing page)
+
+**Production infrastructure on the VPS** (`deploy@41.222.36.147`, key `~/.ssh/lapanza_vps_deploy`, passwordless sudo):
+- **PostgreSQL 16** (`dnf install postgresql-server postgresql-contrib`, AlmaLinux 10) — installed fresh 2026-09-07, wasn't there before. `barkie_prod` database, `barkie` role. `listen_addresses` explicitly includes `127.0.0.1` (the VPS's `/etc/hosts` maps `127.0.0.1` to a custom hostname, not `localhost` — plain `listen_addresses = 'localhost'` alone silently only bound the IPv6 loopback `::1`, not `127.0.0.1`, which is why `DATABASE_URL` and this note both use `127.0.0.1` explicitly, not `localhost`). `pg_hba.conf`'s `host` lines for `127.0.0.1/32`/`::1/128` were changed from the AlmaLinux default `ident` to `scram-sha-256` so password auth works over TCP (a backup of the original is at `/var/lib/pgsql/data/pg_hba.conf.bak-<timestamp>`).
+- **`barkie-api.service`** (systemd, mirrors `barkie-landing.service`'s pattern) — `WorkingDirectory=/opt/barkie/api`, `ExecStart=/usr/bin/npx tsx src/server.ts`, port 4200, `.env` on the VPS only (never committed) with `DATABASE_URL` pointing at `barkie_prod`, `FRONTEND_ORIGIN=https://barkie.co.za`, `FRONTEND_BASE_PATH=/app`, `TRUST_PROXY=true`. Port 4200 is NOT directly internet-reachable (confirmed by curling it externally) — only reachable via nginx, same posture as the landing page's 4100.
+- **`/opt/barkie/frontend/`** — the frontend's static `dist/` build, no process of its own; nginx serves it directly.
+- **nginx** (`/etc/nginx/conf.d/barkie.conf`, one server block, shared cert) — `location /` (unchanged, → landing on 4100), `location /api/` (→ `proxy_pass http://127.0.0.1:4200;`, no trailing path on purpose — the API's routes already include the `/api/...` prefix themselves, so the full incoming URI must pass through unchanged), `location /app/` (→ `alias /opt/barkie/frontend/; try_files $uri $uri/ /app/index.html;` for SPA fallback).
+
+**Redeploying the API after a code change:**
+```bash
+cd platform/api && tar --exclude=node_modules --exclude=.env --exclude=.env.test --exclude='*.tsbuildinfo' -czf /tmp/barkie-api.tar.gz .
+scp -i ~/.ssh/lapanza_vps_deploy /tmp/barkie-api.tar.gz deploy@41.222.36.147:/tmp/
+ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147 "tar -xzf /tmp/barkie-api.tar.gz -C /opt/barkie/api && cd /opt/barkie/api && npm install && npx prisma migrate deploy && sudo systemctl restart barkie-api"
+```
+
+**Redeploying the frontend after a code change:**
+```bash
+cd platform/frontend && npm run build
+tar -czf /tmp/barkie-frontend-dist.tar.gz -C dist .
+scp -i ~/.ssh/lapanza_vps_deploy /tmp/barkie-frontend-dist.tar.gz deploy@41.222.36.147:/tmp/
+ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147 "rm -rf /opt/barkie/frontend/* && tar -xzf /tmp/barkie-frontend-dist.tar.gz -C /opt/barkie/frontend"
+```
+No nginx/systemd changes needed for routine redeploys — only if adding a genuinely new top-level route or service.
 
 ## Money math: the Decimal convention (read this before touching any cost field)
 
