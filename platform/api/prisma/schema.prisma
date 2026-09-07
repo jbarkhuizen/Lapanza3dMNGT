@@ -48,6 +48,8 @@ model Tenant {
   costingLabourLines     CostingLabourLine[]
   costingConsumableLines CostingConsumableLine[]
   tenantSequences        TenantSequence[]
+  quotes                 Quote[]
+  quoteLineItems         QuoteLineItem[]
 
   @@map("tenants")
 }
@@ -98,6 +100,8 @@ model Customer {
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  quotes Quote[]
 
   @@index([tenantId])
   @@map("customers")
@@ -261,6 +265,7 @@ model CostingTemplate {
 
   labourLines     CostingLabourLine[]
   consumableLines CostingConsumableLine[]
+  quoteLineItems  QuoteLineItem[]
 
   @@index([tenantId])
   @@map("costing_templates")
@@ -302,4 +307,46 @@ model CostingConsumableLine {
   @@index([tenantId])
   @@index([costingTemplateId])
   @@map("costing_consumable_lines")
+}
+
+model Quote {
+  id         String    @id @default(uuid())
+  tenantId   String
+  number     String
+  customerId String
+  status     String    @default("draft")
+  validUntil DateTime? @db.Timestamptz(3)
+  vatApplied Boolean
+  subtotal   Decimal   @db.Decimal(12, 2)
+  vatAmount  Decimal   @db.Decimal(12, 2)
+  total      Decimal   @db.Decimal(12, 2)
+  notes      String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  lineItems QuoteLineItem[]
+
+  @@index([tenantId])
+  @@map("quotes")
+}
+
+model QuoteLineItem {
+  id                String  @id @default(uuid())
+  tenantId          String
+  quoteId           String
+  costingTemplateId String?
+  description       String
+  quantity          Float   @default(1)
+  unitPrice         Decimal @db.Decimal(12, 2)
+  lineTotal         Decimal @db.Decimal(12, 2)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  quote           Quote            @relation(fields: [quoteId], references: [id])
+  costingTemplate CostingTemplate? @relation(fields: [costingTemplateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([quoteId])
+  @@map("quote_line_items")
 }

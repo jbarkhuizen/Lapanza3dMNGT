@@ -1,0 +1,171 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import type { Quote, QuoteLineItem } from '@prisma/client';
+import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { tenantScope } from '../db/scoped.js';
+import { calculateQuoteTotals } from '../quoting/calculate.js';
+import { formatDocumentNumber } from '../lib/numbering.js';
+
+export const quotesRouter = Router();
+quotesRouter.use(requireTenantAuth);
+
+type QuoteWithOptionalLines = Quote & { lineItems?: QuoteLineItem[] };
+
+function serializeQuote(quote: QuoteWithOptionalLines) {
+  return {
+    ...quote,
+    subtotal: quote.subtotal.toFixed(2),
+    vatAmount: quote.vatAmount.toFixed(2),
+    total: quote.total.toFixed(2),
+    lineItems: quote.lineItems?.map((line) => ({
+      ...line,
+      unitPrice: line.unitPrice.toFixed(2),
+      lineTotal: line.lineTotal.toFixed(2),
+    })),
+  };
+}
+
+const lineItemSchema = z
+  .object({
+    costingTemplateId: z.string().min(1).optional(),
+    description: z.string().min(1).optional(),
+    unitPrice: z.number().nonnegative().optional(),
+    quantity: z.number().positive().default(1),
+  })
+  .refine((data) => data.costingTemplateId != null || (data.description != null && data.unitPrice != null), {
+    message: 'Each line item needs either a costingTemplateId, or a description and unitPrice.',
+  });
+
+const createQuoteSchema = z.object({
+  customerId: z.string().min(1),
+  validUntil: z.string().optional(),
+  notes: z.string().optional(),
+  lineItems: z.array(lineItemSchema).min(1),
+});
+
+const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
+  draft: ['sent', 'expired'],
+  sent: ['accepted', 'expired'],
+};
+
+quotesRouter.get('/api/quotes', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const quotes = await scoped.quotes.findMany();
+  res.json({ ok: true, quotes: quotes.map(serializeQuote) });
+});
+
+quotesRouter.get('/api/quotes/:id', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const quote = await scoped.quotes.findById(req.params.id);
+  if (!quote) {
+    return res.status(404).json({ ok: false, error: 'Quote not found.' });
+  }
+  res.json({ ok: true, quote: serializeQuote(quote) });
+});
+
+quotesRouter.post('/api/quotes', async (req, res) => {
+  const parsed = createQuoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: 'A customer and at least one line item are required.',
+    });
+  }
+  const { customerId, validUntil, notes, lineItems } = parsed.data;
+  const scoped = tenantScope(req.tenantId!);
+
+  const customer = await scoped.customers.findById(customerId);
+  if (!customer) {
+    return res.status(400).json({ ok: false, error: 'Customer not found.' });
+  }
+
+  const resolvedLines: Array<{
+    costingTemplateId: string | null;
+    description: string;
+    unitPrice: number | import('@prisma/client').Prisma.Decimal;
+    quantity: number;
+  }> = [];
+  for (const line of lineItems) {
+    if (line.costingTemplateId) {
+      const template = await scoped.costingTemplates.findById(line.costingTemplateId);
+      if (!template) {
+        return res.status(400).json({ ok: false, error: 'One of the costing templates was not found.' });
+      }
+      resolvedLines.push({
+        costingTemplateId: template.id,
+        description: template.name,
+        unitPrice: template.suggestedPrice,
+        quantity: line.quantity,
+      });
+    } else {
+      resolvedLines.push({
+        costingTemplateId: null,
+        description: line.description!,
+        unitPrice: line.unitPrice!,
+        quantity: line.quantity,
+      });
+    }
+  }
+
+  const profile = await scoped.companyProfile.get();
+  if (!profile) {
+    return res.status(404).json({ ok: false, error: 'Tenant not found.' });
+  }
+
+  const totals = calculateQuoteTotals({
+    lines: resolvedLines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
+    vatApplied: profile.vatRegistered,
+  });
+
+  const sequenceValue = await scoped.tenantSequences.next('quote');
+  const number = formatDocumentNumber(profile.quoteNumberPrefix, sequenceValue);
+
+  let resolvedValidUntil: Date | null = null;
+  if (validUntil) {
+    resolvedValidUntil = new Date(validUntil);
+  } else if (profile.defaultQuoteValidityDays) {
+    resolvedValidUntil = new Date(Date.now() + profile.defaultQuoteValidityDays * 24 * 60 * 60 * 1000);
+  }
+
+  const quote = await scoped.quotes.create({
+    customerId,
+    number,
+    validUntil: resolvedValidUntil,
+    vatApplied: profile.vatRegistered,
+    subtotal: totals.subtotal.toString(),
+    vatAmount: totals.vatAmount.toString(),
+    total: totals.total.toString(),
+    notes: notes ?? null,
+    lineItems: resolvedLines.map((line, i) => ({
+      costingTemplateId: line.costingTemplateId,
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: totals.lineUnitPrices[i].toString(),
+      lineTotal: totals.lineTotals[i].toString(),
+    })),
+  });
+
+  res.status(201).json({ ok: true, quote: serializeQuote(quote) });
+});
+
+quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
+  const parsed = z.object({ status: z.enum(['sent', 'accepted', 'expired']) }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'status must be one of: sent, accepted, expired.' });
+  }
+  const scoped = tenantScope(req.tenantId!);
+  const quote = await scoped.quotes.findById(req.params.id);
+  if (!quote) {
+    return res.status(404).json({ ok: false, error: 'Quote not found.' });
+  }
+  const allowedNextStatuses = VALID_STATUS_TRANSITIONS[quote.status] ?? [];
+  if (!allowedNextStatuses.includes(parsed.data.status)) {
+    return res.status(400).json({
+      ok: false,
+      error: `Cannot move a quote from "${quote.status}" to "${parsed.data.status}".`,
+    });
+  }
+  await scoped.quotes.updateStatus(req.params.id, parsed.data.status);
+  const updated = await scoped.quotes.findById(req.params.id);
+  res.json({ ok: true, quote: serializeQuote(updated!) });
+});

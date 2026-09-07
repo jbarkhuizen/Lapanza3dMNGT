@@ -14,6 +14,7 @@ import { labourStepsRouter } from './routes/labour-steps.js';
 import { consumablesRouter } from './routes/consumables.js';
 import { costingTemplatesRouter } from './routes/costing-templates.js';
 import { companyProfileRouter } from './routes/company-profile.js';
+import { quotesRouter } from './routes/quotes.js';
 
 export function buildApp() {
   const app = express();
@@ -38,6 +39,7 @@ export function buildApp() {
   app.use(consumablesRouter);
   app.use(costingTemplatesRouter);
   app.use(companyProfileRouter);
+  app.use(quotesRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

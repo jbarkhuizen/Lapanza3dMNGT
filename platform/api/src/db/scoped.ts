@@ -183,6 +183,26 @@ export interface CreateCostingTemplateInput {
   consumableLines: CreateCostingTemplateConsumableLineInput[];
 }
 
+export interface CreateQuoteLineItemInput {
+  costingTemplateId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+}
+
+export interface CreateQuoteInput {
+  customerId: string;
+  number: string;
+  validUntil: Date | null;
+  vatApplied: boolean;
+  subtotal: string;
+  vatAmount: string;
+  total: string;
+  notes: string | null;
+  lineItems: CreateQuoteLineItemInput[];
+}
+
 export interface UpdateCompanyProfileInput {
   businessName?: string;
   contactName?: string;
@@ -416,6 +436,42 @@ export function tenantScope(tenantId: string) {
 
       update: (data: UpdateCompanyProfileInput) =>
         prisma.tenant.update({ where: { id: tenantId }, data, select: companyProfileSelect }),
+    },
+
+    quotes: {
+      findMany: () => prisma.quote.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+
+      findById: (id: string) =>
+        prisma.quote.findFirst({ where: { id, tenantId }, include: { lineItems: true } }),
+
+      create: (data: CreateQuoteInput) =>
+        prisma.quote.create({
+          data: {
+            tenantId,
+            customerId: data.customerId,
+            number: data.number,
+            validUntil: data.validUntil,
+            vatApplied: data.vatApplied,
+            subtotal: data.subtotal,
+            vatAmount: data.vatAmount,
+            total: data.total,
+            notes: data.notes,
+            lineItems: {
+              create: data.lineItems.map((line) => ({
+                tenantId,
+                costingTemplateId: line.costingTemplateId,
+                description: line.description,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                lineTotal: line.lineTotal,
+              })),
+            },
+          },
+          include: { lineItems: true },
+        }),
+
+      updateStatus: (id: string, status: string) =>
+        prisma.quote.updateMany({ where: { id, tenantId }, data: { status } }),
     },
 
     tenantSequences: {
