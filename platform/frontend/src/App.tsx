@@ -12,6 +12,8 @@ import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
 import { FilamentFormPage } from './pages/filaments/FilamentFormPage.js';
 import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js';
 import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
+import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
+import { ConsumableFormPage } from './pages/consumables/ConsumableFormPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
@@ -127,6 +129,36 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <LabourStepFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/consumables"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ConsumablesListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/consumables/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ConsumableFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/consumables/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ConsumableFormPage />
               </AppShell>
             </RequireAuth>
           }
