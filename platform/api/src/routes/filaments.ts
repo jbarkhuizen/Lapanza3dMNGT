@@ -16,7 +16,7 @@ const createFilamentSchema = z.object({
   spoolWeightGrams: z.number().optional(),
   remainingWeightGrams: z.number().optional(),
   supplier: z.string().optional(),
-  purchaseDate: z.string().optional(),
+  purchaseDate: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.').optional(),
   notes: z.string().optional(),
   lowStockThresholdGrams: z.number().optional(),
 });

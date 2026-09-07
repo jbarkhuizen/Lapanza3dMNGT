@@ -7,7 +7,7 @@ export const printerMaintenanceRouter = Router();
 printerMaintenanceRouter.use(requireTenantAuth);
 
 const createMaintenanceLogSchema = z.object({
-  date: z.string().min(1),
+  date: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.'),
   description: z.string().min(1),
   cost: z.number().optional(),
   performedBy: z.string().optional(),
