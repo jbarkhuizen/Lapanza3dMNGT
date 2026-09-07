@@ -44,10 +44,10 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 |---|---|
 | **barkie.co.za (live domain)** | Live: `landing/` coming-soon page, deployed 2026-09-07. Runs as systemd service `barkie-landing.service` on the VPS (`/opt/barkie/app`, `node server.js`, port 4100, `User=deploy`, `Restart=on-failure`), nginx reverse-proxies `barkie.co.za`/`www.barkie.co.za` to it (`/etc/nginx/conf.d/barkie.conf`) — same pattern as `lapanza-admin.service`. Existing Certbot SSL cert untouched. Old placeholder backed up at `/opt/barkie/backup-2026-09-07/` on the VPS. |
 | **`landing/`** | Deployed and verified end-to-end in production (page renders, dark mode, `/api/notify` signup tested live then cleaned up). Deploy access: `ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147` (same key as lapanza3d; `deploy` has passwordless sudo on this box). To redeploy after a code change: `tar` the `landing/` folder (excluding `node_modules`/`data`/`.env`), `scp` it up, extract into `/opt/barkie/app`, `npm install --omit=dev`, `sudo systemctl restart barkie-landing`. |
-| **`platform/api/`** | Foundation merged to `master`, pushed to GitHub. Auth (register/verify/login/logout/session), tenant isolation (`tenantScope`, the sole sanctioned path to tenant-scoped tables), Customer CRUD, rate limiting. 23 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. |
+| **`platform/api/`** | Foundation + Reference Data Modules both merged to `master`, pushed to GitHub. Auth (register/verify/login/logout/session), tenant isolation (`tenantScope`), Customer/Printer/PrinterPreset/PrinterMaintenanceLog/Filament/LabourStep/Consumable CRUD, rate limiting. 58 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. |
 | **Frontend** | Does not exist yet. The API has no UI to log into outside of raw HTTP calls / the test suite. This is the next real gap — see backlog item "Phase 1: Subscriber dashboard frontend". |
 | **Database** | PostgreSQL 18, local dev only (`barkie_dev`/`barkie_test`, role `barkie`). No production database exists. |
-| **Domain modules** | Only `Customer` exists. Printers, filament, labour, consumables, costing engine, quotes/invoices — none started. See backlog for the full Phase 1 list. |
+| **Domain modules** | `Customer`, `Printer` (+ `PrinterPreset`, `PrinterMaintenanceLog`), `Filament`, `LabourStep`, `Consumable` all exist and are tenant-isolated. Costing engine and quotes/invoices — not started (SRS §8.3's "non-negotiable core", next up). |
 | **Billing/subscription** | Phase 2, not started. Needs PayFast + PayPal merchant credentials as a dependency. |
 
 ## Non-obvious things that will bite you if you don't know them
@@ -65,9 +65,39 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 
 ## What to do next (roughly, per the backlog's priorities)
 
-1. Decide on and build the subscriber dashboard frontend (nothing exists yet — first real UI work).
-2. Build out the remaining Phase 1 domain modules (printers, filament, labour, consumables), then the costing engine and quotes/invoices — SRS §8.3 calls costing + quotes/invoices the non-negotiable core.
+1. Build the costing engine and quotes/invoices — SRS §8.3 calls this the non-negotiable core, and all its inputs (filament, printers, labour, consumables) now exist.
+2. Decide on and build the subscriber dashboard frontend (nothing exists yet — first real UI work; the API has no UI to log into outside raw HTTP calls / tests).
 3. Eventually deploy `platform/api/` to the VPS alongside the landing page, once there's a frontend worth serving.
+
+## Reusable pattern for adding a new tenant-scoped resource
+
+The "Reference Data Modules" plan (printers, filament, labour, consumables)
+established the repeatable shape for a new tenant-scoped CRUD resource:
+
+1. Prisma model with `tenantId` (and, for anything nested under another
+   resource like a printer, that parent's id too) — every `DateTime` field
+   gets `@db.Timestamptz(3)` from the start.
+2. A resource group added to `tenantScope()` in `src/db/scoped.ts` —
+   `findMany`/`findById`/`create`/`update`, `update()` always stripping
+   `tenantId` (and any parent id) from `data` before the Prisma call.
+3. A route file behind `requireTenantAuth` — for a nested resource, a
+   `requireOwnedPrinter`-style helper (verify the parent belongs to the
+   calling tenant) called FIRST in every handler, before body validation.
+4. `requireTenantAuth` is idempotent (`if (req.tenantId) return next();`)
+   — every tenant-scoped router still mounts it, but it only does the real
+   DB session lookup once per request regardless of how many routers a
+   request falls through. When writing a new resource's "requires auth"
+   test, build a minimal single-router app (just `express.json()` +
+   `cookieParser()` + the one router) rather than the full `buildApp()` —
+   otherwise the test can pass even if that router's own auth check is
+   deleted, satisfied by an earlier-mounted router instead.
+5. Add the table to `resetTestDatabase()` in FK-safe order (children
+   before parents).
+6. Add a wrapper-level cross-tenant isolation test to
+   `tests/tenant-isolation.test.ts`, not just a route-level 404 test —
+   the wrapper needs to be provably safe on its own, since the costing
+   engine (next up) will call these wrappers directly, not just through
+   HTTP routes.
 
 Full detail on all of the above — and everything else not urgent enough to
 put here — lives in the backlog board, not this file. Check it before
