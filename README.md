@@ -15,7 +15,7 @@ current state, what's live vs. not, gotchas. This file is just the map.
 |---|---|---|
 | [`landing/`](landing/) | Temporary holding page for barkie.co.za — Express app with an email signup | **Live** at https://barkie.co.za (deployed 2026-09-07, `barkie-landing.service` on the VPS). |
 | [`platform/api/`](platform/api/) | The real product: Node/TypeScript/Express/Postgres API — auth, tenant isolation, Customer/Printer/Filament/Labour/Consumable CRUD, costing engine, Company Profile, Quotes, and Invoices | Merged to `master`, pushed to GitHub, **live** at https://barkie.co.za/api/ (`barkie-api.service` on the VPS, `barkie_prod` Postgres DB). No PDF/real email yet (dev-mode email only). |
-| [`platform/frontend/`](platform/frontend/) | The subscriber dashboard SPA — React/Vite/TS/Tailwind, talks to `platform/api/` | Merged to `master`, pushed to GitHub, **live** at https://barkie.co.za/app/. Auth pages, app shell, and routing done; every module page (Company Profile, Customers, Printers, etc.) is still unbuilt. |
+| [`platform/frontend/`](platform/frontend/) | The subscriber dashboard SPA — React/Vite/TS/Tailwind, talks to `platform/api/` | Merged to `master`, pushed to GitHub, **live** at https://barkie.co.za/app/. Auth, app shell, Company Profile, Customers, Filaments, Labour Steps, Consumables done. Printers, Costing Templates, Quotes, Invoices still unbuilt. |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs (what to build and why) | — |
 | [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans (task-by-task build instructions) | — |
 
