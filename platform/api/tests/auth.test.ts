@@ -180,6 +180,25 @@ test('POST /api/auth/logout clears the session', async () => {
   assert.equal(res.status, 401);
 });
 
+test('POST /api/auth/login rejects an unverified tenant', async () => {
+  const app = buildApp();
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  const res = await request(app).post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  assert.equal(res.status, 403);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.error, 'Verify your email address before logging in.');
+});
+
 test('POST /api/auth/login is rate-limited after repeated failures', async () => {
   const app = buildApp();
   await registerAndVerify(app, 'jane@acmeprints.co.za');

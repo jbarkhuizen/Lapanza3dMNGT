@@ -108,6 +108,10 @@ export function createAuthRouter() {
       return res.status(401).json({ ok: false, error: 'Incorrect email or password.' });
     }
 
+    if (!tenant.emailVerifiedAt) {
+      return res.status(403).json({ ok: false, error: 'Verify your email address before logging in.' });
+    }
+
     const { token, expiresAt } = await createSession('tenant', tenant.id);
     res.cookie(env.sessionCookieName, token, {
       httpOnly: true,
