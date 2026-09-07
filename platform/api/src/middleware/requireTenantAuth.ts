@@ -12,6 +12,10 @@ declare global {
 }
 
 export async function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
+  if (req.tenantId) {
+    return next();
+  }
+
   const token = req.cookies?.[env.sessionCookieName];
   if (!token) {
     return res.status(401).json({ ok: false, error: 'Log in to continue.' });

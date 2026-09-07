@@ -1,11 +1,22 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import express from 'express';
+import cookieParser from 'cookie-parser';
 import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
+import { consumablesRouter } from '../src/routes/consumables.js';
 
 beforeEach(resetTestDatabase);
+
+function buildMinimalApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  app.use(consumablesRouter);
+  return app;
+}
 
 async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acmeprints.co.za') {
   await request(app).post('/api/auth/register').send({
@@ -23,7 +34,7 @@ async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acm
 }
 
 test('consumable endpoints require auth', async () => {
-  const app = buildApp();
+  const app = buildMinimalApp();
   const res = await request(app).get('/api/consumables');
   assert.equal(res.status, 401);
 });

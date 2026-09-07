@@ -1,11 +1,22 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import express from 'express';
+import cookieParser from 'cookie-parser';
 import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
+import { filamentsRouter } from '../src/routes/filaments.js';
 
 beforeEach(resetTestDatabase);
+
+function buildMinimalApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  app.use(filamentsRouter);
+  return app;
+}
 
 async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acmeprints.co.za') {
   await request(app).post('/api/auth/register').send({
@@ -23,7 +34,7 @@ async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acm
 }
 
 test('filament endpoints require auth', async () => {
-  const app = buildApp();
+  const app = buildMinimalApp();
   const res = await request(app).get('/api/filaments');
   assert.equal(res.status, 401);
 });
@@ -35,6 +46,18 @@ test('POST /api/filaments rejects an invalid diameter', async () => {
     brand: 'eSun',
     materialType: 'PLA',
     diameterMm: 3.0,
+  });
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/filaments rejects a malformed purchaseDate', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+    purchaseDate: 'not-a-date',
   });
   assert.equal(res.status, 400);
 });

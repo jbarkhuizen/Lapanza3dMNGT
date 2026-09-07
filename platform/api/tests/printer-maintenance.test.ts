@@ -1,11 +1,22 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import express from 'express';
+import cookieParser from 'cookie-parser';
 import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
+import { printerMaintenanceRouter } from '../src/routes/printer-maintenance.js';
 
 beforeEach(resetTestDatabase);
+
+function buildMinimalApp() {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  app.use(printerMaintenanceRouter);
+  return app;
+}
 
 async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acmeprints.co.za') {
   await request(app).post('/api/auth/register').send({
@@ -29,7 +40,7 @@ async function loggedInAgentWithPrinter(app: ReturnType<typeof buildApp>, email 
 }
 
 test('maintenance log endpoints require auth', async () => {
-  const app = buildApp();
+  const app = buildMinimalApp();
   const res = await request(app).get('/api/printers/does-not-matter/maintenance-log');
   assert.equal(res.status, 401);
 });
@@ -56,6 +67,16 @@ test('POST rejects a missing required field', async () => {
   const app = buildApp();
   const { agent, printerId } = await loggedInAgentWithPrinter(app);
   const res = await agent.post(`/api/printers/${printerId}/maintenance-log`).send({ cost: 50 });
+  assert.equal(res.status, 400);
+});
+
+test('POST rejects a malformed date', async () => {
+  const app = buildApp();
+  const { agent, printerId } = await loggedInAgentWithPrinter(app);
+  const res = await agent.post(`/api/printers/${printerId}/maintenance-log`).send({
+    date: 'not-a-date',
+    description: 'Replaced nozzle',
+  });
   assert.equal(res.status, 400);
 });
 
