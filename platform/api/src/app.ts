@@ -9,6 +9,13 @@ import { customersRouter } from './routes/customers.js';
 
 export function buildApp() {
   const app = express();
+  if (env.trustProxy) {
+    // Trust exactly one hop (the immediate reverse proxy) so express-rate-limit
+    // and req.ip key on the real client IP instead of the proxy's IP. Using
+    // `true` here would trust the entire X-Forwarded-For chain, letting a
+    // malicious client spoof their apparent IP.
+    app.set('trust proxy', 1);
+  }
   app.use(cors({ origin: env.frontendOrigin, credentials: true }));
   app.use(express.json());
   app.use(cookieParser());

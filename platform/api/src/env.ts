@@ -14,4 +14,5 @@ export const env = {
   databaseUrl: required('DATABASE_URL'),
   frontendOrigin: process.env.FRONTEND_ORIGIN ?? 'http://localhost:5174',
   sessionCookieName: process.env.SESSION_COOKIE_NAME ?? 'barkie_session',
+  trustProxy: process.env.TRUST_PROXY === 'true',
 };
