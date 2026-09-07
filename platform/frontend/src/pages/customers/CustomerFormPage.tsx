@@ -36,11 +36,11 @@ export function CustomerFormPage() {
   const updateMutation = useUpdateCustomer(id ?? '');
   const [form, setForm] = useState<CustomerFormInput>(emptyForm);
   const [error, setError] = useState<string | null>(null);
-  const hasPopulatedRef = useRef(false);
+  const populatedForIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (existingCustomer && !hasPopulatedRef.current) {
-      hasPopulatedRef.current = true;
+    if (existingCustomer && populatedForIdRef.current !== id) {
+      populatedForIdRef.current = id;
       setForm({
         name: existingCustomer.name,
         billingAddress: existingCustomer.billingAddress,
@@ -52,7 +52,7 @@ export function CustomerFormPage() {
         notes: existingCustomer.notes ?? '',
       });
     }
-  }, [existingCustomer]);
+  }, [existingCustomer, id]);
 
   function set<K extends keyof CustomerFormInput>(key: K, value: CustomerFormInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));

@@ -91,12 +91,14 @@ export function CompanyProfilePage() {
           label="Business name"
           value={form.businessName ?? ''}
           onChange={(e) => set('businessName', e.target.value)}
+          required
         />
         <FormField
           id="contactName"
           label="Contact name"
           value={form.contactName ?? ''}
           onChange={(e) => set('contactName', e.target.value)}
+          required
         />
         <FormField id="registrationNumber" label="Registration number" value={form.registrationNumber ?? ''} onChange={(e) => set('registrationNumber', e.target.value)} />
         <FormField id="logoUrl" label="Logo URL" value={form.logoUrl ?? ''} onChange={(e) => set('logoUrl', e.target.value)} />

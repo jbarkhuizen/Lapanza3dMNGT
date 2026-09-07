@@ -147,4 +147,53 @@ describe('CustomerFormPage — edit mode', () => {
     queryClient.setQueryData(['customers', '1'], { ...customer });
     await waitFor(() => expect(screen.getByDisplayValue('Bob Client Jr')).toBeInTheDocument());
   });
+
+  it('can load different customers and populate correctly for each', async () => {
+    // Regression test verifying the populate guard is keyed to customer id.
+    // Without the id in the dependency array, the second customer would show stale data.
+    const customer1 = {
+      id: '1',
+      name: 'Bob Client',
+      company: null,
+      email: null,
+      phone: null,
+      billingAddress: '1 Oak St',
+      deliveryAddress: null,
+      vatNumber: null,
+      notes: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const customer2 = {
+      id: '2',
+      name: 'Alice Supplier',
+      company: null,
+      email: null,
+      phone: null,
+      billingAddress: '2 Elm Ave',
+      deliveryAddress: null,
+      vatNumber: null,
+      notes: null,
+      createdAt: '2026-01-02T00:00:00.000Z',
+    };
+
+    vi.spyOn(client, 'apiGet').mockImplementation((path) => {
+      if (path === '/api/customers/1') {
+        return Promise.resolve({ ok: true, customer: customer1 });
+      } else if (path === '/api/customers/2') {
+        return Promise.resolve({ ok: true, customer: customer2 });
+      }
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+
+    // Load customer 1
+    const { unmount } = renderAt('/customers/1');
+    await waitFor(() => expect(screen.getByDisplayValue('Bob Client')).toBeInTheDocument());
+    expect(screen.getByDisplayValue('1 Oak St')).toBeInTheDocument();
+    unmount();
+
+    // Load customer 2 and verify it shows customer 2's data, not customer 1's stale data
+    renderAt('/customers/2');
+    await waitFor(() => expect(screen.getByDisplayValue('Alice Supplier')).toBeInTheDocument());
+    expect(screen.getByDisplayValue('2 Elm Ave')).toBeInTheDocument();
+  });
 });
