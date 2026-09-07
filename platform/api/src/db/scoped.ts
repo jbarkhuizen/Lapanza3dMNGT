@@ -23,6 +23,9 @@ export interface UpdateCustomerInput {
 }
 
 export function tenantScope(tenantId: string) {
+  if (!tenantId) {
+    throw new Error('tenantScope requires a tenantId');
+  }
   return {
     customers: {
       findMany: () => prisma.customer.findMany({ where: { tenantId } }),

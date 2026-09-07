@@ -69,6 +69,11 @@ test('update only affects the owning tenant\'s row', async () => {
   assert.equal(ownerResult.count, 1);
 });
 
+test('tenantScope throws when given a falsy tenantId', () => {
+  assert.throws(() => tenantScope(''), /tenantScope requires a tenantId/);
+  assert.throws(() => tenantScope(undefined as any), /tenantScope requires a tenantId/);
+});
+
 test('update cannot reassign a row to a different tenant via a smuggled tenantId', async () => {
   const tenantA = await makeTenant('a@example.co.za');
   const tenantB = await makeTenant('b@example.co.za');
