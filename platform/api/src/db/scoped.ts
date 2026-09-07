@@ -48,6 +48,28 @@ export interface UpdatePrinterInput {
   status?: string;
 }
 
+export interface CreatePrinterPresetInput {
+  name: string;
+  materialType: string;
+  nozzleTempC?: number;
+  bedTempC?: number;
+  printSpeedMmS?: number;
+  layerHeightMm?: number;
+  infillPercent?: number;
+  notes?: string;
+}
+
+export interface UpdatePrinterPresetInput {
+  name?: string;
+  materialType?: string;
+  nozzleTempC?: number;
+  bedTempC?: number;
+  printSpeedMmS?: number;
+  layerHeightMm?: number;
+  infillPercent?: number;
+  notes?: string;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -87,6 +109,23 @@ export function tenantScope(tenantId: string) {
             purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
             tenantId: undefined,
           },
+        }),
+    },
+
+    printerPresets: {
+      findMany: (printerId: string) =>
+        prisma.printerPreset.findMany({ where: { printerId, tenantId } }),
+
+      findById: (printerId: string, id: string) =>
+        prisma.printerPreset.findFirst({ where: { id, printerId, tenantId } }),
+
+      create: (printerId: string, data: CreatePrinterPresetInput) =>
+        prisma.printerPreset.create({ data: { ...data, printerId, tenantId } }),
+
+      update: (printerId: string, id: string, data: UpdatePrinterPresetInput) =>
+        prisma.printerPreset.updateMany({
+          where: { id, printerId, tenantId },
+          data: { ...data, tenantId: undefined, printerId: undefined },
         }),
     },
   };
