@@ -19,6 +19,7 @@ model Tenant {
   createdAt                DateTime  @default(now()) @db.Timestamptz(3)
 
   customers Customer[]
+  printers  Printer[]
 
   @@map("tenants")
 }
@@ -60,4 +61,25 @@ model Customer {
 
   @@index([tenantId])
   @@map("customers")
+}
+
+model Printer {
+  id               String    @id @default(uuid())
+  tenantId         String
+  name             String
+  make             String?
+  model            String?
+  buildVolumeXMm   Float?
+  buildVolumeYMm   Float?
+  buildVolumeZMm   Float?
+  purchaseDate     DateTime? @db.Timestamptz(3)
+  purchaseCost     Float?
+  powerDrawWatts   Float?
+  status           String    @default("active")
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("printers")
 }

@@ -22,6 +22,32 @@ export interface UpdateCustomerInput {
   notes?: string;
 }
 
+export interface CreatePrinterInput {
+  name: string;
+  make?: string;
+  model?: string;
+  buildVolumeXMm?: number;
+  buildVolumeYMm?: number;
+  buildVolumeZMm?: number;
+  purchaseDate?: string;
+  purchaseCost?: number;
+  powerDrawWatts?: number;
+  status?: string;
+}
+
+export interface UpdatePrinterInput {
+  name?: string;
+  make?: string;
+  model?: string;
+  buildVolumeXMm?: number;
+  buildVolumeYMm?: number;
+  buildVolumeZMm?: number;
+  purchaseDate?: string;
+  purchaseCost?: number;
+  powerDrawWatts?: number;
+  status?: string;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -37,6 +63,31 @@ export function tenantScope(tenantId: string) {
 
       update: (id: string, data: UpdateCustomerInput) =>
         prisma.customer.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+    },
+
+    printers: {
+      findMany: () => prisma.printer.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.printer.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreatePrinterInput) =>
+        prisma.printer.create({
+          data: {
+            ...data,
+            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            tenantId,
+          },
+        }),
+
+      update: (id: string, data: UpdatePrinterInput) =>
+        prisma.printer.updateMany({
+          where: { id, tenantId },
+          data: {
+            ...data,
+            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            tenantId: undefined,
+          },
+        }),
     },
   };
 }

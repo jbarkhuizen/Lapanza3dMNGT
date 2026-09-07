@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { healthRouter } from './routes/health.js';
 import { createAuthRouter } from './routes/auth.js';
 import { customersRouter } from './routes/customers.js';
+import { printersRouter } from './routes/printers.js';
 
 export function buildApp() {
   const app = express();
@@ -22,6 +23,7 @@ export function buildApp() {
   app.use(healthRouter);
   app.use(createAuthRouter());
   app.use(customersRouter);
+  app.use(printersRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
