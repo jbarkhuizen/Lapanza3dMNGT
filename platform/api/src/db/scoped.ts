@@ -107,6 +107,18 @@ export interface UpdateFilamentInput {
   lowStockThresholdGrams?: number;
 }
 
+export interface CreateLabourStepInput {
+  name: string;
+  hourlyRate: number;
+  active?: boolean;
+}
+
+export interface UpdateLabourStepInput {
+  name?: string;
+  hourlyRate?: number;
+  active?: boolean;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -202,6 +214,18 @@ export function tenantScope(tenantId: string) {
             tenantId: undefined,
           },
         }),
+    },
+
+    labourSteps: {
+      findMany: () => prisma.labourStep.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.labourStep.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateLabourStepInput) =>
+        prisma.labourStep.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdateLabourStepInput) =>
+        prisma.labourStep.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
     },
   };
 }

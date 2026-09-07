@@ -23,6 +23,7 @@ model Tenant {
   printerPresets         PrinterPreset[]
   printerMaintenanceLogs PrinterMaintenanceLog[]
   filaments              Filament[]
+  labourSteps            LabourStep[]
 
   @@map("tenants")
 }
@@ -151,4 +152,18 @@ model Filament {
 
   @@index([tenantId])
   @@map("filaments")
+}
+
+model LabourStep {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  hourlyRate  Float
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("labour_steps")
 }
