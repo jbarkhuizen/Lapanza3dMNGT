@@ -5,10 +5,9 @@ auth, tenant-scoped data access, and Customer CRUD.
 
 ## Prerequisites
 
-- **Node 20+**. Note: `npm test` relies on the shell expanding the
-  `tests/**/*.test.ts` glob natively, which needs **Node 21.7+ / 22+**. On
-  Node 20 the glob may not expand as expected — upgrade if `npm test` reports
-  no test files found.
+- **Node 20+**. Note: `npm test` relies on Node's own `--test` glob support
+  for `tests/**/*.test.ts`, which needs **Node 21.7+ / 22+** — on Node 20
+  the pattern isn't expanded and `npm test` reports no test files found.
 - **PostgreSQL 14+** running locally.
 
 ## One-time setup
@@ -33,11 +32,14 @@ auth, tenant-scoped data access, and Customer CRUD.
 
    ```sh
    npx prisma migrate deploy
-   node --env-file=.env.test node_modules/.bin/prisma migrate deploy
+   npm run migrate:test
    ```
 
    (The first command reads `DATABASE_URL` from `.env` via Prisma's default
-   dotenv loading; the second points it at `.env.test` instead.)
+   dotenv loading; `migrate:test` points it at `.env.test` instead. Note:
+   `node_modules/.bin/prisma` is a POSIX shell shim, not JavaScript — running
+   it directly via `node` fails on Windows. `migrate:test` calls Prisma's
+   actual JS entrypoint instead, so it works cross-platform.)
 
 ## Common commands
 

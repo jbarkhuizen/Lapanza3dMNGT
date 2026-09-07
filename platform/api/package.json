@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "node --env-file=.env.test --import tsx --test --test-concurrency=1 tests/**/*.test.ts",
+    "test": "node --env-file=.env.test --import tsx --test --test-concurrency=1 \"tests/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "migrate:test": "node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
