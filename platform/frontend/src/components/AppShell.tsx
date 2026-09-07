@@ -6,6 +6,7 @@ import { apiPost } from '../api/client.js';
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard' },
   { to: '/company-profile', label: 'Company Profile' },
+  { to: '/customers', label: 'Customers' },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

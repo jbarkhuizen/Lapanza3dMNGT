@@ -1,0 +1,45 @@
+import { Link } from 'react-router-dom';
+import { useCustomers } from '../../api/customers.js';
+
+export function CustomersListPage() {
+  const { data: customers, isLoading } = useCustomers();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-slate-900">Customers</h1>
+        <Link to="/customers/new" className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white">
+          New Customer
+        </Link>
+      </div>
+      {isLoading && <p className="text-slate-500">Loading…</p>}
+      {!isLoading && customers?.length === 0 && <p className="text-slate-500">No customers yet.</p>}
+      {!isLoading && customers && customers.length > 0 && (
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-500">
+              <th className="py-2">Name</th>
+              <th className="py-2">Company</th>
+              <th className="py-2">Email</th>
+              <th className="py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {customers.map((customer) => (
+              <tr key={customer.id} className="border-b border-slate-100">
+                <td className="py-2">{customer.name}</td>
+                <td className="py-2">{customer.company ?? '—'}</td>
+                <td className="py-2">{customer.email ?? '—'}</td>
+                <td className="py-2 text-right">
+                  <Link to={`/customers/${customer.id}`} className="text-slate-600 underline">
+                    Edit
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
