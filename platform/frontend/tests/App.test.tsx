@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { App } from '../src/App.js';
+import { AppProviders } from '../src/AppProviders.js';
 import * as client from '../src/api/client.js';
 
 beforeEach(() => {
@@ -13,7 +14,9 @@ describe('App routing', () => {
     vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/']}>
-        <App />
+        <AppProviders>
+          <App />
+        </AppProviders>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText('Log in to Barkie')).toBeInTheDocument());
@@ -26,7 +29,9 @@ describe('App routing', () => {
     });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/']}>
-        <App />
+        <AppProviders>
+          <App />
+        </AppProviders>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText(/Welcome, Acme Prints/)).toBeInTheDocument());
@@ -36,7 +41,9 @@ describe('App routing', () => {
     vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/register']}>
-        <App />
+        <AppProviders>
+          <App />
+        </AppProviders>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText('Create your account')).toBeInTheDocument());
@@ -46,7 +53,9 @@ describe('App routing', () => {
     vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/company-profile']}>
-        <App />
+        <AppProviders>
+          <App />
+        </AppProviders>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText('Page not found')).toBeInTheDocument());

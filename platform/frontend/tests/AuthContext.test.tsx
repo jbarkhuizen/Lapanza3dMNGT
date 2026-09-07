@@ -61,4 +61,23 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
     expect(screen.getByText('logged in as Acme Prints')).toBeInTheDocument();
   });
+
+  it('clears an already-set tenant when a later refetch fails with a 401', async () => {
+    const getSpy = vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+    });
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText('logged in as Acme Prints')).toBeInTheDocument());
+
+    getSpy.mockRejectedValueOnce(new client.ApiError('Log in to continue.', 401));
+    fireEvent.click(screen.getByRole('button', { name: 'refetch' }));
+
+    await waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('logged out')).toBeInTheDocument());
+  });
 });

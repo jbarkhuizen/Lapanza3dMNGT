@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Base URL for all API calls comes from `import.meta.env.VITE_API_BASE_URL`: `http://localhost:4200` in dev, `/api` in the production build (same-origin path-based hosting — no host needed).
+- Base URL for all API calls comes from `import.meta.env.VITE_API_BASE_URL`: `http://localhost:4200` in dev, empty/unset in the production build (`.env.production` sets it to `""` — since every API call already includes the `/api/...` prefix in its path, a non-empty base URL here would double it).
 - Every fetch call sets `credentials: 'include'` — the API's session cookie is httpOnly and must ride along on every request, including cross-port dev requests (same-site, different port — allowed under `SameSite=Lax`).
 - Every API error response (`{ ok: false, error: string }`) surfaces as a thrown `ApiError` with a `.message` equal to the server's `error` string — never a generic "request failed."
 - No global client-state library. Auth state lives in one `AuthContext`. Everything else is React Query server state.
