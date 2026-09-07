@@ -80,6 +80,8 @@ model Printer {
   purchaseDate     DateTime? @db.Timestamptz(3)
   purchaseCost     Float?
   powerDrawWatts   Float?
+  electricityRatePerKwh Decimal? @db.Decimal(10, 4)
+  expectedLifetimeHours Float?
   status           String    @default("active")
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
 

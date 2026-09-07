@@ -94,3 +94,37 @@ test('GET /api/printers/:id returns 404 for another tenant\'s printer', async ()
   const res = await agentB.get(`/api/printers/${createRes.body.printer.id}`);
   assert.equal(res.status, 404);
 });
+
+test('create and update round-trip electricityRatePerKwh and expectedLifetimeHours', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/printers').send({
+    name: 'Printer 1',
+    purchaseCost: 4000,
+    electricityRatePerKwh: 2.5,
+    expectedLifetimeHours: 2000,
+  });
+  assert.equal(createRes.status, 201);
+  assert.equal(createRes.body.printer.electricityRatePerKwh, '2.5000');
+  assert.equal(createRes.body.printer.expectedLifetimeHours, 2000);
+  const printerId = createRes.body.printer.id;
+
+  const updateRes = await agent
+    .patch(`/api/printers/${printerId}`)
+    .send({ electricityRatePerKwh: 3.1 });
+  assert.equal(updateRes.status, 200);
+
+  const getRes = await agent.get(`/api/printers/${printerId}`);
+  assert.equal(getRes.body.printer.electricityRatePerKwh, '3.1000');
+});
+
+test('POST /api/printers rejects a negative electricityRatePerKwh', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.post('/api/printers').send({
+    name: 'Printer 1',
+    electricityRatePerKwh: -1,
+  });
+  assert.equal(res.status, 400);
+});

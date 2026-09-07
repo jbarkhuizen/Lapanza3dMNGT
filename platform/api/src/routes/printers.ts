@@ -18,6 +18,8 @@ const createPrinterSchema = z.object({
   purchaseDate: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.').optional(),
   purchaseCost: z.number().optional(),
   powerDrawWatts: z.number().optional(),
+  electricityRatePerKwh: z.number().nonnegative().optional(),
+  expectedLifetimeHours: z.number().positive().optional(),
   status: z.enum(STATUSES).optional(),
 });
 
