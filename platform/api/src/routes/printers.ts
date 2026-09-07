@@ -1,9 +1,22 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { Printer } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const printersRouter = Router();
+
+// Prisma's Decimal normalizes trailing zeros away by default (toString()
+// on `new Decimal('2.5000')` gives '2.5', not '2.5000') -- fix the display
+// scale only at the HTTP boundary, not in scoped.ts, so the data layer
+// keeps returning a real Decimal instance for callers (the costing engine)
+// that need to do Decimal arithmetic on it.
+function serializePrinter(printer: Printer) {
+  return {
+    ...printer,
+    electricityRatePerKwh: printer.electricityRatePerKwh != null ? printer.electricityRatePerKwh.toFixed(4) : null,
+  };
+}
 printersRouter.use(requireTenantAuth);
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
@@ -28,7 +41,7 @@ const updatePrinterSchema = createPrinterSchema.partial();
 printersRouter.get('/api/printers', async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const printers = await scoped.printers.findMany();
-  res.json({ ok: true, printers });
+  res.json({ ok: true, printers: printers.map(serializePrinter) });
 });
 
 printersRouter.post('/api/printers', async (req, res) => {
@@ -38,7 +51,7 @@ printersRouter.post('/api/printers', async (req, res) => {
   }
   const scoped = tenantScope(req.tenantId!);
   const printer = await scoped.printers.create(parsed.data);
-  res.status(201).json({ ok: true, printer });
+  res.status(201).json({ ok: true, printer: serializePrinter(printer) });
 });
 
 printersRouter.get('/api/printers/:id', async (req, res) => {
@@ -47,7 +60,7 @@ printersRouter.get('/api/printers/:id', async (req, res) => {
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });
   }
-  res.json({ ok: true, printer });
+  res.json({ ok: true, printer: serializePrinter(printer) });
 });
 
 printersRouter.patch('/api/printers/:id', async (req, res) => {

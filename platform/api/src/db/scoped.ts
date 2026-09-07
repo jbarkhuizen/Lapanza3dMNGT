@@ -1,18 +1,5 @@
 import { prisma } from './client.js';
 
-// Helper function to format printer response with full Decimal precision
-function formatPrinter<T extends Record<string, any>>(printer: T): T {
-  if (printer && printer.electricityRatePerKwh != null) {
-    printer.electricityRatePerKwh = printer.electricityRatePerKwh.toFixed(4);
-  }
-  return printer;
-}
-
-// Helper function for arrays of printers
-function formatPrinters<T extends Record<string, any>>(printers: T[]): T[] {
-  return printers.map(formatPrinter);
-}
-
 export interface CreateCustomerInput {
   name: string;
   billingAddress: string;
@@ -174,26 +161,18 @@ export function tenantScope(tenantId: string) {
     },
 
     printers: {
-      findMany: async () => {
-        const printers = await prisma.printer.findMany({ where: { tenantId } });
-        return formatPrinters(printers);
-      },
+      findMany: () => prisma.printer.findMany({ where: { tenantId } }),
 
-      findById: async (id: string) => {
-        const printer = await prisma.printer.findFirst({ where: { id, tenantId } });
-        return printer ? formatPrinter(printer) : null;
-      },
+      findById: (id: string) => prisma.printer.findFirst({ where: { id, tenantId } }),
 
-      create: async (data: CreatePrinterInput) => {
-        const printer = await prisma.printer.create({
+      create: (data: CreatePrinterInput) =>
+        prisma.printer.create({
           data: {
             ...data,
             purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
             tenantId,
           },
-        });
-        return formatPrinter(printer);
-      },
+        }),
 
       update: (id: string, data: UpdatePrinterInput) =>
         prisma.printer.updateMany({
