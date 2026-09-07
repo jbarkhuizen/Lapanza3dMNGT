@@ -10,7 +10,13 @@ import {
   type LabourStepFormInput,
 } from '../../api/labourSteps.js';
 
-const emptyForm: LabourStepFormInput = { name: '', hourlyRate: 0, active: true };
+// `hourlyRate` is required by the real API contract (`LabourStepFormInput`), but the form
+// needs to represent "cleared, mid-edit" as `undefined` rather than coercing to `0` —
+// otherwise clearing the field silently produces a real, meaningful rate. `required`
+// on the input then genuinely blocks submitting while it's `undefined`.
+type LabourStepFormState = Omit<LabourStepFormInput, 'hourlyRate'> & { hourlyRate: number | undefined };
+
+const emptyForm: LabourStepFormState = { name: '', hourlyRate: undefined, active: true };
 
 export function LabourStepFormPage() {
   const { id } = useParams();
@@ -19,7 +25,7 @@ export function LabourStepFormPage() {
   const { data: existingStep, isLoading: isLoadingStep, isError: isStepError } = useLabourStep(id);
   const createMutation = useCreateLabourStep();
   const updateMutation = useUpdateLabourStep(id ?? '');
-  const [form, setForm] = useState<LabourStepFormInput>(emptyForm);
+  const [form, setForm] = useState<LabourStepFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const populatedForIdRef = useRef<string | undefined>(undefined);
 
@@ -30,7 +36,7 @@ export function LabourStepFormPage() {
     }
   }, [existingStep, id]);
 
-  function set<K extends keyof LabourStepFormInput>(key: K, value: LabourStepFormInput[K]) {
+  function set<K extends keyof LabourStepFormState>(key: K, value: LabourStepFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -41,7 +47,11 @@ export function LabourStepFormPage() {
       if (isEditMode) {
         await updateMutation.mutateAsync(form);
       } else {
-        await createMutation.mutateAsync(form);
+        // `name` is required and `hourlyRate` is guaranteed non-undefined here because the
+        // input's `required` attribute blocks submitting the form while it's blank — safe to
+        // assert back to the full input type for the create endpoint, which (unlike update)
+        // doesn't accept a partial payload.
+        await createMutation.mutateAsync(form as LabourStepFormInput);
       }
       navigate('/labour-steps');
     } catch (err) {
@@ -66,8 +76,8 @@ export function LabourStepFormPage() {
         id="hourlyRate"
         label="Hourly rate"
         type="number"
-        value={form.hourlyRate}
-        onChange={(e) => set('hourlyRate', Number(e.target.value))}
+        value={form.hourlyRate ?? ''}
+        onChange={(e) => set('hourlyRate', e.target.value ? Number(e.target.value) : undefined)}
         required
       />
       <Checkbox id="active" label="Active" checked={form.active ?? true} onChange={(checked) => set('active', checked)} />

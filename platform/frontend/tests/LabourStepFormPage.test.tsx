@@ -52,6 +52,30 @@ describe('LabourStepFormPage — create mode', () => {
     expect((body as Record<string, unknown>).hourlyRate).toBe(150);
   });
 
+  it('does not coerce a cleared hourlyRate to 0 — clearing it leaves the input blank, not "0"', async () => {
+    // Regression test: `Number('') === 0`, so a naive `onChange={(e) => set('hourlyRate',
+    // Number(e.target.value))}` would snap a cleared field to 0 immediately, making the
+    // input non-empty and silently defeating the `required` attribute on submit.
+    renderAt('/labour-steps/new');
+
+    const hourlyRateInput = screen.getByLabelText('Hourly rate');
+    fireEvent.change(hourlyRateInput, { target: { value: '150' } });
+    expect(hourlyRateInput).toHaveValue(150);
+
+    fireEvent.change(hourlyRateInput, { target: { value: '' } });
+    expect(hourlyRateInput).toHaveValue(null);
+  });
+
+  it('blocks submitting the create form when hourlyRate is left blank', async () => {
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, labourStep: { id: '1' } });
+    renderAt('/labour-steps/new');
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Slicing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
   it('can uncheck the active checkbox before creating', async () => {
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, labourStep: { id: '1' } });
     renderAt('/labour-steps/new');

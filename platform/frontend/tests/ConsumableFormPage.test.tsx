@@ -56,6 +56,31 @@ describe('ConsumableFormPage — create mode', () => {
     expect((body as Record<string, unknown>).reorderThreshold).toBe(200);
   });
 
+  it('does not coerce a cleared costPerUnit to 0 — clearing it leaves the input blank, not "0"', async () => {
+    // Regression test: `Number('') === 0`, so a naive onChange that always ran
+    // `Number(e.target.value)` would snap a cleared required field to 0 immediately, making
+    // the input non-empty and silently defeating the `required` attribute on submit.
+    renderAt('/consumables/new');
+
+    const costPerUnitInput = screen.getByLabelText('Cost per unit');
+    fireEvent.change(costPerUnitInput, { target: { value: '0.5' } });
+    expect(costPerUnitInput).toHaveValue(0.5);
+
+    fireEvent.change(costPerUnitInput, { target: { value: '' } });
+    expect(costPerUnitInput).toHaveValue(null);
+  });
+
+  it('blocks submitting the create form when costPerUnit is left blank', async () => {
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, consumable: { id: '1' } });
+    renderAt('/consumables/new');
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Standard Resin' } });
+    fireEvent.change(screen.getByLabelText('Unit of measure'), { target: { value: 'ml' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(postSpy).not.toHaveBeenCalled();
+  });
+
   it('sends one of the valid CONSUMABLE_CATEGORIES values from the category select, not an arbitrary string', async () => {
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, consumable: { id: '1' } });
     renderAt('/consumables/new');

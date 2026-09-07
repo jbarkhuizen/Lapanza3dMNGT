@@ -10,11 +10,17 @@ import {
   type ConsumableFormInput,
 } from '../../api/consumables.js';
 
-const emptyForm: ConsumableFormInput = {
+// `costPerUnit` is required by the real API contract (`ConsumableFormInput`), but the form
+// needs to represent "cleared, mid-edit" as `undefined` rather than coercing to `0` —
+// otherwise clearing the field silently produces a real, meaningful cost. `required`
+// on the input then genuinely blocks submitting while it's `undefined`.
+type ConsumableFormState = Omit<ConsumableFormInput, 'costPerUnit'> & { costPerUnit: number | undefined };
+
+const emptyForm: ConsumableFormState = {
   name: '',
   category: CONSUMABLE_CATEGORIES[0],
   unitOfMeasure: '',
-  costPerUnit: 0,
+  costPerUnit: undefined,
   currentStock: undefined,
   reorderThreshold: undefined,
   supplier: '',
@@ -32,7 +38,7 @@ export function ConsumableFormPage() {
   const { data: existingConsumable, isLoading: isLoadingConsumable, isError: isConsumableError } = useConsumable(id);
   const createMutation = useCreateConsumable();
   const updateMutation = useUpdateConsumable(id ?? '');
-  const [form, setForm] = useState<ConsumableFormInput>(emptyForm);
+  const [form, setForm] = useState<ConsumableFormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const populatedForIdRef = useRef<string | undefined>(undefined);
 
@@ -51,14 +57,14 @@ export function ConsumableFormPage() {
     }
   }, [existingConsumable, id]);
 
-  function set<K extends keyof ConsumableFormInput>(key: K, value: ConsumableFormInput[K]) {
+  function set<K extends keyof ConsumableFormState>(key: K, value: ConsumableFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  type NumericConsumableField = 'costPerUnit' | 'currentStock' | 'reorderThreshold';
+  type NumericConsumableField = 'currentStock' | 'reorderThreshold';
 
   function setNumber(key: NumericConsumableField, raw: string) {
-    set(key, (raw ? Number(raw) : undefined) as ConsumableFormInput[NumericConsumableField]);
+    set(key, raw ? Number(raw) : undefined);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -68,7 +74,11 @@ export function ConsumableFormPage() {
       if (isEditMode) {
         await updateMutation.mutateAsync(form);
       } else {
-        await createMutation.mutateAsync(form);
+        // `name`, `unitOfMeasure`, `category`, and `costPerUnit` are required and `costPerUnit`
+        // is guaranteed non-undefined here because the input's `required` attribute blocks
+        // submitting the form while it's blank — safe to assert back to the full input type
+        // for the create endpoint, which (unlike update) doesn't accept a partial payload.
+        await createMutation.mutateAsync(form as ConsumableFormInput);
       }
       navigate('/consumables');
     } catch (err) {
@@ -105,7 +115,14 @@ export function ConsumableFormPage() {
         </select>
       </div>
       <FormField id="unitOfMeasure" label="Unit of measure" value={form.unitOfMeasure} onChange={(e) => set('unitOfMeasure', e.target.value)} required />
-      <FormField id="costPerUnit" label="Cost per unit" type="number" value={form.costPerUnit} onChange={(e) => setNumber('costPerUnit', e.target.value)} required />
+      <FormField
+        id="costPerUnit"
+        label="Cost per unit"
+        type="number"
+        value={form.costPerUnit ?? ''}
+        onChange={(e) => set('costPerUnit', e.target.value ? Number(e.target.value) : undefined)}
+        required
+      />
       <FormField id="currentStock" label="Current stock" type="number" value={form.currentStock ?? ''} onChange={(e) => setNumber('currentStock', e.target.value)} />
       <FormField id="reorderThreshold" label="Reorder threshold" type="number" value={form.reorderThreshold ?? ''} onChange={(e) => setNumber('reorderThreshold', e.target.value)} />
       <FormField id="supplier" label="Supplier" value={form.supplier ?? ''} onChange={(e) => set('supplier', e.target.value)} />
