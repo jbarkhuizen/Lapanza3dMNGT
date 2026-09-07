@@ -203,6 +203,28 @@ export interface CreateQuoteInput {
   lineItems: CreateQuoteLineItemInput[];
 }
 
+export interface CreateInvoiceLineItemInput {
+  quoteLineItemId: string | null;
+  costingTemplateId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+}
+
+export interface CreateInvoiceInput {
+  customerId: string;
+  quoteId: string | null;
+  number: string;
+  dueDate: Date;
+  vatApplied: boolean;
+  subtotal: string;
+  vatAmount: string;
+  total: string;
+  notes: string | null;
+  lineItems: CreateInvoiceLineItemInput[];
+}
+
 export interface UpdateCompanyProfileInput {
   businessName?: string;
   contactName?: string;
@@ -472,6 +494,47 @@ export function tenantScope(tenantId: string) {
 
       updateStatus: (id: string, status: string) =>
         prisma.quote.updateMany({ where: { id, tenantId }, data: { status } }),
+    },
+
+    invoices: {
+      findMany: () => prisma.invoice.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+
+      findById: (id: string) =>
+        prisma.invoice.findFirst({ where: { id, tenantId }, include: { lineItems: true } }),
+
+      create: (data: CreateInvoiceInput) =>
+        prisma.invoice.create({
+          data: {
+            tenantId,
+            customerId: data.customerId,
+            quoteId: data.quoteId,
+            number: data.number,
+            dueDate: data.dueDate,
+            vatApplied: data.vatApplied,
+            subtotal: data.subtotal,
+            vatAmount: data.vatAmount,
+            total: data.total,
+            notes: data.notes,
+            lineItems: {
+              create: data.lineItems.map((line) => ({
+                tenantId,
+                quoteLineItemId: line.quoteLineItemId,
+                costingTemplateId: line.costingTemplateId,
+                description: line.description,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                lineTotal: line.lineTotal,
+              })),
+            },
+          },
+          include: { lineItems: true },
+        }),
+
+      updateStatus: (id: string, status: string, amountPaid?: string) =>
+        prisma.invoice.updateMany({
+          where: { id, tenantId },
+          data: { status, ...(amountPaid !== undefined ? { amountPaid } : {}) },
+        }),
     },
 
     tenantSequences: {

@@ -50,6 +50,8 @@ model Tenant {
   tenantSequences        TenantSequence[]
   quotes                 Quote[]
   quoteLineItems         QuoteLineItem[]
+  invoices               Invoice[]
+  invoiceLineItems       InvoiceLineItem[]
 
   @@map("tenants")
 }
@@ -101,7 +103,8 @@ model Customer {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
-  quotes Quote[]
+  quotes   Quote[]
+  invoices Invoice[]
 
   @@index([tenantId])
   @@map("customers")
@@ -263,9 +266,10 @@ model CostingTemplate {
   filament Filament? @relation(fields: [filamentId], references: [id], onDelete: SetNull)
   printer  Printer?  @relation(fields: [printerId], references: [id], onDelete: SetNull)
 
-  labourLines     CostingLabourLine[]
-  consumableLines CostingConsumableLine[]
-  quoteLineItems  QuoteLineItem[]
+  labourLines      CostingLabourLine[]
+  consumableLines  CostingConsumableLine[]
+  quoteLineItems   QuoteLineItem[]
+  invoiceLineItems InvoiceLineItem[]
 
   @@index([tenantId])
   @@map("costing_templates")
@@ -327,6 +331,7 @@ model Quote {
   customer Customer @relation(fields: [customerId], references: [id])
 
   lineItems QuoteLineItem[]
+  invoice   Invoice?
 
   @@index([tenantId])
   @@map("quotes")
@@ -349,4 +354,50 @@ model QuoteLineItem {
   @@index([tenantId])
   @@index([quoteId])
   @@map("quote_line_items")
+}
+
+model Invoice {
+  id         String   @id @default(uuid())
+  tenantId   String
+  number     String
+  customerId String
+  quoteId    String?  @unique
+  status     String   @default("unpaid")
+  dueDate    DateTime @db.Timestamptz(3)
+  vatApplied Boolean
+  subtotal   Decimal  @db.Decimal(12, 2)
+  vatAmount  Decimal  @db.Decimal(12, 2)
+  total      Decimal  @db.Decimal(12, 2)
+  amountPaid Decimal  @default(0) @db.Decimal(12, 2)
+  notes      String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  quote    Quote?   @relation(fields: [quoteId], references: [id])
+
+  lineItems InvoiceLineItem[]
+
+  @@index([tenantId])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id                String  @id @default(uuid())
+  tenantId          String
+  invoiceId         String
+  quoteLineItemId   String?
+  costingTemplateId String?
+  description       String
+  quantity          Float   @default(1)
+  unitPrice         Decimal @db.Decimal(12, 2)
+  lineTotal         Decimal @db.Decimal(12, 2)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  invoice         Invoice          @relation(fields: [invoiceId], references: [id])
+  costingTemplate CostingTemplate? @relation(fields: [costingTemplateId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@map("invoice_line_items")
 }

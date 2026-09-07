@@ -5,6 +5,7 @@ import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { tenantScope } from '../db/scoped.js';
 import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
+import { prisma } from '../db/client.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
@@ -168,4 +169,91 @@ quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
   await scoped.quotes.updateStatus(req.params.id, parsed.data.status);
   const updated = await scoped.quotes.findById(req.params.id);
   res.json({ ok: true, quote: serializeQuote(updated!) });
+});
+
+quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const quote = await scoped.quotes.findById(req.params.id);
+  if (!quote) {
+    return res.status(404).json({ ok: false, error: 'Quote not found.' });
+  }
+  if (quote.status !== 'accepted') {
+    return res.status(400).json({ ok: false, error: 'Only an accepted quote can be converted to an invoice.' });
+  }
+
+  const profile = await scoped.companyProfile.get();
+  if (!profile) {
+    return res.status(404).json({ ok: false, error: 'Tenant not found.' });
+  }
+
+  const tenantId = req.tenantId!;
+  const dueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  try {
+    const invoice = await prisma.$transaction(async (tx) => {
+      const existing = await tx.invoice.findFirst({ where: { quoteId: quote.id, tenantId } });
+      if (existing) {
+        throw new Error('QUOTE_ALREADY_CONVERTED');
+      }
+
+      await tx.tenantSequence.upsert({
+        where: { tenantId_type: { tenantId, type: 'invoice' } },
+        create: { tenantId, type: 'invoice', value: 0 },
+        update: {},
+      });
+      const sequence = await tx.tenantSequence.update({
+        where: { tenantId_type: { tenantId, type: 'invoice' } },
+        data: { value: { increment: 1 } },
+      });
+      const number = formatDocumentNumber(profile.invoiceNumberPrefix, sequence.value);
+
+      return tx.invoice.create({
+        data: {
+          tenantId,
+          customerId: quote.customerId,
+          quoteId: quote.id,
+          number,
+          dueDate,
+          vatApplied: quote.vatApplied,
+          subtotal: quote.subtotal,
+          vatAmount: quote.vatAmount,
+          total: quote.total,
+          notes: quote.notes,
+          lineItems: {
+            create: quote.lineItems.map((line) => ({
+              tenantId,
+              quoteLineItemId: line.id,
+              costingTemplateId: line.costingTemplateId,
+              description: line.description,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              lineTotal: line.lineTotal,
+            })),
+          },
+        },
+        include: { lineItems: true },
+      });
+    });
+
+    res.status(201).json({
+      ok: true,
+      invoice: {
+        ...invoice,
+        subtotal: invoice.subtotal.toFixed(2),
+        vatAmount: invoice.vatAmount.toFixed(2),
+        total: invoice.total.toFixed(2),
+        amountPaid: invoice.amountPaid.toFixed(2),
+        lineItems: invoice.lineItems.map((line) => ({
+          ...line,
+          unitPrice: line.unitPrice.toFixed(2),
+          lineTotal: line.lineTotal.toFixed(2),
+        })),
+      },
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === 'QUOTE_ALREADY_CONVERTED') {
+      return res.status(400).json({ ok: false, error: 'This quote has already been converted to an invoice.' });
+    }
+    throw err;
+  }
 });
