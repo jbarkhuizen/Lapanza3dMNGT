@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/company-profile', label: 'Company Profile' },
   { to: '/customers', label: 'Customers' },
   { to: '/filaments', label: 'Filaments' },
+  { to: '/labour-steps', label: 'Labour Steps' },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

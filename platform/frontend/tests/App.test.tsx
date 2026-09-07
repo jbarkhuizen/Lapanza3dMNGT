@@ -151,4 +151,27 @@ describe('App routing', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Filaments' })).toBeInTheDocument());
   });
+
+  it('renders the Labour Steps list page at "/labour-steps" for an authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+        });
+      }
+      if (path === '/api/labour-steps') {
+        return Promise.resolve({ ok: true, labourSteps: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/labour-steps']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Labour Steps' })).toBeInTheDocument());
+  });
 });
