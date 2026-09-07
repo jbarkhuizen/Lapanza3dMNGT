@@ -309,3 +309,44 @@ test('a tenant cannot see another tenant\'s printer maintenance logs, even with 
   const bListForAsPrinter = await scopedB.printerMaintenanceLogs.findMany(printerA.id);
   assert.equal(bListForAsPrinter.length, 0);
 });
+
+test('a tenant cannot see another tenant\'s costing templates', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+
+  await scopedA.costingTemplates.create({
+    name: 'Tenant A template',
+    filamentId: null,
+    filamentSnapshotBrand: null,
+    filamentSnapshotMaterialType: null,
+    filamentSnapshotCostPerGram: null,
+    weightGrams: 10,
+    printerId: null,
+    printerSnapshotName: null,
+    printerSnapshotElectricityRatePerKwh: null,
+    printerSnapshotDepreciationPerHour: null,
+    printTimeHours: 1,
+    markupPercent: '0',
+    filamentCost: '1.00',
+    electricityCost: '0.00',
+    depreciationCost: '0.00',
+    labourCost: '0.00',
+    consumablesCost: '0.00',
+    totalCost: '1.00',
+    suggestedPrice: '1.00',
+    labourLines: [],
+    consumableLines: [],
+  });
+
+  const aList = await scopedA.costingTemplates.findMany();
+  const bList = await scopedB.costingTemplates.findMany();
+
+  assert.equal(aList.length, 1);
+  assert.equal(bList.length, 0);
+
+  const bFindById = await scopedB.costingTemplates.findById(aList[0].id);
+  assert.equal(bFindById, null);
+});

@@ -143,6 +143,46 @@ export interface UpdateConsumableInput {
   supplier?: string;
 }
 
+export interface CreateCostingTemplateLabourLineInput {
+  labourStepId: string | null;
+  labourStepSnapshotName: string;
+  hourlyRateSnapshot: string;
+  hours: number;
+  lineCost: string;
+}
+
+export interface CreateCostingTemplateConsumableLineInput {
+  consumableId: string | null;
+  consumableSnapshotName: string;
+  costPerUnitSnapshot: string;
+  quantity: number;
+  lineCost: string;
+}
+
+export interface CreateCostingTemplateInput {
+  name: string;
+  filamentId: string | null;
+  filamentSnapshotBrand: string | null;
+  filamentSnapshotMaterialType: string | null;
+  filamentSnapshotCostPerGram: string | null;
+  weightGrams: number;
+  printerId: string | null;
+  printerSnapshotName: string | null;
+  printerSnapshotElectricityRatePerKwh: string | null;
+  printerSnapshotDepreciationPerHour: string | null;
+  printTimeHours: number;
+  markupPercent: string;
+  filamentCost: string;
+  electricityCost: string;
+  depreciationCost: string;
+  labourCost: string;
+  consumablesCost: string;
+  totalCost: string;
+  suggestedPrice: string;
+  labourLines: CreateCostingTemplateLabourLineInput[];
+  consumableLines: CreateCostingTemplateConsumableLineInput[];
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -262,6 +302,64 @@ export function tenantScope(tenantId: string) {
 
       update: (id: string, data: UpdateConsumableInput) =>
         prisma.consumable.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+    },
+
+    costingTemplates: {
+      findMany: () =>
+        prisma.costingTemplate.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+
+      findById: (id: string) =>
+        prisma.costingTemplate.findFirst({
+          where: { id, tenantId },
+          include: { labourLines: true, consumableLines: true },
+        }),
+
+      create: (data: CreateCostingTemplateInput) =>
+        prisma.costingTemplate.create({
+          data: {
+            tenantId,
+            name: data.name,
+            filamentId: data.filamentId,
+            filamentSnapshotBrand: data.filamentSnapshotBrand,
+            filamentSnapshotMaterialType: data.filamentSnapshotMaterialType,
+            filamentSnapshotCostPerGram: data.filamentSnapshotCostPerGram,
+            weightGrams: data.weightGrams,
+            printerId: data.printerId,
+            printerSnapshotName: data.printerSnapshotName,
+            printerSnapshotElectricityRatePerKwh: data.printerSnapshotElectricityRatePerKwh,
+            printerSnapshotDepreciationPerHour: data.printerSnapshotDepreciationPerHour,
+            printTimeHours: data.printTimeHours,
+            markupPercent: data.markupPercent,
+            filamentCost: data.filamentCost,
+            electricityCost: data.electricityCost,
+            depreciationCost: data.depreciationCost,
+            labourCost: data.labourCost,
+            consumablesCost: data.consumablesCost,
+            totalCost: data.totalCost,
+            suggestedPrice: data.suggestedPrice,
+            labourLines: {
+              create: data.labourLines.map((line) => ({
+                tenantId,
+                labourStepId: line.labourStepId,
+                labourStepSnapshotName: line.labourStepSnapshotName,
+                hourlyRateSnapshot: line.hourlyRateSnapshot,
+                hours: line.hours,
+                lineCost: line.lineCost,
+              })),
+            },
+            consumableLines: {
+              create: data.consumableLines.map((line) => ({
+                tenantId,
+                consumableId: line.consumableId,
+                consumableSnapshotName: line.consumableSnapshotName,
+                costPerUnitSnapshot: line.costPerUnitSnapshot,
+                quantity: line.quantity,
+                lineCost: line.lineCost,
+              })),
+            },
+          },
+          include: { labourLines: true, consumableLines: true },
+        }),
     },
   };
 }

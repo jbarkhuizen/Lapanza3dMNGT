@@ -25,6 +25,9 @@ model Tenant {
   filaments              Filament[]
   labourSteps            LabourStep[]
   consumables            Consumable[]
+  costingTemplates       CostingTemplate[]
+  costingLabourLines     CostingLabourLine[]
+  costingConsumableLines CostingConsumableLine[]
 
   @@map("tenants")
 }
@@ -89,6 +92,7 @@ model Printer {
 
   printerPresets         PrinterPreset[]
   printerMaintenanceLogs PrinterMaintenanceLog[]
+  costingTemplates       CostingTemplate[]
 
   @@index([tenantId])
   @@map("printers")
@@ -153,6 +157,8 @@ model Filament {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
+  costingTemplates CostingTemplate[]
+
   @@index([tenantId])
   @@map("filaments")
 }
@@ -166,6 +172,8 @@ model LabourStep {
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  costingLabourLines CostingLabourLine[]
 
   @@index([tenantId])
   @@map("labour_steps")
@@ -185,6 +193,81 @@ model Consumable {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
+  costingConsumableLines CostingConsumableLine[]
+
   @@index([tenantId])
   @@map("consumables")
+}
+
+model CostingTemplate {
+  id                                    String    @id @default(uuid())
+  tenantId                              String
+  name                                  String
+  filamentId                            String?
+  filamentSnapshotBrand                 String?
+  filamentSnapshotMaterialType          String?
+  filamentSnapshotCostPerGram           Decimal?  @db.Decimal(12, 6)
+  weightGrams                           Float
+  printerId                             String?
+  printerSnapshotName                   String?
+  printerSnapshotElectricityRatePerKwh  Decimal?  @db.Decimal(10, 4)
+  printerSnapshotDepreciationPerHour    Decimal?  @db.Decimal(12, 4)
+  printTimeHours                        Float
+  markupPercent                         Decimal   @db.Decimal(6, 2)
+  filamentCost                          Decimal   @db.Decimal(12, 2)
+  electricityCost                       Decimal   @db.Decimal(12, 2)
+  depreciationCost                      Decimal   @db.Decimal(12, 2)
+  labourCost                            Decimal   @db.Decimal(12, 2)
+  consumablesCost                       Decimal   @db.Decimal(12, 2)
+  totalCost                             Decimal   @db.Decimal(12, 2)
+  suggestedPrice                        Decimal   @db.Decimal(12, 2)
+  createdAt                             DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  filament Filament? @relation(fields: [filamentId], references: [id], onDelete: SetNull)
+  printer  Printer?  @relation(fields: [printerId], references: [id], onDelete: SetNull)
+
+  labourLines     CostingLabourLine[]
+  consumableLines CostingConsumableLine[]
+
+  @@index([tenantId])
+  @@map("costing_templates")
+}
+
+model CostingLabourLine {
+  id                     String  @id @default(uuid())
+  tenantId               String
+  costingTemplateId      String
+  labourStepId           String?
+  labourStepSnapshotName String
+  hourlyRateSnapshot     Decimal @db.Decimal(10, 2)
+  hours                  Float
+  lineCost               Decimal @db.Decimal(12, 2)
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  costingTemplate CostingTemplate @relation(fields: [costingTemplateId], references: [id])
+  labourStep      LabourStep?     @relation(fields: [labourStepId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([costingTemplateId])
+  @@map("costing_labour_lines")
+}
+
+model CostingConsumableLine {
+  id                      String  @id @default(uuid())
+  tenantId                String
+  costingTemplateId       String
+  consumableId            String?
+  consumableSnapshotName  String
+  costPerUnitSnapshot     Decimal @db.Decimal(10, 2)
+  quantity                Float
+  lineCost                Decimal @db.Decimal(12, 2)
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  costingTemplate CostingTemplate @relation(fields: [costingTemplateId], references: [id])
+  consumable      Consumable?     @relation(fields: [consumableId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([costingTemplateId])
+  @@map("costing_consumable_lines")
 }
