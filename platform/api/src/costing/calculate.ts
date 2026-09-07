@@ -43,8 +43,11 @@ export interface CostingResult {
   consumablesCost: Prisma.Decimal;
   totalCost: Prisma.Decimal;
   suggestedPrice: Prisma.Decimal;
+  markupPercent: Prisma.Decimal;
   labourLineCosts: Prisma.Decimal[];
   consumableLineCosts: Prisma.Decimal[];
+  labourLineRates: Prisma.Decimal[];
+  consumableLineRates: Prisma.Decimal[];
 }
 
 export class CostingInputError extends Error {}
@@ -59,6 +62,8 @@ function round(value: Prisma.Decimal, decimalPlaces: number): Prisma.Decimal {
 
 export function calculateCosting(input: CostingInput): CostingResult {
   const { filament, printer, labourLines, consumableLines, markupPercent } = input;
+
+  const roundedMarkupPercent = round(toDecimal(markupPercent), 2);
 
   let costPerGram: Prisma.Decimal;
   if (filament.costPerKg != null) {
@@ -89,10 +94,12 @@ export function calculateCosting(input: CostingInput): CostingResult {
   );
   const depreciationCost = round(toDecimal(printer.printTimeHours).times(depreciationPerHour), 2);
 
-  const labourLineCosts = labourLines.map((line) => round(toDecimal(line.hourlyRate).times(line.hours), 2));
+  const labourLineRates = labourLines.map((line) => round(toDecimal(line.hourlyRate), 2));
+  const labourLineCosts = labourLines.map((line, i) => round(labourLineRates[i].times(line.hours), 2));
   const labourCost = labourLineCosts.reduce((sum, cost) => sum.plus(cost), new Prisma.Decimal(0));
 
-  const consumableLineCosts = consumableLines.map((line) => round(toDecimal(line.costPerUnit).times(line.quantity), 2));
+  const consumableLineRates = consumableLines.map((line) => round(toDecimal(line.costPerUnit), 2));
+  const consumableLineCosts = consumableLines.map((line, i) => round(consumableLineRates[i].times(line.quantity), 2));
   const consumablesCost = consumableLineCosts.reduce((sum, cost) => sum.plus(cost), new Prisma.Decimal(0));
 
   const totalCost = round(
@@ -101,7 +108,7 @@ export function calculateCosting(input: CostingInput): CostingResult {
   );
 
   const suggestedPrice = round(
-    totalCost.times(new Prisma.Decimal(1).plus(toDecimal(markupPercent).dividedBy(100))),
+    totalCost.times(new Prisma.Decimal(1).plus(roundedMarkupPercent.dividedBy(100))),
     2,
   );
 
@@ -115,7 +122,10 @@ export function calculateCosting(input: CostingInput): CostingResult {
     consumablesCost,
     totalCost,
     suggestedPrice,
+    markupPercent: roundedMarkupPercent,
     labourLineCosts,
     consumableLineCosts,
+    labourLineRates,
+    consumableLineRates,
   };
 }

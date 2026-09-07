@@ -259,6 +259,40 @@ test('rejects a consumable belonging to another tenant', async () => {
   assert.equal(res.body.error, 'One of the consumables was not found.');
 });
 
+test('persisted snapshot rates reproduce their persisted costs after rounding', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const filamentRes = await agent.post('/api/filaments').send({
+    brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, costPerKg: 300,
+  });
+  const printerRes = await agent.post('/api/printers').send({
+    name: 'Printer 1', powerDrawWatts: 200, purchaseCost: 4000,
+    electricityRatePerKwh: 2.5, expectedLifetimeHours: 2000,
+  });
+  const labourRes = await agent.post('/api/labour-steps').send({ name: 'Slicing', hourlyRate: 45.335 });
+  const consumableRes = await agent.post('/api/consumables').send({
+    name: 'Adhesive', category: 'build-plate-adhesive', unitOfMeasure: 'each', costPerUnit: 0.125,
+  });
+
+  const res = await agent.post('/api/costing-templates').send({
+    name: 'Fractional rates test',
+    filamentId: filamentRes.body.filament.id,
+    weightGrams: 50,
+    printerId: printerRes.body.printer.id,
+    printTimeHours: 2,
+    markupPercent: 12.345,
+    labourLines: [{ labourStepId: labourRes.body.labourStep.id, hours: 2 }],
+    consumableLines: [{ consumableId: consumableRes.body.consumable.id, quantity: 7 }],
+  });
+  assert.equal(res.status, 201);
+  const t = res.body.costingTemplate;
+  assert.equal(t.markupPercent, '12.35');
+  assert.equal(t.labourLines[0].hourlyRateSnapshot, '45.34');
+  assert.equal(t.labourLines[0].lineCost, '90.68');
+  assert.equal(t.consumableLines[0].costPerUnitSnapshot, '0.13');
+  assert.equal(t.consumableLines[0].lineCost, '0.91');
+});
+
 test('GET /api/costing-templates/:id returns 404 for another tenant\'s template', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');

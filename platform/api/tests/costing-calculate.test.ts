@@ -169,3 +169,41 @@ test('the five cost components sum exactly to totalCost, even with fractional in
     .plus(result.consumablesCost);
   assert.equal(componentSum.toFixed(2), result.totalCost.toFixed(2));
 });
+
+test('rounds each labour/consumable line to exact cents before summing, using round-half-up', () => {
+  const result = calculateCosting({
+    filament: baseFilament,
+    printer: basePrinter,
+    labourLines: [{ hourlyRate: 62.5, hours: 0.85 }], // 53.125 -> 53.13 under HALF_UP (53.12 under HALF_EVEN)
+    // the rate is rounded to 2dp FIRST (2.335 -> 2.34 under HALF_UP), THEN multiplied:
+    // 2.34 * 3 = 7.02 exactly. (Rounding the raw 2.335 * 3 = 7.005 total directly, without
+    // rounding the rate first, would give 7.01 -- that's the old, now-fixed defect.)
+    consumableLines: [{ costPerUnit: 2.335, quantity: 3 }],
+    markupPercent: 0,
+  });
+  assert.equal(result.labourLineCosts[0].toFixed(2), '53.13');
+  assert.equal(result.consumableLineCosts[0].toFixed(2), '7.02');
+});
+
+test('rounds markupPercent, hourlyRate, and costPerUnit snapshots to 2dp and returns them for persistence', () => {
+  const result = calculateCosting({
+    filament: baseFilament,
+    printer: basePrinter,
+    labourLines: [{ hourlyRate: 45.335, hours: 2 }],
+    consumableLines: [{ costPerUnit: 0.125, quantity: 7 }],
+    markupPercent: 12.345,
+  });
+  assert.equal(result.markupPercent.toFixed(2), '12.35');
+  assert.equal(result.labourLineRates[0].toFixed(2), '45.34');
+  assert.equal(result.consumableLineRates[0].toFixed(2), '0.13');
+  // the whole point: re-multiplying the PERSISTED rate by the PERSISTED quantity
+  // must reproduce the PERSISTED line cost exactly -- this is what was broken
+  assert.equal(
+    result.labourLineRates[0].times(2).toFixed(2),
+    result.labourLineCosts[0].toFixed(2),
+  );
+  assert.equal(
+    result.consumableLineRates[0].times(7).toFixed(2),
+    result.consumableLineCosts[0].toFixed(2),
+  );
+});
