@@ -192,6 +192,49 @@ test('PATCH /api/invoices/:id/status treats paid as a terminal status', async ()
   assert.equal(unpay.status, 400);
 });
 
+test('PATCH /api/invoices/:id/status allows recording a second, larger partial payment', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const first = await agent
+    .patch(`/api/invoices/${invoiceId}/status`)
+    .send({ status: 'partially_paid', amountPaid: 30 });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.invoice.amountPaid, '30.00');
+
+  const second = await agent
+    .patch(`/api/invoices/${invoiceId}/status`)
+    .send({ status: 'partially_paid', amountPaid: 60 });
+  assert.equal(second.status, 200);
+  assert.equal(second.body.invoice.status, 'partially_paid');
+  assert.equal(second.body.invoice.amountPaid, '60.00');
+});
+
+test('PATCH /api/invoices/:id/status allows re-confirming overdue on an already-overdue invoice', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const first = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'overdue' });
+  assert.equal(first.status, 200);
+  assert.equal(first.body.invoice.status, 'overdue');
+
+  const second = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'overdue' });
+  assert.equal(second.status, 200);
+  assert.equal(second.body.invoice.status, 'overdue');
+});
+
 test('POST /api/quotes/:id/convert-to-invoice requires an accepted quote', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);

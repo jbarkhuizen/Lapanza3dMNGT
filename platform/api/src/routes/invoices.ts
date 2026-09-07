@@ -162,8 +162,8 @@ const updateInvoiceStatusSchema = z
 
 const VALID_INVOICE_STATUS_TRANSITIONS: Record<string, string[]> = {
   unpaid: ['partially_paid', 'paid', 'overdue'],
-  partially_paid: ['paid', 'overdue'],
-  overdue: ['partially_paid', 'paid'],
+  partially_paid: ['partially_paid', 'paid', 'overdue'],
+  overdue: ['overdue', 'partially_paid', 'paid'],
   paid: [],
 };
 
