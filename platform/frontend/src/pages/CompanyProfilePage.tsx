@@ -4,6 +4,7 @@ import { Checkbox } from '../components/Checkbox.js';
 import { TextareaField } from '../components/TextareaField.js';
 import { ApiError } from '../api/client.js';
 import { useCompanyProfile, useUpdateCompanyProfile, type UpdateCompanyProfileInput } from '../api/companyProfile.js';
+import { omitBlankStrings } from '../lib/omitBlankStrings.js';
 
 type FormState = UpdateCompanyProfileInput;
 
@@ -31,7 +32,7 @@ export function CompanyProfilePage() {
     setError(null);
     setSaved(false);
     try {
-      await updateMutation.mutateAsync(form);
+      await updateMutation.mutateAsync(omitBlankStrings(form));
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');

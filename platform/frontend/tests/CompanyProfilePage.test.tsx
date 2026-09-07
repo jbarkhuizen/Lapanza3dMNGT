@@ -70,6 +70,24 @@ describe('CompanyProfilePage', () => {
     await waitFor(() => expect(screen.getByText('Saved.')).toBeInTheDocument());
   });
 
+  it('does not send a blank optional field as an empty string when saving', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      companyProfile: { ...baseProfile, registrationNumber: '' },
+    });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('City'), { target: { value: 'Cape Town' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.registrationNumber).not.toBe('');
+    expect(payload.registrationNumber).toBeUndefined();
+  });
+
   it('checking "VAT registered" reveals the VAT number field as required', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
     renderPage();

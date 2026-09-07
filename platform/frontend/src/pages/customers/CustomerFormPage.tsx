@@ -9,6 +9,7 @@ import {
   useUpdateCustomer,
   type CustomerFormInput,
 } from '../../api/customers.js';
+import { omitBlankStrings } from '../../lib/omitBlankStrings.js';
 
 const emptyForm: CustomerFormInput = {
   name: '',
@@ -55,9 +56,9 @@ export function CustomerFormPage() {
     setError(null);
     try {
       if (isEditMode) {
-        await updateMutation.mutateAsync(form);
+        await updateMutation.mutateAsync(omitBlankStrings(form));
       } else {
-        await createMutation.mutateAsync(form);
+        await createMutation.mutateAsync(omitBlankStrings(form));
       }
       navigate('/customers');
     } catch (err) {

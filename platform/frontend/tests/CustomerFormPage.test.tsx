@@ -39,6 +39,20 @@ describe('CustomerFormPage — create mode', () => {
     );
     await waitFor(() => expect(screen.getByText('customers list')).toBeInTheDocument());
   });
+
+  it('omits the email field instead of sending it as an empty string when left blank', async () => {
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, customer: { id: '1' } });
+    renderAt('/customers/new');
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bob Client' } });
+    fireEvent.change(screen.getByLabelText('Billing address'), { target: { value: '1 Oak St' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, payload] = postSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.email).not.toBe('');
+    expect(payload.email).toBeUndefined();
+  });
 });
 
 describe('CustomerFormPage — edit mode', () => {
@@ -57,5 +71,23 @@ describe('CustomerFormPage — edit mode', () => {
     await waitFor(() =>
       expect(patchSpy).toHaveBeenCalledWith('/api/customers/1', expect.objectContaining({ company: 'Acme Co' })),
     );
+  });
+
+  it('does not flatten an existing null notes field to an empty string when editing an unrelated field', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      customer: { id: '1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true });
+    renderAt('/customers/1');
+
+    await waitFor(() => expect(screen.getByDisplayValue('Bob Client')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Bob Client Jr' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.notes).not.toBe('');
+    expect(payload.notes).toBeUndefined();
   });
 });
