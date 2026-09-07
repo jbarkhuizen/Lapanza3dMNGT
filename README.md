@@ -13,7 +13,7 @@ current state, what's live vs. not, gotchas. This file is just the map.
 
 | Folder | What it is | Status |
 |---|---|---|
-| [`landing/`](landing/) | Temporary holding page for barkie.co.za — static-ish Express app with an email signup | Built, tested locally. **Not yet deployed** — barkie.co.za still shows the pre-existing placeholder. |
+| [`landing/`](landing/) | Temporary holding page for barkie.co.za — Express app with an email signup | **Live** at https://barkie.co.za (deployed 2026-09-07, `barkie-landing.service` on the VPS). |
 | [`platform/api/`](platform/api/) | The real product: Node/TypeScript/Express/Postgres API — auth, tenant isolation, Customer CRUD so far | Foundation merged to `master`, pushed to GitHub. **Not yet deployed anywhere** — no server is running it. |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs (what to build and why) | — |
 | [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans (task-by-task build instructions) | — |

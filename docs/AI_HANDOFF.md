@@ -19,9 +19,9 @@ printers, filament, labour, consumables, job costing, quotes/invoices).
 **Repo:** `github.com/jbarkhuizen/Lapanza3dMNGT`, branch `master` (no PR
 workflow so far — merges go straight in, via git worktrees + subagent-driven
 task review during development)
-**Live site:** https://barkie.co.za — **still shows the original bare
-placeholder** ("This is the Home of the new barkie.co.za site"). Nothing
-built in this repo has been deployed anywhere yet.
+**Live site:** https://barkie.co.za — the `landing/` coming-soon page is
+now live (deployed 2026-09-07). `platform/api/` is still not deployed
+anywhere.
 **Backlog board:** https://claude.ai/code/artifact/43333269-4f57-4dd3-8e44-c72367c2525d
 — live, shared, database-backed. Add items here as you find them, the same
 way lapanza3d's admin Todo/Backlog page works (this board's categories/
@@ -42,8 +42,8 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 
 | Item | State |
 |---|---|
-| **barkie.co.za (live domain)** | Still the pre-existing bare placeholder. Neither the landing page nor the API is deployed there. |
-| **`landing/`** | Built and tested locally (Express + better-sqlite3, email-capture endpoint). Has deploy instructions in its README for its own folder/process on the VPS. Not deployed. |
+| **barkie.co.za (live domain)** | Live: `landing/` coming-soon page, deployed 2026-09-07. Runs as systemd service `barkie-landing.service` on the VPS (`/opt/barkie/app`, `node server.js`, port 4100, `User=deploy`, `Restart=on-failure`), nginx reverse-proxies `barkie.co.za`/`www.barkie.co.za` to it (`/etc/nginx/conf.d/barkie.conf`) — same pattern as `lapanza-admin.service`. Existing Certbot SSL cert untouched. Old placeholder backed up at `/opt/barkie/backup-2026-09-07/` on the VPS. |
+| **`landing/`** | Deployed and verified end-to-end in production (page renders, dark mode, `/api/notify` signup tested live then cleaned up). Deploy access: `ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147` (same key as lapanza3d; `deploy` has passwordless sudo on this box). To redeploy after a code change: `tar` the `landing/` folder (excluding `node_modules`/`data`/`.env`), `scp` it up, extract into `/opt/barkie/app`, `npm install --omit=dev`, `sudo systemctl restart barkie-landing`. |
 | **`platform/api/`** | Foundation merged to `master`, pushed to GitHub. Auth (register/verify/login/logout/session), tenant isolation (`tenantScope`, the sole sanctioned path to tenant-scoped tables), Customer CRUD, rate limiting. 23 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. |
 | **Frontend** | Does not exist yet. The API has no UI to log into outside of raw HTTP calls / the test suite. This is the next real gap — see backlog item "Phase 1: Subscriber dashboard frontend". |
 | **Database** | PostgreSQL 18, local dev only (`barkie_dev`/`barkie_test`, role `barkie`). No production database exists. |
@@ -67,8 +67,7 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 
 1. Decide on and build the subscriber dashboard frontend (nothing exists yet — first real UI work).
 2. Build out the remaining Phase 1 domain modules (printers, filament, labour, consumables), then the costing engine and quotes/invoices — SRS §8.3 calls costing + quotes/invoices the non-negotiable core.
-3. Deploy `landing/` to the real VPS so barkie.co.za stops showing the placeholder.
-4. Eventually deploy `platform/api/` alongside it once there's a frontend worth serving.
+3. Eventually deploy `platform/api/` to the VPS alongside the landing page, once there's a frontend worth serving.
 
 Full detail on all of the above — and everything else not urgent enough to
 put here — lives in the backlog board, not this file. Check it before
