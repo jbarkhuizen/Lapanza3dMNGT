@@ -12,7 +12,7 @@ describe('RegisterPage', () => {
   it('submits businessName, contactName, email, and password to /api/auth/register', async () => {
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true });
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <RegisterPage />
       </MemoryRouter>,
     );
@@ -36,7 +36,7 @@ describe('RegisterPage', () => {
   it('shows a success message after registering, instead of navigating away', async () => {
     vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true });
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <RegisterPage />
       </MemoryRouter>,
     );
@@ -48,5 +48,14 @@ describe('RegisterPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Register' }));
 
     await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument());
+  });
+
+  it('renders an "Already have an account? Log in" link that does not point at the /app/ prefix', () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <RegisterPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: /log in/i }).getAttribute('href')).not.toMatch(/^\/app\//);
   });
 });

@@ -2,14 +2,21 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  fieldErrors?: Record<string, string>;
+  constructor(message: string, status: number, fieldErrors?: Record<string, string>) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.fieldErrors = fieldErrors;
   }
 }
 
-type ApiEnvelope = { ok: boolean; error?: string; [key: string]: unknown };
+type ApiEnvelope = {
+  ok: boolean;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+  [key: string]: unknown;
+};
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -17,6 +24,10 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
+
+  if (response.status === 204) {
+    return { ok: true } as T;
+  }
 
   let body: ApiEnvelope;
   try {
@@ -26,7 +37,7 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
   }
 
   if (!body.ok) {
-    throw new ApiError(body.error ?? 'Something went wrong. Try again shortly.', response.status);
+    throw new ApiError(body.error ?? 'Something went wrong. Try again shortly.', response.status, body.fieldErrors);
   }
 
   return body as T;

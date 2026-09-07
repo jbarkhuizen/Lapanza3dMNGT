@@ -1,8 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { apiPost, ApiError } from '../../api/client.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { FormField } from '../../components/FormField.js';
+
+interface LocationState {
+  from?: { pathname: string };
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,6 +15,7 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const { refetch } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -19,7 +24,8 @@ export function LoginPage() {
     try {
       await apiPost('/api/auth/login', { email, password });
       await refetch();
-      navigate('/');
+      const state = location.state as LocationState | null;
+      navigate(state?.from?.pathname ?? '/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     } finally {

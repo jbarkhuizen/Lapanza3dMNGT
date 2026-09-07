@@ -16,7 +16,7 @@ beforeEach(() => {
 describe('AppShell', () => {
   it('shows the tenant business name once loaded', async () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <AppShell>
             <div>page content</div>
@@ -31,7 +31,7 @@ describe('AppShell', () => {
   it('logs out and calls /api/auth/logout when the logout button is clicked', async () => {
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true });
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AuthProvider>
           <AppShell>
             <div>page content</div>

@@ -5,6 +5,7 @@ import { LoginPage } from './pages/auth/LoginPage.js';
 import { RegisterPage } from './pages/auth/RegisterPage.js';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage.js';
 import { DashboardHomePage } from './pages/DashboardHomePage.js';
+import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
   return (
@@ -23,6 +24,7 @@ export function App() {
             </RequireAuth>
           }
         />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AuthProvider>
   );

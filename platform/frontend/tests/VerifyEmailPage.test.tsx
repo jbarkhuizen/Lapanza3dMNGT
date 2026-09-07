@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -8,15 +9,16 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderWithToken(token: string | null) {
+function renderWithToken(token: string | null, options?: { strictMode?: boolean }) {
   const path = token ? `/verify-email?token=${token}` : '/verify-email';
-  return render(
-    <MemoryRouter initialEntries={[path]}>
+  const tree = (
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={[path]}>
       <Routes>
         <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+  return render(options?.strictMode ? <React.StrictMode>{tree}</React.StrictMode> : tree);
 }
 
 describe('VerifyEmailPage', () => {
@@ -25,6 +27,20 @@ describe('VerifyEmailPage', () => {
     renderWithToken('abc123');
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/auth/verify-email', { token: 'abc123' }));
     await waitFor(() => expect(screen.getByText(/verified/i)).toBeInTheDocument());
+  });
+
+  it('posts the verification request exactly once under React.StrictMode double-invoked effects', async () => {
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true });
+    renderWithToken('abc123', { strictMode: true });
+    await waitFor(() => expect(screen.getByText(/verified/i)).toBeInTheDocument());
+    expect(postSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a "Log in to continue" link that does not point at the /app/ prefix', async () => {
+    vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true });
+    renderWithToken('abc123');
+    await waitFor(() => expect(screen.getByText(/verified/i)).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /log in to continue/i }).getAttribute('href')).not.toMatch(/^\/app\//);
   });
 
   it('shows an error message when verification fails', async () => {

@@ -10,6 +10,7 @@ export function VerifyEmailPage() {
   const requestedTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
+    setStatus('verifying');
     if (!token) {
       setStatus('error');
       setError('No verification token was found in this link.');

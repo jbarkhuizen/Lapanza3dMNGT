@@ -41,6 +41,41 @@ describe('apiGet', () => {
     });
     await expect(apiGet('/api/health')).rejects.toMatchObject({ status: 500 });
   });
+
+  it('passes through fieldErrors on an { ok: false } response when present', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      status: 422,
+      json: async () => ({
+        ok: false,
+        error: 'Validation failed.',
+        fieldErrors: { email: 'Email is already in use.' },
+      }),
+    });
+    await expect(apiGet('/api/auth/register')).rejects.toMatchObject({
+      fieldErrors: { email: 'Email is already in use.' },
+    });
+  });
+
+  it('leaves fieldErrors undefined when the response does not include it', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      status: 401,
+      json: async () => ({ ok: false, error: 'Log in to continue.' }),
+    });
+    await expect(apiGet('/api/auth/me')).rejects.toMatchObject({ fieldErrors: undefined });
+  });
+
+  it('returns a synthetic ok body for a 204 No Content response without parsing json', async () => {
+    (fetch as any).mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => {
+        throw new Error('should not be called for a 204 response');
+      },
+    });
+    await expect(apiGet('/api/some-resource')).resolves.toEqual({ ok: true });
+  });
 });
 
 describe('apiPost', () => {

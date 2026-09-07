@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { apiGet } from '../api/client.js';
+import { apiGet, ApiError } from '../api/client.js';
 
 export interface Tenant {
   id: string;
@@ -25,8 +25,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const result = await apiGet<{ tenant: Tenant }>('/api/auth/me');
       setTenant(result.tenant);
-    } catch {
-      setTenant(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setTenant(null);
+      }
+      // A transient failure (network error, 500, etc.) shouldn't silently
+      // log the user out mid-session — leave tenant as-is.
     } finally {
       setLoading(false);
     }
@@ -36,7 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refetch();
   }, [refetch]);
 
-  return <AuthContext.Provider value={{ tenant, loading, refetch }}>{children}</AuthContext.Provider>;
+  const value = useMemo(() => ({ tenant, loading, refetch }), [tenant, loading, refetch]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {
