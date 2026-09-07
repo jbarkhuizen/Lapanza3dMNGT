@@ -55,7 +55,7 @@ export function FilamentFormPage() {
         spoolWeightGrams: existingFilament.spoolWeightGrams ?? undefined,
         remainingWeightGrams: existingFilament.remainingWeightGrams ?? undefined,
         supplier: existingFilament.supplier ?? '',
-        purchaseDate: existingFilament.purchaseDate ?? '',
+        purchaseDate: existingFilament.purchaseDate?.slice(0, 10) ?? '',
         notes: existingFilament.notes ?? '',
         lowStockThresholdGrams: existingFilament.lowStockThresholdGrams ?? undefined,
       });
@@ -66,8 +66,11 @@ export function FilamentFormPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function setNumber(key: keyof FilamentFormInput, raw: string) {
-    set(key, (raw ? Number(raw) : undefined) as never);
+  type NumericFilamentField =
+    | 'costPerSpool' | 'costPerKg' | 'spoolWeightGrams' | 'remainingWeightGrams' | 'lowStockThresholdGrams';
+
+  function setNumber(key: NumericFilamentField, raw: string) {
+    set(key, raw ? Number(raw) : undefined);
   }
 
   async function handleSubmit(e: FormEvent) {

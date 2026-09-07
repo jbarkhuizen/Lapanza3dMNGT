@@ -91,4 +91,20 @@ describe('FilamentFormPage — edit mode', () => {
       expect(patchSpy).toHaveBeenCalledWith('/api/filaments/1', expect.objectContaining({ colour: 'Black' })),
     );
   });
+
+  it('displays purchaseDate in YYYY-MM-DD format when editing a filament with an ISO datetime from backend', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      filament: {
+        id: '1', brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, colour: null,
+        costPerSpool: null, costPerKg: null, spoolWeightGrams: null, remainingWeightGrams: null,
+        supplier: null, purchaseDate: '2026-03-15T00:00:00.000Z', notes: null, lowStockThresholdGrams: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    renderAt('/filaments/1');
+
+    await waitFor(() => expect(screen.getByDisplayValue('eSun')).toBeInTheDocument());
+    expect((screen.getByLabelText('Purchase date') as HTMLInputElement).value).toBe('2026-03-15');
+  });
 });
