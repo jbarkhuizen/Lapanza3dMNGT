@@ -1,6 +1,7 @@
 import { prisma } from '../../src/db/client.js';
 
 export async function resetTestDatabase() {
+  await prisma.printerMaintenanceLog.deleteMany();
   await prisma.printerPreset.deleteMany();
   await prisma.printer.deleteMany();
   await prisma.customer.deleteMany();

@@ -70,6 +70,13 @@ export interface UpdatePrinterPresetInput {
   notes?: string;
 }
 
+export interface CreateMaintenanceLogInput {
+  date: string;
+  description: string;
+  cost?: number;
+  performedBy?: string;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -126,6 +133,19 @@ export function tenantScope(tenantId: string) {
         prisma.printerPreset.updateMany({
           where: { id, printerId, tenantId },
           data: { ...data, tenantId: undefined, printerId: undefined },
+        }),
+    },
+
+    printerMaintenanceLogs: {
+      findMany: (printerId: string) =>
+        prisma.printerMaintenanceLog.findMany({
+          where: { printerId, tenantId },
+          orderBy: { date: 'desc' },
+        }),
+
+      create: (printerId: string, data: CreateMaintenanceLogInput) =>
+        prisma.printerMaintenanceLog.create({
+          data: { ...data, date: new Date(data.date), printerId, tenantId },
         }),
     },
   };

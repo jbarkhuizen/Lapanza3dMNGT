@@ -18,9 +18,10 @@ model Tenant {
   verificationTokenExpires DateTime? @db.Timestamptz(3)
   createdAt                DateTime  @default(now()) @db.Timestamptz(3)
 
-  customers      Customer[]
-  printers       Printer[]
-  printerPresets PrinterPreset[]
+  customers              Customer[]
+  printers               Printer[]
+  printerPresets         PrinterPreset[]
+  printerMaintenanceLogs PrinterMaintenanceLog[]
 
   @@map("tenants")
 }
@@ -81,7 +82,8 @@ model Printer {
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
-  printerPresets PrinterPreset[]
+  printerPresets         PrinterPreset[]
+  printerMaintenanceLogs PrinterMaintenanceLog[]
 
   @@index([tenantId])
   @@map("printers")
@@ -107,4 +109,22 @@ model PrinterPreset {
   @@index([tenantId])
   @@index([printerId])
   @@map("printer_presets")
+}
+
+model PrinterMaintenanceLog {
+  id          String   @id @default(uuid())
+  tenantId    String
+  printerId   String
+  date        DateTime @db.Timestamptz(3)
+  description String
+  cost        Float?
+  performedBy String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  printer Printer @relation(fields: [printerId], references: [id])
+
+  @@index([tenantId])
+  @@index([printerId])
+  @@map("printer_maintenance_logs")
 }

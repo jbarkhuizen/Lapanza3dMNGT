@@ -8,6 +8,7 @@ import { createAuthRouter } from './routes/auth.js';
 import { customersRouter } from './routes/customers.js';
 import { printersRouter } from './routes/printers.js';
 import { printerPresetsRouter } from './routes/printer-presets.js';
+import { printerMaintenanceRouter } from './routes/printer-maintenance.js';
 
 export function buildApp() {
   const app = express();
@@ -26,6 +27,7 @@ export function buildApp() {
   app.use(customersRouter);
   app.use(printersRouter);
   app.use(printerPresetsRouter);
+  app.use(printerMaintenanceRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
