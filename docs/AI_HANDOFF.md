@@ -44,10 +44,10 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 |---|---|
 | **barkie.co.za (live domain)** | Live: `landing/` coming-soon page, deployed 2026-09-07. Runs as systemd service `barkie-landing.service` on the VPS (`/opt/barkie/app`, `node server.js`, port 4100, `User=deploy`, `Restart=on-failure`), nginx reverse-proxies `barkie.co.za`/`www.barkie.co.za` to it (`/etc/nginx/conf.d/barkie.conf`) — same pattern as `lapanza-admin.service`. Existing Certbot SSL cert untouched. Old placeholder backed up at `/opt/barkie/backup-2026-09-07/` on the VPS. |
 | **`landing/`** | Deployed and verified end-to-end in production (page renders, dark mode, `/api/notify` signup tested live then cleaned up). Deploy access: `ssh -i ~/.ssh/lapanza_vps_deploy deploy@41.222.36.147` (same key as lapanza3d; `deploy` has passwordless sudo on this box). To redeploy after a code change: `tar` the `landing/` folder (excluding `node_modules`/`data`/`.env`), `scp` it up, extract into `/opt/barkie/app`, `npm install --omit=dev`, `sudo systemctl restart barkie-landing`. |
-| **`platform/api/`** | Foundation + Reference Data Modules both merged to `master`, pushed to GitHub. Auth (register/verify/login/logout/session), tenant isolation (`tenantScope`), Customer/Printer/PrinterPreset/PrinterMaintenanceLog/Filament/LabourStep/Consumable CRUD, rate limiting. 58 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. |
+| **`platform/api/`** | Foundation + Reference Data Modules + Costing Engine all merged to `master`, pushed to GitHub. Auth, tenant isolation (`tenantScope`), Customer/Printer/PrinterPreset/PrinterMaintenanceLog/Filament/LabourStep/Consumable CRUD, `CostingTemplate` (money-correct, Decimal-based), rate limiting. 86 tests passing, `tsc --noEmit` clean. **Not deployed anywhere** — only exists as source + whatever's running on the local dev machine. |
 | **Frontend** | Does not exist yet. The API has no UI to log into outside of raw HTTP calls / the test suite. This is the next real gap — see backlog item "Phase 1: Subscriber dashboard frontend". |
 | **Database** | PostgreSQL 18, local dev only (`barkie_dev`/`barkie_test`, role `barkie`). No production database exists. |
-| **Domain modules** | `Customer`, `Printer` (+ `PrinterPreset`, `PrinterMaintenanceLog`), `Filament`, `LabourStep`, `Consumable` all exist and are tenant-isolated. Costing engine and quotes/invoices — not started (SRS §8.3's "non-negotiable core", next up). |
+| **Domain modules** | `Customer`, `Printer` (+ `PrinterPreset`, `PrinterMaintenanceLog`), `Filament`, `LabourStep`, `Consumable`, `CostingTemplate` (+ `CostingLabourLine`, `CostingConsumableLine`) all exist and are tenant-isolated. Quotes/invoices — not started (SRS §8.3's other non-negotiable-core piece, next up). |
 | **Billing/subscription** | Phase 2, not started. Needs PayFast + PayPal merchant credentials as a dependency. |
 
 ## Non-obvious things that will bite you if you don't know them
@@ -65,9 +65,53 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 
 ## What to do next (roughly, per the backlog's priorities)
 
-1. Build the costing engine and quotes/invoices — SRS §8.3 calls this the non-negotiable core, and all its inputs (filament, printers, labour, consumables) now exist.
+1. Build quotes/invoices — SRS §8.3's other non-negotiable-core piece. `CostingTemplate` now exists as the thing a quote's line items will pull from.
 2. Decide on and build the subscriber dashboard frontend (nothing exists yet — first real UI work; the API has no UI to log into outside raw HTTP calls / tests).
 3. Eventually deploy `platform/api/` to the VPS alongside the landing page, once there's a frontend worth serving.
+
+## Money math: the Decimal convention (read this before touching any cost field)
+
+The costing engine (`src/costing/calculate.ts`, `src/routes/costing-templates.ts`)
+is the only place in the codebase doing real financial arithmetic, and it
+went through three rounds of final-review fixes — all real, live-reproduced
+bugs, all in the same family. The pattern that emerged, and that any future
+money-handling code (quotes/invoices) should follow:
+
+1. **Data layer (`scoped.ts`) always returns a live `Prisma.Decimal`** for
+   any Decimal-typed column — never format, never coerce to a string,
+   never touch it. `Prisma.Decimal`'s default `toString()`/JSON
+   serialization does NOT preserve column scale (`new Decimal('2.5000').toString()`
+   gives `'2.5'`, not `'2.5000'`) — this is genuinely non-obvious and bit
+   this plan twice before the pattern below was established.
+2. **Formatting for display happens only at the HTTP response boundary**,
+   via a small `serializeX()` helper in the route file (see
+   `serializePrinter()` in `routes/printers.ts`, `serializeCostingTemplate()`
+   in `routes/costing-templates.ts`) — `.toFixed(n)` at each field's actual
+   `@db.Decimal(p, s)` scale, applied only at the response points, never
+   inside `scoped.ts`.
+3. **Round every RATE before deriving a COST from it, not after.** If a
+   per-unit rate (a snapshot, a per-gram cost, a per-hour depreciation
+   figure) is going to be persisted alongside a cost computed from it,
+   round the rate first (to its own column's scale) and compute the cost
+   from the *rounded* rate — otherwise the persisted rate and the
+   persisted cost are two independent roundings of the same underlying
+   number, and a customer re-multiplying the rate by the quantity on a
+   saved template won't get the number that's actually there. This bit
+   `costPerGram`/`depreciationPerHour` first, then — after that fix looked
+   complete — `hourlyRateSnapshot`/`costPerUnitSnapshot`/`markupPercent`
+   turned out to have the identical bug, missed by the first fix because
+   nobody had swept every Decimal column in the schema for the same
+   pattern. If you add a new rate-then-cost pair anywhere, apply this from
+   the start.
+4. **Round line-item costs before summing them into a total**, not after —
+   otherwise the persisted total can disagree with the sum of the
+   persisted line items a customer sees on the invoice.
+5. **A regression test that re-derives its own expected value from the
+   code under test proves nothing.** The first attempt at testing "do the
+   components sum to the total" asserted `componentSum === totalCost`
+   where `totalCost` is *defined* as that sum — true by construction for
+   any implementation, buggy or not. Pin concrete, independently
+   hand-computable expected values instead.
 
 ## Reusable pattern for adding a new tenant-scoped resource
 

@@ -14,7 +14,7 @@ current state, what's live vs. not, gotchas. This file is just the map.
 | Folder | What it is | Status |
 |---|---|---|
 | [`landing/`](landing/) | Temporary holding page for barkie.co.za — Express app with an email signup | **Live** at https://barkie.co.za (deployed 2026-09-07, `barkie-landing.service` on the VPS). |
-| [`platform/api/`](platform/api/) | The real product: Node/TypeScript/Express/Postgres API — auth, tenant isolation, Customer/Printer/Filament/Labour/Consumable CRUD so far | Foundation + Reference Data Modules merged to `master`, pushed to GitHub. **Not yet deployed anywhere** — no server is running it. |
+| [`platform/api/`](platform/api/) | The real product: Node/TypeScript/Express/Postgres API — auth, tenant isolation, Customer/Printer/Filament/Labour/Consumable CRUD, and now the costing engine | Foundation + Reference Data Modules + Costing Engine merged to `master`, pushed to GitHub. **Not yet deployed anywhere** — no server is running it. |
 | [`docs/superpowers/specs/`](docs/superpowers/specs/) | Design specs (what to build and why) | — |
 | [`docs/superpowers/plans/`](docs/superpowers/plans/) | Implementation plans (task-by-task build instructions) | — |
 
