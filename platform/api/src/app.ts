@@ -11,6 +11,7 @@ import { printerPresetsRouter } from './routes/printer-presets.js';
 import { printerMaintenanceRouter } from './routes/printer-maintenance.js';
 import { filamentsRouter } from './routes/filaments.js';
 import { labourStepsRouter } from './routes/labour-steps.js';
+import { consumablesRouter } from './routes/consumables.js';
 
 export function buildApp() {
   const app = express();
@@ -32,6 +33,7 @@ export function buildApp() {
   app.use(printerMaintenanceRouter);
   app.use(filamentsRouter);
   app.use(labourStepsRouter);
+  app.use(consumablesRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

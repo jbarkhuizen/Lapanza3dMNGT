@@ -24,6 +24,7 @@ model Tenant {
   printerMaintenanceLogs PrinterMaintenanceLog[]
   filaments              Filament[]
   labourSteps            LabourStep[]
+  consumables            Consumable[]
 
   @@map("tenants")
 }
@@ -166,4 +167,22 @@ model LabourStep {
 
   @@index([tenantId])
   @@map("labour_steps")
+}
+
+model Consumable {
+  id                String   @id @default(uuid())
+  tenantId          String
+  name              String
+  category          String
+  unitOfMeasure     String
+  costPerUnit       Float
+  currentStock      Float    @default(0)
+  reorderThreshold  Float?
+  supplier          String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("consumables")
 }

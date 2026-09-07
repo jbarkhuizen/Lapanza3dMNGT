@@ -6,6 +6,7 @@ export async function resetTestDatabase() {
   await prisma.printer.deleteMany();
   await prisma.filament.deleteMany();
   await prisma.labourStep.deleteMany();
+  await prisma.consumable.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.session.deleteMany();
   await prisma.tenant.deleteMany();

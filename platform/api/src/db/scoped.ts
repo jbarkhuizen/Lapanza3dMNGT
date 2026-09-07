@@ -119,6 +119,26 @@ export interface UpdateLabourStepInput {
   active?: boolean;
 }
 
+export interface CreateConsumableInput {
+  name: string;
+  category: string;
+  unitOfMeasure: string;
+  costPerUnit: number;
+  currentStock?: number;
+  reorderThreshold?: number;
+  supplier?: string;
+}
+
+export interface UpdateConsumableInput {
+  name?: string;
+  category?: string;
+  unitOfMeasure?: string;
+  costPerUnit?: number;
+  currentStock?: number;
+  reorderThreshold?: number;
+  supplier?: string;
+}
+
 export function tenantScope(tenantId: string) {
   if (!tenantId) {
     throw new Error('tenantScope requires a tenantId');
@@ -226,6 +246,18 @@ export function tenantScope(tenantId: string) {
 
       update: (id: string, data: UpdateLabourStepInput) =>
         prisma.labourStep.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+    },
+
+    consumables: {
+      findMany: () => prisma.consumable.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.consumable.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateConsumableInput) =>
+        prisma.consumable.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdateConsumableInput) =>
+        prisma.consumable.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
     },
   };
 }
