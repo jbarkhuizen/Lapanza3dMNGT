@@ -108,16 +108,22 @@ costingTemplatesRouter.post('/api/costing-templates', async (req, res) => {
   if (!printer) {
     return res.status(400).json({ ok: false, error: 'Printer not found.' });
   }
-  if (printer.electricityRatePerKwh == null || printer.expectedLifetimeHours == null || printer.purchaseCost == null) {
+  if (
+    printer.electricityRatePerKwh == null ||
+    printer.expectedLifetimeHours == null ||
+    printer.purchaseCost == null ||
+    printer.powerDrawWatts == null
+  ) {
     return res.status(400).json({
       ok: false,
       error:
-        'This printer is missing an electricity rate, expected lifetime, or purchase cost — set these before costing a job on it.',
+        'This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.',
     });
   }
   const electricityRatePerKwh = printer.electricityRatePerKwh;
   const expectedLifetimeHours = printer.expectedLifetimeHours;
   const purchaseCost = printer.purchaseCost;
+  const powerDrawWatts = printer.powerDrawWatts;
 
   const resolvedLabourLines: Array<{ id: string; name: string; hourlyRate: number; hours: number }> = [];
   for (const line of labourLines) {
@@ -153,7 +159,7 @@ costingTemplatesRouter.post('/api/costing-templates', async (req, res) => {
       },
       printer: {
         printTimeHours,
-        powerDrawWatts: printer.powerDrawWatts ?? 0,
+        powerDrawWatts,
         electricityRatePerKwh,
         purchaseCost,
         expectedLifetimeHours,

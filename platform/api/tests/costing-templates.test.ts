@@ -96,7 +96,37 @@ test('POST /api/costing-templates rejects a printer missing electricity rate or 
   assert.equal(res.status, 400);
   assert.equal(
     res.body.error,
-    'This printer is missing an electricity rate, expected lifetime, or purchase cost — set these before costing a job on it.',
+    'This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.',
+  );
+});
+
+test('rejects a printer missing powerDrawWatts', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const filamentRes = await agent.post('/api/filaments').send({
+    brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, costPerKg: 300,
+  });
+  const printerRes = await agent.post('/api/printers').send({
+    name: 'No wattage printer',
+    purchaseCost: 4000,
+    electricityRatePerKwh: 2.5,
+    expectedLifetimeHours: 2000,
+  });
+
+  const res = await agent.post('/api/costing-templates').send({
+    name: 'Test',
+    filamentId: filamentRes.body.filament.id,
+    weightGrams: 50,
+    printerId: printerRes.body.printer.id,
+    printTimeHours: 2,
+    markupPercent: 20,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 400);
+  assert.equal(
+    res.body.error,
+    'This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.',
   );
 });
 
