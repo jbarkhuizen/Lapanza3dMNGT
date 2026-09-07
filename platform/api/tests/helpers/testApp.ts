@@ -12,6 +12,7 @@ export async function resetTestDatabase() {
   await prisma.consumable.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.session.deleteMany();
+  await prisma.tenantSequence.deleteMany();
   await prisma.tenant.deleteMany();
   await prisma.platformAdmin.deleteMany();
 }

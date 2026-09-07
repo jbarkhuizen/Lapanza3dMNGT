@@ -350,3 +350,15 @@ test('a tenant cannot see another tenant\'s costing templates', async () => {
   const bFindById = await scopedB.costingTemplates.findById(aList[0].id);
   assert.equal(bFindById, null);
 });
+
+test('a tenant\'s sequence numbers are independent of another tenant\'s', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+
+  assert.equal(await scopedA.tenantSequences.next('quote'), 1);
+  assert.equal(await scopedB.tenantSequences.next('quote'), 1);
+  assert.equal(await scopedA.tenantSequences.next('quote'), 2);
+});

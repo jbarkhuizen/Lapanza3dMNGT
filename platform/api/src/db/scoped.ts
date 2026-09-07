@@ -417,5 +417,20 @@ export function tenantScope(tenantId: string) {
       update: (data: UpdateCompanyProfileInput) =>
         prisma.tenant.update({ where: { id: tenantId }, data, select: companyProfileSelect }),
     },
+
+    tenantSequences: {
+      next: async (type: 'quote' | 'invoice') => {
+        await prisma.tenantSequence.upsert({
+          where: { tenantId_type: { tenantId, type } },
+          create: { tenantId, type, value: 0 },
+          update: {},
+        });
+        const updated = await prisma.tenantSequence.update({
+          where: { tenantId_type: { tenantId, type } },
+          data: { value: { increment: 1 } },
+        });
+        return updated.value;
+      },
+    },
   };
 }

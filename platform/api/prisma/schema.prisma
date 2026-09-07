@@ -47,6 +47,7 @@ model Tenant {
   costingTemplates       CostingTemplate[]
   costingLabourLines     CostingLabourLine[]
   costingConsumableLines CostingConsumableLine[]
+  tenantSequences        TenantSequence[]
 
   @@map("tenants")
 }
@@ -58,6 +59,18 @@ model PlatformAdmin {
   createdAt    DateTime @default(now()) @db.Timestamptz(3)
 
   @@map("platform_admins")
+}
+
+model TenantSequence {
+  id       String @id @default(uuid())
+  tenantId String
+  type     String
+  value    Int    @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, type])
+  @@map("tenant_sequences")
 }
 
 model Session {
