@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.js';
 import { apiPost } from '../api/client.js';
 
-const NAV_ITEMS = [{ to: '/', label: 'Dashboard' }];
+const NAV_ITEMS = [
+  { to: '/', label: 'Dashboard' },
+  { to: '/company-profile', label: 'Company Profile' },
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { tenant, refetch } = useAuth();

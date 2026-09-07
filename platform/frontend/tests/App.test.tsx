@@ -52,7 +52,7 @@ describe('App routing', () => {
   it('renders a not-found page for an unknown path', async () => {
     vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
     render(
-      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/company-profile']}>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/no-such-page']}>
         <AppProviders>
           <App />
         </AppProviders>
@@ -60,5 +60,37 @@ describe('App routing', () => {
     );
     await waitFor(() => expect(screen.getByText('Page not found')).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /back to dashboard/i })).toBeInTheDocument();
+  });
+
+  it('renders the Company Profile page at "/company-profile" for an authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+        });
+      }
+      if (path === '/api/company-profile') {
+        return Promise.resolve({
+          ok: true,
+          companyProfile: {
+            businessName: 'Acme Prints', contactName: 'Jane', email: 'a@b.com', registrationNumber: null,
+            vatRegistered: false, vatNumber: null, logoUrl: null, addressLine1: null, addressLine2: null,
+            city: null, postalCode: null, phone: null, website: null, bankName: null, bankAccountHolder: null,
+            bankAccountNumber: null, bankBranchCode: null, termsAndConditionsText: null, defaultCurrency: 'ZAR',
+            defaultQuoteValidityDays: null, quoteNumberPrefix: 'QT', invoiceNumberPrefix: 'INV',
+          },
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/company-profile']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Company Profile')).toBeInTheDocument());
   });
 });

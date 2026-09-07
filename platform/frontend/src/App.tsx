@@ -5,6 +5,7 @@ import { LoginPage } from './pages/auth/LoginPage.js';
 import { RegisterPage } from './pages/auth/RegisterPage.js';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage.js';
 import { DashboardHomePage } from './pages/DashboardHomePage.js';
+import { CompanyProfilePage } from './pages/CompanyProfilePage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
@@ -20,6 +21,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <DashboardHomePage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/company-profile"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <CompanyProfilePage />
               </AppShell>
             </RequireAuth>
           }
