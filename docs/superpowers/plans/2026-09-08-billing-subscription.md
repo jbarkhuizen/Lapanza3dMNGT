@@ -864,12 +864,19 @@ export function createPaypalProvider(
 }
 
 export const paypalProvider = createPaypalProvider({
-  clientId: process.env.PAYPAL_CLIENT_ID ?? '',
-  clientSecret: process.env.PAYPAL_CLIENT_SECRET ?? '',
-  webhookId: process.env.PAYPAL_WEBHOOK_ID ?? '',
-  live: process.env.NODE_ENV === 'production',
+  clientId: env.paypalClientId ?? '',
+  clientSecret: env.paypalClientSecret ?? '',
+  webhookId: env.paypalWebhookId ?? '',
+  live: env.paymentsLive,
 });
 ```
+
+(Reads from `env.ts` rather than `process.env` directly — Task 2's
+review caught the same anti-pattern in `payfastProvider.ts`'s singleton
+and fixed it there; do the same here from the start rather than
+replicating it. This needs `import { env } from '../env.js';` added to
+this file's imports, alongside the existing `PaymentProvider`/
+`NormalizedSubscriptionEvent` import from `./payfastProvider.js`.)
 
 **Note for the implementer:** `PaymentProvider.verifyWebhookSignature`'s
 return type differs between the two adapters — PayFast's is
