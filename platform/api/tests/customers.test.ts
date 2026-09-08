@@ -77,6 +77,26 @@ test('full create -> list -> get -> update cycle', async () => {
   assert.equal(getAfterUpdate.body.customer.notes, 'Prefers matte finish');
 });
 
+test('a lapsed subscription blocks POST /api/customers with 402 but not GET /api/customers', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.subscription.update({
+    where: { tenantId: tenant!.id },
+    data: { status: 'lapsed' },
+  });
+
+  const createRes = await agent.post('/api/customers').send({
+    name: 'Print Buyer CC',
+    billingAddress: '5 Oak Ave, Centurion',
+  });
+  assert.equal(createRes.status, 402);
+
+  const listRes = await agent.get('/api/customers');
+  assert.equal(listRes.status, 200);
+});
+
 test('GET /api/customers/:id returns 404 for another tenant\'s customer', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app);

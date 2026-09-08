@@ -67,6 +67,20 @@ test('PATCH /api/company-profile updates fields', async () => {
   assert.equal(res.body.companyProfile.city, 'Cape Town');
 });
 
+test('a lapsed subscription blocks PATCH /api/company-profile with 402', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.subscription.update({
+    where: { tenantId: tenant!.id },
+    data: { status: 'lapsed' },
+  });
+
+  const res = await agent.patch('/api/company-profile').send({ city: 'Cape Town' });
+  assert.equal(res.status, 402);
+});
+
 test('PATCH rejects a whitespace-only quoteNumberPrefix', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);

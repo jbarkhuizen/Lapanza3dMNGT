@@ -151,6 +151,24 @@ test('POST /api/quotes rejects an out-of-range unitPrice with 400, not 500', asy
   assert.equal(res.status, 400);
 });
 
+test('a lapsed subscription blocks POST /api/quotes with 402', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.subscription.update({
+    where: { tenantId: tenant!.id },
+    data: { status: 'lapsed' },
+  });
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+  assert.equal(res.status, 402);
+});
+
 test('PATCH /api/quotes/:id/status enforces the draft -> sent -> accepted lifecycle', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);
