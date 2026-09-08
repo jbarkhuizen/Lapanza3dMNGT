@@ -110,6 +110,27 @@ test('POST /api/auth/verify-email rejects an unknown token', async () => {
   assert.equal(res.body.ok, false);
 });
 
+test('POST /api/auth/resend-verification returns 404 for an unknown email', async () => {
+  const app = buildApp();
+  const res = await request(app)
+    .post('/api/auth/resend-verification')
+    .send({ email: 'nobody@example.com' });
+
+  assert.equal(res.status, 404);
+  assert.equal(res.body.ok, false);
+  assert.match(res.body.error, /No account found/);
+});
+
+test('POST /api/auth/resend-verification returns 400 for an invalid email format', async () => {
+  const app = buildApp();
+  const res = await request(app)
+    .post('/api/auth/resend-verification')
+    .send({ email: 'not-an-email' });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.ok, false);
+});
+
 async function registerAndVerify(app: ReturnType<typeof buildApp>, email: string) {
   await request(app).post('/api/auth/register').send({
     businessName: 'Acme Prints',
@@ -120,6 +141,54 @@ async function registerAndVerify(app: ReturnType<typeof buildApp>, email: string
   const tenant = await prisma.tenant.findUnique({ where: { email } });
   await request(app).post('/api/auth/verify-email').send({ token: tenant?.verificationToken });
 }
+
+test('POST /api/auth/resend-verification returns 400 for an already-verified account', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+
+  const res = await request(app)
+    .post('/api/auth/resend-verification')
+    .send({ email: 'jane@acmeprints.co.za' });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.ok, false);
+  assert.match(res.body.error, /already verified/);
+});
+
+test('POST /api/auth/resend-verification mints a fresh token that invalidates the old one', async () => {
+  const app = buildApp();
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  const original = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  const originalToken = original?.verificationToken;
+
+  const res = await request(app)
+    .post('/api/auth/resend-verification')
+    .send({ email: 'jane@acmeprints.co.za' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+
+  const updated = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  assert.ok(updated?.verificationToken, 'a new token should be set');
+  assert.notEqual(updated?.verificationToken, originalToken, 'the token should have changed');
+
+  // The old token must no longer verify the account.
+  const oldTokenAttempt = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: originalToken });
+  assert.equal(oldTokenAttempt.status, 400);
+
+  // The new token must work.
+  const newTokenAttempt = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: updated?.verificationToken });
+  assert.equal(newTokenAttempt.status, 200);
+});
 
 test('POST /api/auth/login sets a session cookie for correct credentials', async () => {
   const app = buildApp();

@@ -102,6 +102,42 @@ export function createAuthRouter() {
     res.json({ ok: true });
   });
 
+  const resendVerificationSchema = z.object({ email: z.string().email() });
+
+  authRouter.post('/api/auth/resend-verification', authLimiter, async (req, res) => {
+    const parsed = resendVerificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: 'Enter a valid email address.' });
+    }
+
+    const tenant = await prisma.tenant.findUnique({ where: { email: parsed.data.email } });
+    if (!tenant) {
+      return res.status(404).json({ ok: false, error: 'No account found with this email.' });
+    }
+    if (tenant.emailVerifiedAt) {
+      return res.status(400).json({ ok: false, error: 'This account is already verified. Log in instead.' });
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await prisma.tenant.update({
+      where: { id: tenant.id },
+      data: { verificationToken, verificationTokenExpires },
+    });
+
+    try {
+      await sendVerificationEmail(tenant.email, verificationToken);
+    } catch (error) {
+      // The fresh token is already persisted above — don't 500 and
+      // discard it over a transient SMTP failure. Same pattern as
+      // POST /api/auth/register's own hardening.
+      console.error(`Failed to resend verification email to ${tenant.email}:`, error);
+    }
+
+    res.json({ ok: true });
+  });
+
   const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
   authRouter.post('/api/auth/login', authLimiter, async (req, res) => {
