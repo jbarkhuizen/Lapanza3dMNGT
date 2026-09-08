@@ -292,7 +292,7 @@ quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
     notes: serialized.notes,
   });
 
-  await sendDocumentEmail(customer.email, 'quote', quote.number, pdfBuffer);
+  await sendDocumentEmail(customer.email, 'quote', quote.number, pdfBuffer, profile.businessName, profile.email);
 
   res.json({
     ok: true,

@@ -7,6 +7,8 @@ export async function sendDocumentEmail(
   documentType: DocumentType,
   documentNumber: string,
   pdfBuffer: Buffer,
+  businessName: string,
+  replyTo: string,
 ): Promise<void> {
   if (!mailer.isConfigured()) {
     console.log(
@@ -17,8 +19,9 @@ export async function sendDocumentEmail(
 
   await mailer.sendMail({
     to,
-    subject: `Your ${documentType} ${documentNumber}`,
-    text: `Please find your ${documentType} ${documentNumber} attached.`,
+    subject: `Your ${documentType} ${documentNumber} from ${businessName}`,
+    text: `Please find your ${documentType} ${documentNumber} from ${businessName} attached.`,
+    replyTo,
     attachments: [
       { filename: `${documentNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
     ],

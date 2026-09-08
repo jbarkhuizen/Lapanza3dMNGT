@@ -249,7 +249,7 @@ invoicesRouter.post('/api/invoices/:id/send', async (req, res) => {
     notes: serialized.notes,
   });
 
-  await sendDocumentEmail(customer.email, 'invoice', invoice.number, pdfBuffer);
+  await sendDocumentEmail(customer.email, 'invoice', invoice.number, pdfBuffer, profile.businessName, profile.email);
 
   res.json({
     ok: true,

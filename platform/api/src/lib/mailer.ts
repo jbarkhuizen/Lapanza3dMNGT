@@ -11,6 +11,7 @@ export interface MailOptions {
   to: string;
   subject: string;
   text: string;
+  replyTo?: string;
   attachments?: MailAttachment[];
 }
 
@@ -53,6 +54,7 @@ export function createMailer(config: MailerConfig): Mailer {
         to: options.to,
         subject: options.subject,
         text: options.text,
+        replyTo: options.replyTo,
         attachments: options.attachments,
       });
     },

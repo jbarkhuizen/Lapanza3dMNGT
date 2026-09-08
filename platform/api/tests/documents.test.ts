@@ -254,7 +254,14 @@ test('sendDocumentEmail logs the send to console in dev mode', async () => {
   const original = console.log;
   console.log = (msg: string) => { logs.push(msg); };
   try {
-    await sendDocumentEmail('bob@example.com', 'quote', 'QT-0001', Buffer.from('%PDF-fake'));
+    await sendDocumentEmail(
+      'bob@example.com',
+      'quote',
+      'QT-0001',
+      Buffer.from('%PDF-fake'),
+      'Acme Prints',
+      'hello@acme.co.za',
+    );
   } finally {
     console.log = original;
   }
@@ -271,11 +278,21 @@ test('sendDocumentEmail sends real mail with the PDF attached when SMTP is confi
 
   try {
     const pdfBuffer = Buffer.from('%PDF-fake');
-    await sendDocumentEmail('bob@example.com', 'invoice', 'INV-0001', pdfBuffer);
+    await sendDocumentEmail(
+      'bob@example.com',
+      'invoice',
+      'INV-0001',
+      pdfBuffer,
+      'Acme Prints',
+      'hello@acme.co.za',
+    );
 
     assert.equal(sendMailCalls.length, 1);
     assert.equal(sendMailCalls[0].to, 'bob@example.com');
+    assert.equal(sendMailCalls[0].replyTo, 'hello@acme.co.za');
     assert.match(sendMailCalls[0].subject as string, /INV-0001/);
+    assert.match(sendMailCalls[0].subject as string, /Acme Prints/);
+    assert.match(sendMailCalls[0].text as string, /Acme Prints/);
     const attachments = sendMailCalls[0].attachments as Array<Record<string, unknown>>;
     assert.equal(attachments.length, 1);
     assert.equal(attachments[0].filename, 'INV-0001.pdf');
