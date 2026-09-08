@@ -61,7 +61,15 @@ export function createAuthRouter() {
       throw error;
     }
 
-    await sendVerificationEmail(email, verificationToken);
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (error) {
+      // The tenant row is already committed above — don't 500 and strand
+      // an unverifiable account over a transient SMTP failure. Logged for
+      // operator follow-up; see backlog item #001 (resend-verification
+      // endpoint) for the user-facing fix to this same failure class.
+      console.error(`Failed to send verification email to ${email}:`, error);
+    }
 
     res.status(201).json({ ok: true });
   });

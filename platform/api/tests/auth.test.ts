@@ -1,9 +1,10 @@
-import { test, beforeEach } from 'node:test';
+import { test, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
+import { mailer } from '../src/lib/mailer.js';
 
 beforeEach(resetTestDatabase);
 
@@ -213,4 +214,48 @@ test('POST /api/auth/login is rate-limited after repeated failures', async () =>
   }
 
   assert.equal(lastStatus, 429);
+});
+
+test('POST /api/auth/register still returns 201 with a tenant row if the verification email send throws', async () => {
+  mock.method(mailer, 'isConfigured', () => true);
+  mock.method(mailer, 'sendMail', async () => {
+    throw new Error('SMTP temporarily unavailable');
+  });
+
+  try {
+    const app = buildApp();
+    const res = await request(app).post('/api/auth/register').send({
+      businessName: 'Acme Prints',
+      contactName: 'Jane Doe',
+      email: 'jane@acmeprints.co.za',
+      password: 'correct horse battery staple',
+    });
+
+    assert.equal(res.status, 201);
+    assert.equal(res.body.ok, true);
+
+    const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+    assert.ok(tenant, 'tenant row should still exist despite the email failure');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('sendVerificationEmail sends real mail with the verification link when SMTP is configured', async () => {
+  const { sendVerificationEmail } = await import('../src/auth/email.js');
+  mock.method(mailer, 'isConfigured', () => true);
+  const sendMailCalls: Array<Record<string, unknown>> = [];
+  mock.method(mailer, 'sendMail', async (opts: Record<string, unknown>) => {
+    sendMailCalls.push(opts);
+  });
+
+  try {
+    await sendVerificationEmail('bob@example.com', 'abc123token');
+
+    assert.equal(sendMailCalls.length, 1);
+    assert.equal(sendMailCalls[0].to, 'bob@example.com');
+    assert.match(sendMailCalls[0].text as string, /abc123token/);
+  } finally {
+    mock.restoreAll();
+  }
 });
