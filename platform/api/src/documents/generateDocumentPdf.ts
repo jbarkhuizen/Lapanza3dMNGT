@@ -62,8 +62,18 @@ function formatMoney(value: string, currency: string): string {
 const LEFT = 50;
 const RIGHT = 545;
 const COL_QTY = 340;
-const COL_UNIT_PRICE = 400;
+// Was 400: at that value the totals-block label column (COL_TOTAL - COL_UNIT_PRICE - 10 = 60pt)
+// was narrower than "Balance Due" measured in Helvetica-Bold 10pt (60.02pt) and "Amount Paid"
+// (61.37pt), so pdfkit wrapped those labels onto 2 lines. Shifting to 390 widens that shared
+// label/unit-price column to 70pt, giving both labels ~9-10pt of margin on one line.
+const COL_UNIT_PRICE = 390;
 const COL_TOTAL = 470;
+// Shared by the "Unit Price" line-item column and the totals-block label column
+// (both are drawn at COL_UNIT_PRICE with this width). Exported so tests can
+// assert real labels ("Balance Due", "Amount Paid", ...) fit on one line at
+// this exact width, as a permanent regression guard against the column being
+// narrowed back below a label's rendered width.
+export const TOTALS_LABEL_WIDTH = COL_TOTAL - COL_UNIT_PRICE - 10;
 
 function drawTableHeader(doc: PDFKit.PDFDocument): void {
   const y = doc.y;
@@ -75,9 +85,6 @@ function drawTableHeader(doc: PDFKit.PDFDocument): void {
   doc.font('Helvetica');
   doc.moveDown(0.75);
 }
-
-// Fixed conservative estimate for a totals line, which is always single-line.
-const TOTALS_LINE_HEIGHT_ESTIMATE = 20;
 
 /**
  * Advances to a new page (without drawing anything else) if the given
@@ -121,14 +128,24 @@ function drawTableRow(doc: PDFKit.PDFDocument, line: PdfLineItem, currency: stri
   doc.y = y + rowContentHeight + 6;
 }
 
+// Real (not estimated) content height of a totals line's label cell, mirroring
+// computeRowContentHeight. Totals labels are normally single-line, but this
+// guards against a future label ever being long enough to wrap in the label
+// column, the same way computeRowContentHeight guards line-item descriptions.
+function computeTotalsLineHeight(doc: PDFKit.PDFDocument, label: string, bold: boolean): number {
+  doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
+  return Math.max(doc.heightOfString(label, { width: TOTALS_LABEL_WIDTH }), 14);
+}
+
 function drawTotalsLine(doc: PDFKit.PDFDocument, label: string, value: string, bold = false): void {
-  ensurePageSpace(doc, TOTALS_LINE_HEIGHT_ESTIMATE);
+  const lineContentHeight = computeTotalsLineHeight(doc, label, bold);
+  ensurePageSpace(doc, lineContentHeight + 6);
   const y = doc.y;
   doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
-  doc.text(label, COL_UNIT_PRICE, y, { width: COL_TOTAL - COL_UNIT_PRICE - 10 });
+  doc.text(label, COL_UNIT_PRICE, y, { width: TOTALS_LABEL_WIDTH });
   doc.text(value, COL_TOTAL, y, { width: RIGHT - COL_TOTAL, align: 'right' });
   doc.font('Helvetica');
-  doc.moveDown(0.5);
+  doc.y = y + lineContentHeight + 6;
 }
 
 export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Buffer> {

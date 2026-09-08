@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateDocumentPdf } from '../src/documents/generateDocumentPdf.js';
+import PDFDocument from 'pdfkit';
+import { generateDocumentPdf, TOTALS_LABEL_WIDTH } from '../src/documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../src/documents/sendDocumentEmail.js';
 
 const baseCompanyProfile = {
@@ -199,6 +200,52 @@ test('generateDocumentPdf keeps the totals block together instead of splitting i
     pageCount <= 2,
     `expected the totals block to stay intact (<=2 pages) for 25 short line items, got ${pageCount}`,
   );
+});
+
+test('totals-block labels ("Balance Due", "Amount Paid", ...) render on a single line at the real label column width', () => {
+  // Direct content-based regression guard for the bug the page-count tests above
+  // cannot catch: the "Balance Due" split doesn't change total page count (the
+  // label and value both still land somewhere in the document), so a page-count
+  // assertion alone can't detect a label silently wrapping onto two lines.
+  //
+  // Root cause (now fixed): the label column used to be COL_TOTAL - COL_UNIT_PRICE - 10
+  // = 60pt, but "Balance Due" measures 60.02pt and "Amount Paid" measures 61.37pt in
+  // Helvetica-Bold 10pt, so pdfkit wrapped both onto 2 lines ("Balance" / "Due"). That
+  // wrap made the row tall enough to trigger a second bug: drawTotalsLine's flat
+  // fit-check height estimate (20pt) undercounted the wrapped row's real ~23.8pt height,
+  // so pdfkit could auto-break mid-label near a page boundary, landing the value at a
+  // stale pre-break y-coordinate far from its label.
+  //
+  // This test measures the exact same way pdfkit itself decides whether to wrap
+  // (doc.heightOfString(label, { width }) at the real, exported label column width) and
+  // asserts every current totals label fits on one line with real margin, not just
+  // barely. It will fail the moment TOTALS_LABEL_WIDTH is narrowed back below a label's
+  // rendered width, independent of the height-aware fit-check added in drawTotalsLine.
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const singleLineThreshold = 14; // matches the 14pt floor used by computeRowContentHeight/computeTotalsLineHeight
+
+  const labels = ['Subtotal', 'VAT (15%)', 'Total', 'Amount Paid', 'Balance Due'];
+  for (const label of labels) {
+    doc.font('Helvetica-Bold').fontSize(10);
+    const height = doc.heightOfString(label, { width: TOTALS_LABEL_WIDTH });
+    assert.ok(
+      height <= singleLineThreshold,
+      `expected "${label}" to render on a single line (height <= ${singleLineThreshold}pt) at ` +
+        `TOTALS_LABEL_WIDTH=${TOTALS_LABEL_WIDTH}pt, got height=${height}pt (label wrapped)`,
+    );
+  }
+
+  // "Balance Due" specifically, with an explicit margin check: it must fit with real
+  // headroom, not just barely clear the wrap threshold by a fraction of a point.
+  doc.font('Helvetica-Bold').fontSize(10);
+  const balanceDueWidth = doc.widthOfString('Balance Due');
+  assert.ok(
+    TOTALS_LABEL_WIDTH - balanceDueWidth >= 5,
+    `expected "Balance Due" (${balanceDueWidth}pt) to fit within TOTALS_LABEL_WIDTH ` +
+      `(${TOTALS_LABEL_WIDTH}pt) with at least 5pt of margin, got ${TOTALS_LABEL_WIDTH - balanceDueWidth}pt`,
+  );
+
+  doc.end();
 });
 
 test('sendDocumentEmail logs the send to console in dev mode', async () => {
