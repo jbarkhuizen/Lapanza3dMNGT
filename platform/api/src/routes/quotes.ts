@@ -10,6 +10,7 @@ import { prisma } from '../db/client.js';
 import { serializeInvoice } from './invoices.js';
 import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
+import { mailer } from '../lib/mailer.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
@@ -291,7 +292,12 @@ quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
     notes: serialized.notes,
   });
 
-  await sendDocumentEmail(customer.email, 'quote', quote.number);
+  await sendDocumentEmail(customer.email, 'quote', quote.number, pdfBuffer);
 
-  res.json({ ok: true, pdfBase64: pdfBuffer.toString('base64'), sentTo: customer.email, devMode: true });
+  res.json({
+    ok: true,
+    pdfBase64: pdfBuffer.toString('base64'),
+    sentTo: customer.email,
+    devMode: !mailer.isConfigured(),
+  });
 });

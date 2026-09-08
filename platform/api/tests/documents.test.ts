@@ -1,8 +1,9 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import PDFDocument from 'pdfkit';
 import { generateDocumentPdf, TOTALS_LABEL_WIDTH } from '../src/documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../src/documents/sendDocumentEmail.js';
+import { mailer } from '../src/lib/mailer.js';
 
 const baseCompanyProfile = {
   businessName: 'Acme Prints',
@@ -253,10 +254,34 @@ test('sendDocumentEmail logs the send to console in dev mode', async () => {
   const original = console.log;
   console.log = (msg: string) => { logs.push(msg); };
   try {
-    await sendDocumentEmail('bob@example.com', 'quote', 'QT-0001');
+    await sendDocumentEmail('bob@example.com', 'quote', 'QT-0001', Buffer.from('%PDF-fake'));
   } finally {
     console.log = original;
   }
   assert.equal(logs.length, 1);
   assert.match(logs[0], /quote QT-0001 sent to bob@example\.com/);
+});
+
+test('sendDocumentEmail sends real mail with the PDF attached when SMTP is configured', async () => {
+  mock.method(mailer, 'isConfigured', () => true);
+  const sendMailCalls: Array<Record<string, unknown>> = [];
+  mock.method(mailer, 'sendMail', async (opts: Record<string, unknown>) => {
+    sendMailCalls.push(opts);
+  });
+
+  try {
+    const pdfBuffer = Buffer.from('%PDF-fake');
+    await sendDocumentEmail('bob@example.com', 'invoice', 'INV-0001', pdfBuffer);
+
+    assert.equal(sendMailCalls.length, 1);
+    assert.equal(sendMailCalls[0].to, 'bob@example.com');
+    assert.match(sendMailCalls[0].subject as string, /INV-0001/);
+    const attachments = sendMailCalls[0].attachments as Array<Record<string, unknown>>;
+    assert.equal(attachments.length, 1);
+    assert.equal(attachments[0].filename, 'INV-0001.pdf');
+    assert.equal(attachments[0].content, pdfBuffer);
+    assert.equal(attachments[0].contentType, 'application/pdf');
+  } finally {
+    mock.restoreAll();
+  }
 });

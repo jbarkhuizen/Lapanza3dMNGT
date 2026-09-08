@@ -1,14 +1,26 @@
+import { mailer } from '../lib/mailer.js';
+
 export type DocumentType = 'quote' | 'invoice';
 
-// Dev-mode implementation: logs instead of sending a real email, exactly
-// like sendVerificationEmail() in src/auth/email.ts. A later phase can
-// replace the body with real SMTP; callers never need to change.
 export async function sendDocumentEmail(
   to: string,
   documentType: DocumentType,
   documentNumber: string,
+  pdfBuffer: Buffer,
 ): Promise<void> {
-  console.log(
-    `[dev-email] ${documentType} ${documentNumber} sent to ${to} (PDF attached, dev mode — no real email sent)`,
-  );
+  if (!mailer.isConfigured()) {
+    console.log(
+      `[dev-email] ${documentType} ${documentNumber} sent to ${to} (PDF attached, dev mode — no real email sent)`,
+    );
+    return;
+  }
+
+  await mailer.sendMail({
+    to,
+    subject: `Your ${documentType} ${documentNumber}`,
+    text: `Please find your ${documentType} ${documentNumber} attached.`,
+    attachments: [
+      { filename: `${documentNumber}.pdf`, content: pdfBuffer, contentType: 'application/pdf' },
+    ],
+  });
 }

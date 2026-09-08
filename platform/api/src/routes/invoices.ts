@@ -8,6 +8,7 @@ import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
+import { mailer } from '../lib/mailer.js';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireTenantAuth);
@@ -248,7 +249,12 @@ invoicesRouter.post('/api/invoices/:id/send', async (req, res) => {
     notes: serialized.notes,
   });
 
-  await sendDocumentEmail(customer.email, 'invoice', invoice.number);
+  await sendDocumentEmail(customer.email, 'invoice', invoice.number, pdfBuffer);
 
-  res.json({ ok: true, pdfBase64: pdfBuffer.toString('base64'), sentTo: customer.email, devMode: true });
+  res.json({
+    ok: true,
+    pdfBase64: pdfBuffer.toString('base64'),
+    sentTo: customer.email,
+    devMode: !mailer.isConfigured(),
+  });
 });
