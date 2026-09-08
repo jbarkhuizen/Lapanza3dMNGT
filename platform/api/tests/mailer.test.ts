@@ -85,3 +85,26 @@ test('createTransport is only called once across multiple sendMail calls (transp
     mock.restoreAll();
   }
 });
+
+test('sendMail throws Error when mailer is not configured and never calls createTransport', async () => {
+  let createTransportCalls = 0;
+  mock.method(nodemailer, 'createTransport', () => {
+    createTransportCalls += 1;
+    return { sendMail: async () => {} };
+  });
+
+  try {
+    const mailer = createMailer({ fromName: 'Barkie' });
+    await assert.rejects(
+      () => mailer.sendMail({ to: 'bob@example.com', subject: 'Hello', text: 'Body text' }),
+      (err: Error) => {
+        assert.equal(err.message, 'mailer.sendMail called while not configured — check isConfigured() first');
+        return true;
+      }
+    );
+
+    assert.equal(createTransportCalls, 0, 'createTransport should never be called for unconfigured mailer');
+  } finally {
+    mock.restoreAll();
+  }
+});
