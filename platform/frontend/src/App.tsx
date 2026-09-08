@@ -17,6 +17,7 @@ import { ConsumableFormPage } from './pages/consumables/ConsumableFormPage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
 import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
+import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
@@ -203,6 +204,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CostingTemplatesListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/costing-templates/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <CostingTemplateCreatePage />
               </AppShell>
             </RequireAuth>
           }
