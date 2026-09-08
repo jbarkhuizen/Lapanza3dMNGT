@@ -22,10 +22,11 @@ describe('MaintenanceLogSection', () => {
   it('lists maintenance log entries for the printer', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({
       ok: true,
-      entries: [{ id: '1', date: '2026-02-01', description: 'Replaced nozzle', cost: 15, performedBy: 'Jane', createdAt: '2026-01-01T00:00:00.000Z' }],
+      entries: [{ id: '1', date: '2026-02-01T00:00:00.000Z', description: 'Replaced nozzle', cost: 15, performedBy: 'Jane', createdAt: '2026-01-01T00:00:00.000Z' }],
     });
     renderSection();
     await waitFor(() => expect(screen.getByText(/Replaced nozzle/)).toBeInTheDocument());
+    expect(screen.getByText('2026-02-01 — Replaced nozzle')).toBeInTheDocument();
   });
 
   it('creates a new maintenance log entry and clears the add form', async () => {
@@ -47,6 +48,9 @@ describe('MaintenanceLogSection', () => {
         expect.objectContaining({ date: '2026-03-01', description: 'Belt tension check' }),
       ),
     );
+
+    expect(screen.getByLabelText('Date')).toHaveValue('');
+    expect(screen.getByLabelText('Description')).toHaveValue('');
   });
 
   it('sends a filled-in optional cost as a real number, not a string', async () => {

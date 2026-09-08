@@ -47,6 +47,9 @@ describe('PresetsSection', () => {
         expect.objectContaining({ name: 'PETG', materialType: 'PETG' }),
       ),
     );
+
+    expect(screen.getByLabelText('Preset name')).toHaveValue('');
+    expect(screen.getByLabelText('Material type')).toHaveValue('');
   });
 
   it('sends numeric preset fields as numbers, not strings', async () => {

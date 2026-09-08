@@ -14,6 +14,7 @@ export function FormField({ label, error, id, className, ...inputProps }: FormFi
       <input
         id={id}
         {...inputProps}
+        {...(inputProps.type === 'number' && inputProps.step === undefined ? { step: 'any' } : {})}
         className={`rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none ${className ?? ''}`}
       />
       {error && <span className="text-sm text-red-600">{error}</span>}
