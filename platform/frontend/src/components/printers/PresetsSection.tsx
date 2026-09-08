@@ -1,9 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { FormField } from '../FormField.js';
+import { TextareaField } from '../TextareaField.js';
 import { ApiError } from '../../api/client.js';
 import { usePrinterPresets, useCreatePrinterPreset, type PrinterPresetFormInput } from '../../api/printerPresets.js';
 
-const emptyForm: PrinterPresetFormInput = { name: '', materialType: '' };
+const emptyForm: PrinterPresetFormInput = {
+  name: '',
+  materialType: '',
+  nozzleTempC: undefined,
+  bedTempC: undefined,
+  printSpeedMmS: undefined,
+  layerHeightMm: undefined,
+  infillPercent: undefined,
+  notes: undefined,
+};
 
 export function PresetsSection({ printerId }: { printerId: string }) {
   const { data: presets, isLoading, isError } = usePrinterPresets(printerId);
@@ -13,6 +23,12 @@ export function PresetsSection({ printerId }: { printerId: string }) {
 
   function set<K extends keyof PrinterPresetFormInput>(key: K, value: PrinterPresetFormInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  type NumericPresetField = 'nozzleTempC' | 'bedTempC' | 'printSpeedMmS' | 'layerHeightMm' | 'infillPercent';
+
+  function setNumber(key: NumericPresetField, raw: string) {
+    set(key, raw ? Number(raw) : undefined);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -45,6 +61,12 @@ export function PresetsSection({ printerId }: { printerId: string }) {
       <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
         <FormField id="presetName" label="Preset name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
         <FormField id="presetMaterialType" label="Material type" value={form.materialType} onChange={(e) => set('materialType', e.target.value)} required />
+        <FormField id="nozzleTempC" label="Nozzle temp (°C)" type="number" value={form.nozzleTempC ?? ''} onChange={(e) => setNumber('nozzleTempC', e.target.value)} />
+        <FormField id="bedTempC" label="Bed temp (°C)" type="number" value={form.bedTempC ?? ''} onChange={(e) => setNumber('bedTempC', e.target.value)} />
+        <FormField id="printSpeedMmS" label="Print speed (mm/s)" type="number" value={form.printSpeedMmS ?? ''} onChange={(e) => setNumber('printSpeedMmS', e.target.value)} />
+        <FormField id="layerHeightMm" label="Layer height (mm)" type="number" value={form.layerHeightMm ?? ''} onChange={(e) => setNumber('layerHeightMm', e.target.value)} />
+        <FormField id="infillPercent" label="Infill (%)" type="number" value={form.infillPercent ?? ''} onChange={(e) => setNumber('infillPercent', e.target.value)} />
+        <TextareaField id="presetNotes" label="Notes" value={form.notes ?? ''} onChange={(value) => set('notes', value)} />
         <button
           type="submit"
           disabled={createMutation.isPending}

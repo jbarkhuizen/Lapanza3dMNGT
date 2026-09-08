@@ -48,4 +48,26 @@ describe('PresetsSection', () => {
       ),
     );
   });
+
+  it('sends numeric preset fields as numbers, not strings', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, presets: [] });
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({
+      ok: true,
+      preset: { id: '3', name: 'PLA — Fast', materialType: 'PLA', nozzleTempC: 210, bedTempC: null, printSpeedMmS: null, layerHeightMm: null, infillPercent: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+    renderSection();
+    await waitFor(() => expect(screen.getByText(/no presets yet/i)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'PLA — Fast' } });
+    fireEvent.change(screen.getByLabelText('Material type'), { target: { value: 'PLA' } });
+    fireEvent.change(screen.getByLabelText('Nozzle temp (°C)'), { target: { value: '210' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Preset' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith(
+        '/api/printers/printer-1/presets',
+        expect.objectContaining({ nozzleTempC: 210 }),
+      ),
+    );
+  });
 });
