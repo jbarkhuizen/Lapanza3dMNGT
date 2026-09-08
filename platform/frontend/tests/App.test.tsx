@@ -281,4 +281,30 @@ describe('App routing', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'New Costing Template' })).toBeInTheDocument());
   });
+
+  it('renders the Quotes list page at "/quotes" for an authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+        });
+      }
+      if (path === '/api/quotes') {
+        return Promise.resolve({ ok: true, quotes: [] });
+      }
+      if (path === '/api/customers') {
+        return Promise.resolve({ ok: true, customers: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/quotes']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Quotes' })).toBeInTheDocument());
+  });
 });

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from './client.js';
 
@@ -61,4 +62,15 @@ export function useUpdateCustomer(id: string) {
       queryClient.invalidateQueries({ queryKey: CUSTOMERS_QUERY_KEY });
     },
   });
+}
+
+/**
+ * Neither `Quote` nor `Invoice` API responses include the related `Customer`
+ * record (see platform/api/src/db/scoped.ts), so quote/invoice pages resolve
+ * customer names client-side through this Map lookup.
+ */
+export function useCustomerLookup() {
+  const { data: customers, isLoading } = useCustomers();
+  const lookup = useMemo(() => new Map(customers?.map((c) => [c.id, c]) ?? []), [customers]);
+  return { lookup, isLoading };
 }

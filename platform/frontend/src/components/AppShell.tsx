@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/consumables', label: 'Consumables' },
   { to: '/printers', label: 'Printers' },
   { to: '/costing-templates', label: 'Costing Templates' },
+  { to: '/quotes', label: 'Quotes' },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
