@@ -10,7 +10,7 @@ export interface PaymentProvider {
     returnUrl: string;
     webhookUrl: string;
   }): Promise<{ redirectUrl: string }>;
-  verifyWebhookSignature(req: Request): boolean;
+  verifyWebhookSignature(req: Request): boolean | Promise<boolean>;
   parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null;
 }
 
