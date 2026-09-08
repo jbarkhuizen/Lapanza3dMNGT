@@ -62,7 +62,6 @@ test('generateDocumentPdf handles a minimal profile with no VAT, no banking, no 
       city: null,
       postalCode: null,
       phone: null,
-      email: null,
       website: null,
       bankName: null,
       bankAccountHolder: null,
@@ -84,6 +83,34 @@ test('generateDocumentPdf handles a minimal profile with no VAT, no banking, no 
 
   assert.ok(Buffer.isBuffer(buffer));
   assert.equal(buffer.subarray(0, 4).toString('ascii'), '%PDF');
+});
+
+test('generateDocumentPdf paginates a long line-item table onto multiple pages without losing rows', async () => {
+  const manyLines = Array.from({ length: 30 }, (_, i) => ({
+    description: `Custom part ${i + 1}`,
+    quantity: 1,
+    unitPrice: '10.00',
+    lineTotal: '10.00',
+  }));
+  const buffer = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: 'QT-0002',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Valid until',
+    dateValue: new Date('2026-01-15T00:00:00.000Z'),
+    companyProfile: baseCompanyProfile,
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: manyLines,
+    subtotal: '300.00',
+    vatAmount: '45.00',
+    vatApplied: true,
+    total: '345.00',
+    notes: null,
+  });
+
+  const pdfText = buffer.toString('latin1');
+  const pageCount = (pdfText.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  assert.ok(pageCount > 1, `expected multiple pages for 30 line items, got ${pageCount}`);
 });
 
 test('sendDocumentEmail logs the send to console in dev mode', async () => {

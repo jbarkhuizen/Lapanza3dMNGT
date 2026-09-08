@@ -17,7 +17,6 @@ export interface PdfCompanyProfile {
   city: string | null;
   postalCode: string | null;
   phone: string | null;
-  email: string | null;
   website: string | null;
   bankName: string | null;
   bankAccountHolder: string | null;
@@ -77,6 +76,18 @@ function drawTableHeader(doc: PDFKit.PDFDocument): void {
   doc.moveDown(0.75);
 }
 
+const ROW_HEIGHT_ESTIMATE = 20;
+
+function ensureRowFits(doc: PDFKit.PDFDocument): void {
+  const bottomLimit = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + ROW_HEIGHT_ESTIMATE > bottomLimit) {
+    doc.addPage();
+    drawTableHeader(doc);
+    doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
+    doc.moveDown(0.5);
+  }
+}
+
 function drawTableRow(doc: PDFKit.PDFDocument, line: PdfLineItem, currency: string): void {
   const y = doc.y;
   const descWidth = COL_QTY - LEFT - 10;
@@ -116,7 +127,6 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
       if (line) doc.text(line);
     }
     if (companyProfile.phone) doc.text(`Tel: ${companyProfile.phone}`);
-    if (companyProfile.email) doc.text(`Email: ${companyProfile.email}`);
     if (companyProfile.website) doc.text(companyProfile.website);
     if (companyProfile.registrationNumber) doc.text(`Reg No: ${companyProfile.registrationNumber}`);
     if (companyProfile.vatRegistered && companyProfile.vatNumber) doc.text(`VAT No: ${companyProfile.vatNumber}`);
@@ -141,6 +151,7 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
     doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.5);
     for (const line of input.lineItems) {
+      ensureRowFits(doc);
       drawTableRow(doc, line, currency);
     }
     doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
