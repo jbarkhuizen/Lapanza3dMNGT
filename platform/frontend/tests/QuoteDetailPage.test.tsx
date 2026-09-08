@@ -12,7 +12,7 @@ beforeEach(() => {
 
 const draftQuote = {
   id: 'q1', number: 'QT-0001', customerId: 'c1', status: 'draft', validUntil: null,
-  vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', notes: null,
+  vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', notes: null as string | null,
   createdAt: '2026-01-01T00:00:00.000Z',
   lineItems: [{ id: 'li1', costingTemplateId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
 };
@@ -81,5 +81,12 @@ describe('QuoteDetailPage', () => {
     renderAt('/quotes/q1');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'QT-0001' })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Convert to Invoice' })).not.toBeInTheDocument();
+  });
+
+  it('renders quote notes when present', async () => {
+    mockData({ ...draftQuote, notes: 'Rush order, please confirm colour.' });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'QT-0001' })).toBeInTheDocument());
+    expect(screen.getByText('Rush order, please confirm colour.')).toBeInTheDocument();
   });
 });

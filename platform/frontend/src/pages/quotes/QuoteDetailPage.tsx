@@ -77,6 +77,13 @@ export function QuoteDetailPage() {
         <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total)}</span></div>
       </section>
 
+      {quote.notes && (
+        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Notes</h2>
+          <p className="whitespace-pre-wrap text-slate-700">{quote.notes}</p>
+        </section>
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="flex gap-3">

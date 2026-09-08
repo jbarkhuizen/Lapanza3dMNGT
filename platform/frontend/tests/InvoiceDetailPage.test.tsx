@@ -13,7 +13,7 @@ beforeEach(() => {
 const unpaidInvoice = {
   id: 'inv1', number: 'INV-0001', customerId: 'c1', quoteId: null, status: 'unpaid', dueDate: '2026-02-01T00:00:00.000Z',
   vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', amountPaid: '0.00', balanceDue: '100.00',
-  notes: null, createdAt: '2026-01-01T00:00:00.000Z',
+  notes: null as string | null, createdAt: '2026-01-01T00:00:00.000Z',
   lineItems: [{ id: 'li1', costingTemplateId: null, quoteLineItemId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
 };
 
@@ -53,12 +53,55 @@ describe('InvoiceDetailPage', () => {
     renderAt('/invoices/inv1');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Record Partial Payment' })).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText('Amount paid'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText(/amount paid/i), { target: { value: '40' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record Partial Payment' }));
 
     await waitFor(() =>
       expect(patchSpy).toHaveBeenCalledWith('/api/invoices/inv1/status', { status: 'partially_paid', amountPaid: 40 }),
     );
+  });
+
+  it('pre-fills the amount input with the invoice\'s current amountPaid, not blank', async () => {
+    mockData({ ...unpaidInvoice, status: 'partially_paid', amountPaid: '40.00', balanceDue: '60.00' });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Record Partial Payment' })).toBeInTheDocument());
+    expect(screen.getByLabelText(/amount paid/i)).toHaveValue(40);
+  });
+
+  it('sends the invoice\'s exact total for "Mark as Paid", regardless of the amount input', async () => {
+    mockData({ ...unpaidInvoice, status: 'partially_paid', amountPaid: '40.00', balanceDue: '60.00' });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, invoice: { ...unpaidInvoice, status: 'paid', amountPaid: '100.00', balanceDue: '0.00' } });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark as Paid' })).toBeInTheDocument());
+
+    // Do not touch the amount input — it starts pre-filled with 40.00, the OLD amount.
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as Paid' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith('/api/invoices/inv1/status', { status: 'paid', amountPaid: 100 }),
+    );
+  });
+
+  it('records a new partial payment starting from the correct pre-filled base amount', async () => {
+    mockData({ ...unpaidInvoice, status: 'partially_paid', amountPaid: '40.00', balanceDue: '60.00' });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, invoice: { ...unpaidInvoice, status: 'partially_paid', amountPaid: '70.00', balanceDue: '30.00' } });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Record Partial Payment' })).toBeInTheDocument());
+    expect(screen.getByLabelText(/amount paid/i)).toHaveValue(40);
+
+    fireEvent.change(screen.getByLabelText(/amount paid/i), { target: { value: '70' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Record Partial Payment' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith('/api/invoices/inv1/status', { status: 'partially_paid', amountPaid: 70 }),
+    );
+  });
+
+  it('renders invoice notes when present', async () => {
+    mockData({ ...unpaidInvoice, notes: 'Deliver after 5pm.' });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'INV-0001' })).toBeInTheDocument());
+    expect(screen.getByText('Deliver after 5pm.')).toBeInTheDocument();
   });
 
   it('marks an invoice overdue with no amount input required', async () => {

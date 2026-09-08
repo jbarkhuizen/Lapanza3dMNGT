@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useInvoice, useUpdateInvoiceStatus, VALID_INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
@@ -21,6 +21,15 @@ export function InvoiceDetailPage() {
   const [amountPaid, setAmountPaid] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // Keep the amount input pre-filled with the CURRENT cumulative amount paid to date,
+  // since PATCH /status sets amountPaid rather than incrementing it. Re-sync whenever
+  // the invoice's amountPaid changes (initial load, or after a successful status update).
+  useEffect(() => {
+    if (invoice) {
+      setAmountPaid(invoice.amountPaid);
+    }
+  }, [invoice?.amountPaid]);
+
   if (isLoading) {
     return <p className="text-slate-500">Loading…</p>;
   }
@@ -30,15 +39,20 @@ export function InvoiceDetailPage() {
 
   const customer = customerLookup.get(invoice.customerId);
   const nextStatuses = VALID_INVOICE_STATUS_TRANSITIONS[invoice.status] ?? [];
+  const invoiceTotal = Number(invoice.total);
 
   async function handleStatusChange(status: InvoiceStatus, requiresAmount: boolean) {
     setError(null);
     try {
+      // "Mark as Paid" must send the invoice's exact total — the backend requires an exact
+      // match for the `paid` status — not whatever happens to be in the amount input.
+      const amount = status === 'paid' ? invoiceTotal : Number(amountPaid);
       await updateStatusMutation.mutateAsync({
         status,
-        amountPaid: requiresAmount ? Number(amountPaid) : undefined,
+        amountPaid: requiresAmount ? amount : undefined,
       });
-      setAmountPaid('');
+      // The amount input is re-synced to the new invoice.amountPaid by the useEffect above
+      // once the mutation's success invalidates the query and the invoice refetches.
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
@@ -70,16 +84,29 @@ export function InvoiceDetailPage() {
         <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
         {invoice.vatApplied && <div className="flex justify-between"><span>VAT</span><span>{formatCurrency(invoice.vatAmount)}</span></div>}
         <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
-        <div className="flex justify-between"><span>Amount paid</span><span>{formatCurrency(invoice.amountPaid)}</span></div>
+        <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid)}</span></div>
         <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue)}</span></div>
       </section>
+
+      {invoice.notes && (
+        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Notes</h2>
+          <p className="whitespace-pre-wrap text-slate-700">{invoice.notes}</p>
+        </section>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {nextStatuses.length > 0 && (
         <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
           {(nextStatuses.includes('partially_paid') || nextStatuses.includes('paid')) && (
-            <FormField id="amountPaid" label="Amount paid" type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} />
+            <FormField
+              id="amountPaid"
+              label="Total amount paid to date"
+              type="number"
+              value={amountPaid}
+              onChange={(e) => setAmountPaid(e.target.value)}
+            />
           )}
           <div className="flex gap-3">
             {nextStatuses.includes('partially_paid') && (
