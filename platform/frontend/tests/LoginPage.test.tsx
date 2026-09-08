@@ -73,4 +73,54 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(screen.getByText('protected page content')).toBeInTheDocument());
   });
+
+  it('shows a "Resend verification email" button only when login fails because the account is unverified', async () => {
+    vi.spyOn(client, 'apiPost').mockRejectedValue(
+      new client.ApiError('Verify your email address before logging in.', 403),
+    );
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resend verification email' })).toBeInTheDocument());
+  });
+
+  it('does not show the resend button for a wrong-password failure', async () => {
+    vi.spyOn(client, 'apiPost').mockRejectedValue(new client.ApiError('Incorrect email or password.', 401));
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    await waitFor(() => expect(screen.getByText('Incorrect email or password.')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Resend verification email' })).not.toBeInTheDocument();
+  });
+
+  it('resends the verification email using the email already typed into the form', async () => {
+    const postSpy = vi.spyOn(client, 'apiPost').mockImplementation((path: string) => {
+      if (path === '/api/auth/login') {
+        return Promise.reject(new client.ApiError('Verify your email address before logging in.', 403));
+      }
+      if (path === '/api/auth/resend-verification') {
+        return Promise.resolve({ ok: true });
+      }
+      return Promise.reject(new client.ApiError('unexpected path', 500));
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resend verification email' })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/auth/resend-verification', { email: 'a@b.com' }),
+    );
+    await waitFor(() => expect(screen.getByText(/verification email sent/i)).toBeInTheDocument());
+  });
 });

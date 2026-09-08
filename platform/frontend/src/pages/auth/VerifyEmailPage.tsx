@@ -45,7 +45,14 @@ export function VerifyEmailPage() {
             </Link>
           </>
         )}
-        {status === 'error' && <p className="text-red-600">{error}</p>}
+        {status === 'error' && (
+          <>
+            <p className="text-red-600">{error}</p>
+            <Link to="/login" className="mt-2 inline-block text-sm text-slate-500 underline">
+              Go to login
+            </Link>
+          </>
+        )}
       </div>
     </div>
   );

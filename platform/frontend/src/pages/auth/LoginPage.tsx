@@ -12,6 +12,8 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [submitting, setSubmitting] = useState(false);
   const { refetch } = useAuth();
   const navigate = useNavigate();
@@ -20,6 +22,8 @@ export function LoginPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setNeedsVerification(false);
+    setResendStatus('idle');
     setSubmitting(true);
     try {
       await apiPost('/api/auth/login', { email, password });
@@ -27,9 +31,24 @@ export function LoginPage() {
       const state = location.state as LocationState | null;
       navigate(state?.from?.pathname ?? '/');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
+      if (err instanceof ApiError) {
+        setError(err.message);
+        setNeedsVerification(err.status === 403);
+      } else {
+        setError('Something went wrong. Try again shortly.');
+      }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleResend() {
+    setResendStatus('sending');
+    try {
+      await apiPost('/api/auth/resend-verification', { email });
+      setResendStatus('sent');
+    } catch {
+      setResendStatus('error');
     }
   }
 
@@ -54,6 +73,24 @@ export function LoginPage() {
           required
         />
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {needsVerification && (
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendStatus === 'sending'}
+              className="text-left text-sm text-slate-600 underline disabled:opacity-50"
+            >
+              Resend verification email
+            </button>
+            {resendStatus === 'sent' && (
+              <p className="text-sm text-green-700">Verification email sent — check your inbox.</p>
+            )}
+            {resendStatus === 'error' && (
+              <p className="text-sm text-red-600">Couldn't resend. Try again shortly.</p>
+            )}
+          </div>
+        )}
         <button
           type="submit"
           disabled={submitting}

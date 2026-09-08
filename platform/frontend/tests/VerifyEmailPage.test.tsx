@@ -57,4 +57,15 @@ describe('VerifyEmailPage', () => {
     renderWithToken(null);
     await waitFor(() => expect(screen.getByText(/no verification token/i)).toBeInTheDocument());
   });
+
+  it('renders a link back to login when verification fails', async () => {
+    vi.spyOn(client, 'apiPost').mockRejectedValue(
+      new client.ApiError('This verification link is invalid or has expired.', 400),
+    );
+    renderWithToken('bad-token');
+    await waitFor(() =>
+      expect(screen.getByText('This verification link is invalid or has expired.')).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('link', { name: /go to login/i }).getAttribute('href')).toMatch(/^\/login/);
+  });
 });
