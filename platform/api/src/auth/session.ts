@@ -18,7 +18,14 @@ export async function destroySession(token: string): Promise<void> {
 
 export async function getSession(token: string): Promise<{ subjectType: string; subjectId: string } | null> {
   const session = await prisma.session.findUnique({ where: { token } });
-  if (!session || session.expiresAt < new Date()) {
+  if (!session) {
+    return null;
+  }
+  if (session.expiresAt < new Date()) {
+    // Self-pruning: an expired session naturally encountered by real
+    // traffic gets cleaned up here — no scheduled job needed. See
+    // backlog item #12.
+    await prisma.session.deleteMany({ where: { token } });
     return null;
   }
   return { subjectType: session.subjectType, subjectId: session.subjectId };

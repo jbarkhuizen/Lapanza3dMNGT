@@ -375,3 +375,37 @@ test('sendVerificationEmail sends real mail with the verification link when SMTP
     mock.restoreAll();
   }
 });
+
+test('login rate limit is independent from the register/resend-verification bucket', async () => {
+  const app = buildApp();
+  const email = 'jane@acmeprints.co.za';
+  for (let i = 0; i < 10; i++) {
+    await request(app).post('/api/auth/login').send({ email, password: 'wrong' });
+  }
+  const limitedLogin = await request(app).post('/api/auth/login').send({ email, password: 'wrong' });
+  assert.equal(limitedLogin.status, 429);
+
+  const registerRes = await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email,
+    password: 'correct horse battery staple',
+  });
+  assert.notEqual(registerRes.status, 429);
+});
+
+test('register and resend-verification share one rate-limit bucket', async () => {
+  const app = buildApp();
+  const payload = {
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  };
+  await request(app).post('/api/auth/register').send(payload);
+  for (let i = 0; i < 9; i++) {
+    await request(app).post('/api/auth/resend-verification').send({ email: payload.email });
+  }
+  const limited = await request(app).post('/api/auth/resend-verification').send({ email: payload.email });
+  assert.equal(limited.status, 429);
+});

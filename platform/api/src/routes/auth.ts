@@ -13,7 +13,18 @@ import { env } from '../env.js';
 export function createAuthRouter() {
   const authRouter = Router();
 
-  const authLimiter = rateLimit({
+  // Login is the highest-frequency, most brute-forceable of the three
+  // account-lifecycle actions, so it gets its own bucket. Register and
+  // resend-verification are both low-frequency "something's wrong with
+  // my account" actions and share one — see backlog item #8.
+  const loginLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const accountLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     limit: 10,
     standardHeaders: true,
@@ -27,7 +38,7 @@ export function createAuthRouter() {
     password: z.string().min(10),
   });
 
-  authRouter.post('/api/auth/register', authLimiter, async (req, res) => {
+  authRouter.post('/api/auth/register', accountLimiter, async (req, res) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ ok: false, error: 'Fill in all required fields with a valid email and a password of at least 10 characters.' });
@@ -104,7 +115,7 @@ export function createAuthRouter() {
 
   const resendVerificationSchema = z.object({ email: z.string().email() });
 
-  authRouter.post('/api/auth/resend-verification', authLimiter, async (req, res) => {
+  authRouter.post('/api/auth/resend-verification', accountLimiter, async (req, res) => {
     const parsed = resendVerificationSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ ok: false, error: 'Enter a valid email address.' });
@@ -140,7 +151,7 @@ export function createAuthRouter() {
 
   const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
-  authRouter.post('/api/auth/login', authLimiter, async (req, res) => {
+  authRouter.post('/api/auth/login', loginLimiter, async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ ok: false, error: 'Enter your email and password.' });
