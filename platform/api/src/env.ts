@@ -43,4 +43,11 @@ export const env = {
   smtpUser: process.env.SMTP_USER,
   smtpAppPassword: process.env.SMTP_APP_PASSWORD,
   smtpFromName: process.env.SMTP_FROM_NAME ?? 'Barkie',
+  // Payment provider credentials — optional, same pattern as SMTP_*:
+  // unset in dev/test/CI, set only in the VPS production .env, collected
+  // directly from the user immediately before that deploy step.
+  paymentsLive: process.env.NODE_ENV === 'production',
+  payfastMerchantId: process.env.PAYFAST_MERCHANT_ID,
+  payfastMerchantKey: process.env.PAYFAST_MERCHANT_KEY,
+  payfastPassphrase: process.env.PAYFAST_PASSPHRASE,
 };
