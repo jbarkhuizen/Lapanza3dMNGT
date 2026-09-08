@@ -1,8 +1,9 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { useInvoice, useUpdateInvoiceStatus, VALID_INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '../../api/invoices.js';
+import { useInvoice, useUpdateInvoiceStatus, useSendInvoice, VALID_INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
+import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
 import { FormField } from '../../components/FormField.js';
 import { ApiError } from '../../api/client.js';
 
@@ -18,8 +19,10 @@ export function InvoiceDetailPage() {
   const { data: invoice, isLoading, isError } = useInvoice(id);
   const { lookup: customerLookup } = useCustomerLookup();
   const updateStatusMutation = useUpdateInvoiceStatus(id ?? '');
+  const sendMutation = useSendInvoice(id ?? '');
   const [amountPaid, setAmountPaid] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Keep the amount input pre-filled with the CURRENT cumulative amount paid to date,
   // since PATCH /status sets amountPaid rather than incrementing it. Re-sync whenever
@@ -40,6 +43,7 @@ export function InvoiceDetailPage() {
   const customer = customerLookup.get(invoice.customerId);
   const nextStatuses = VALID_INVOICE_STATUS_TRANSITIONS[invoice.status] ?? [];
   const invoiceTotal = Number(invoice.total);
+  const invoiceNumber = invoice.number;
 
   async function handleStatusChange(status: InvoiceStatus, requiresAmount: boolean) {
     setError(null);
@@ -53,6 +57,18 @@ export function InvoiceDetailPage() {
       });
       // The amount input is re-synced to the new invoice.amountPaid by the useEffect above
       // once the mutation's success invalidates the query and the invoice refetches.
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
+    }
+  }
+
+  async function handleSend() {
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await sendMutation.mutateAsync();
+      downloadBase64Pdf(result.pdfBase64, `${invoiceNumber}.pdf`);
+      setSuccessMessage(`Emailed to ${result.sentTo} (dev mode — check server console for the email log).`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
@@ -96,6 +112,18 @@ export function InvoiceDetailPage() {
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
+
+      <div className="flex gap-3">
+        <button
+          onClick={handleSend}
+          disabled={sendMutation.isPending || !customer?.email}
+          title={!customer?.email ? 'Add a customer email to enable sending' : undefined}
+          className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          Send to Customer
+        </button>
+      </div>
 
       {nextStatuses.length > 0 && (
         <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">

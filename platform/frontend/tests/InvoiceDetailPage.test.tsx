@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { InvoiceDetailPage } from '../src/pages/invoices/InvoiceDetailPage.js';
 import * as client from '../src/api/client.js';
+import * as downloadPdf from '../src/lib/downloadPdf.js';
 import { createTestQueryClient } from './helpers/queryClient.js';
 
 beforeEach(() => {
@@ -118,5 +119,35 @@ describe('InvoiceDetailPage', () => {
     renderAt('/invoices/inv1');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'INV-0001' })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Mark as|Record/ })).not.toBeInTheDocument();
+  });
+
+  it('shows "Send to Customer" disabled when the customer has no email on file', async () => {
+    mockData();
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send to Customer' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Send to Customer' })).toBeDisabled();
+  });
+
+  it('sends the invoice, downloads the PDF, and shows a dev-mode success message', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/invoices/inv1') return Promise.resolve({ ok: true, invoice: unpaidInvoice });
+      if (path === '/api/customers') {
+        return Promise.resolve({
+          ok: true,
+          customers: [{ id: 'c1', name: 'Bob Client', company: null, email: 'bob@example.com', phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' }],
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ pdfBase64: 'ZmFrZQ==', sentTo: 'bob@example.com', devMode: true });
+    const downloadSpy = vi.spyOn(downloadPdf, 'downloadBase64Pdf').mockImplementation(() => {});
+
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send to Customer' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Customer' }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/invoices/inv1/send'));
+    expect(downloadSpy).toHaveBeenCalledWith('ZmFrZQ==', 'INV-0001.pdf');
+    await waitFor(() => expect(screen.getByText(/Emailed to bob@example\.com/)).toBeInTheDocument());
   });
 });

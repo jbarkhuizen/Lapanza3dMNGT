@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuote, useUpdateQuoteStatus, useConvertQuoteToInvoice, VALID_QUOTE_STATUS_TRANSITIONS, type QuoteStatus } from '../../api/quotes.js';
+import { useQuote, useUpdateQuoteStatus, useConvertQuoteToInvoice, useSendQuote, VALID_QUOTE_STATUS_TRANSITIONS, type QuoteStatus } from '../../api/quotes.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
+import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
 import { ApiError } from '../../api/client.js';
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
@@ -19,7 +20,9 @@ export function QuoteDetailPage() {
   const { lookup: customerLookup } = useCustomerLookup();
   const updateStatusMutation = useUpdateQuoteStatus(id ?? '');
   const convertMutation = useConvertQuoteToInvoice(id ?? '');
+  const sendMutation = useSendQuote(id ?? '');
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (isLoading) {
     return <p className="text-slate-500">Loading…</p>;
@@ -30,6 +33,7 @@ export function QuoteDetailPage() {
 
   const customer = customerLookup.get(quote.customerId);
   const nextStatuses = VALID_QUOTE_STATUS_TRANSITIONS[quote.status] ?? [];
+  const quoteNumber = quote.number;
 
   async function handleStatusChange(status: QuoteStatus) {
     setError(null);
@@ -45,6 +49,18 @@ export function QuoteDetailPage() {
     try {
       const invoice = await convertMutation.mutateAsync();
       navigate(`/invoices/${invoice.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
+    }
+  }
+
+  async function handleSend() {
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const result = await sendMutation.mutateAsync();
+      downloadBase64Pdf(result.pdfBase64, `${quoteNumber}.pdf`);
+      setSuccessMessage(`Emailed to ${result.sentTo} (dev mode — check server console for the email log).`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
@@ -85,8 +101,17 @@ export function QuoteDetailPage() {
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
 
       <div className="flex gap-3">
+        <button
+          onClick={handleSend}
+          disabled={sendMutation.isPending || !customer?.email}
+          title={!customer?.email ? 'Add a customer email to enable sending' : undefined}
+          className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          Send to Customer
+        </button>
         {nextStatuses.map((status) => (
           <button
             key={status}
