@@ -61,11 +61,15 @@ function formatMoney(value: string, currency: string): string {
 
 const LEFT = 50;
 const RIGHT = 545;
-const COL_QTY = 340;
+// Was 340 (paired with COL_UNIT_PRICE 400): narrowing COL_UNIT_PRICE to 390 to fix the
+// totals-label wrap below took its 10pt from the Qty column, which reopened the same
+// stale-doc.y pagination bug on quantities in the 5-8 digit range (e.g. "12345.67" wraps
+// in a 40pt Qty column). Taking the 10pt from Description instead — 280pt down to 270pt
+// has ample slack for real line-item descriptions — keeps Qty at its original 50pt.
+const COL_QTY = 330;
 // Was 400: at that value the totals-block label column (COL_TOTAL - COL_UNIT_PRICE - 10 = 60pt)
-// was narrower than "Balance Due" measured in Helvetica-Bold 10pt (60.02pt) and "Amount Paid"
-// (61.37pt), so pdfkit wrapped those labels onto 2 lines. Shifting to 390 widens that shared
-// label/unit-price column to 70pt, giving both labels ~9-10pt of margin on one line.
+// was narrower than "Balance Due" measured in Helvetica-Bold 10pt (60.02pt), so pdfkit wrapped
+// it onto 2 lines. Shifting to 390 widens that shared label/unit-price column to 70pt.
 const COL_UNIT_PRICE = 390;
 const COL_TOTAL = 470;
 // Shared by the "Unit Price" line-item column and the totals-block label column
