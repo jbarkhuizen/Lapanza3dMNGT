@@ -9,6 +9,8 @@ export const webhooksRouter = Router();
 const GRACE_PERIOD_DAYS = 7;
 
 async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
+  if (!event.providerSubscriptionId) return;
+
   const subscription = await prisma.subscription.findFirst({
     where: { providerSubscriptionId: event.providerSubscriptionId },
   });

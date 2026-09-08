@@ -30,6 +30,12 @@ export function buildApp() {
   }
   app.use(cors({ origin: env.frontendOrigin, credentials: true }));
   app.use(express.json());
+  // PayFast's ITN webhook POSTs as application/x-www-form-urlencoded, not
+  // JSON (PayPal's webhook is genuine JSON, handled by express.json() above).
+  // Express only invokes the parser matching the request's actual
+  // Content-Type, so registering both here is safe — each activates only
+  // for its own content type.
+  app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
   app.use(healthRouter);
   app.use(createAuthRouter());
