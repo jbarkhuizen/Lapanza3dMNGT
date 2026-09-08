@@ -10,7 +10,7 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockReferenceData() {
+function mockReferenceData(options?: { emptyLabourSteps?: boolean; emptyConsumables?: boolean }) {
   vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
     if (path === '/api/filaments') {
       return Promise.resolve({ ok: true, filaments: [{ id: 'f1', brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, colour: null, costPerSpool: null, costPerKg: 300, spoolWeightGrams: null, remainingWeightGrams: null, supplier: null, purchaseDate: null, notes: null, lowStockThresholdGrams: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
@@ -19,10 +19,10 @@ function mockReferenceData() {
       return Promise.resolve({ ok: true, printers: [{ id: 'p1', name: 'Prusa MK4', make: null, model: null, buildVolumeXMm: null, buildVolumeYMm: null, buildVolumeZMm: null, purchaseDate: null, purchaseCost: 4000, powerDrawWatts: 200, electricityRatePerKwh: '2.5000', expectedLifetimeHours: 2000, status: 'active', createdAt: '2026-01-01T00:00:00.000Z' }] });
     }
     if (path === '/api/labour-steps') {
-      return Promise.resolve({ ok: true, labourSteps: [{ id: 'ls1', name: 'Slicing', hourlyRate: 150, active: true, createdAt: '2026-01-01T00:00:00.000Z' }] });
+      return Promise.resolve({ ok: true, labourSteps: options?.emptyLabourSteps ? [] : [{ id: 'ls1', name: 'Slicing', hourlyRate: 150, active: true, createdAt: '2026-01-01T00:00:00.000Z' }] });
     }
     if (path === '/api/consumables') {
-      return Promise.resolve({ ok: true, consumables: [{ id: 'cs1', name: 'Build plate adhesive', category: 'other', unitOfMeasure: 'each', costPerUnit: 10, currentStock: 5, reorderThreshold: null, supplier: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
+      return Promise.resolve({ ok: true, consumables: options?.emptyConsumables ? [] : [{ id: 'cs1', name: 'Build plate adhesive', category: 'other', unitOfMeasure: 'each', costPerUnit: 10, currentStock: 5, reorderThreshold: null, supplier: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
     }
     return Promise.reject(new client.ApiError('not found', 404));
   });
@@ -137,5 +137,25 @@ describe('CostingTemplateCreatePage', () => {
         screen.getByText('This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.'),
       ).toBeInTheDocument(),
     );
+  });
+
+  it('disables the "Add Labour Line" button when labour steps list is empty and shows a hint', async () => {
+    mockReferenceData({ emptyLabourSteps: true });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    const addLabourButton = screen.getByRole('button', { name: 'Add Labour Line' });
+    expect(addLabourButton).toBeDisabled();
+    expect(screen.getByText('Add a labour step first (Labour Steps page) before adding one here.')).toBeInTheDocument();
+  });
+
+  it('disables the "Add Consumable Line" button when consumables list is empty and shows a hint', async () => {
+    mockReferenceData({ emptyConsumables: true });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    const addConsumableButton = screen.getByRole('button', { name: 'Add Consumable Line' });
+    expect(addConsumableButton).toBeDisabled();
+    expect(screen.getByText('Add a consumable first (Consumables page) before adding one here.')).toBeInTheDocument();
   });
 });

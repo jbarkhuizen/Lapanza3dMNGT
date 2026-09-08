@@ -126,10 +126,13 @@ export function CostingTemplateCreatePage() {
       <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Labour lines</h2>
-          <button type="button" onClick={addLabourLine} disabled={isLoadingLabourSteps} className="rounded bg-slate-100 px-3 py-1 text-sm">
+          <button type="button" onClick={addLabourLine} disabled={isLoadingLabourSteps || !labourSteps?.length} className="rounded bg-slate-100 px-3 py-1 text-sm">
             Add Labour Line
           </button>
         </div>
+        {!isLoadingLabourSteps && labourSteps?.length === 0 && (
+          <p className="text-sm text-slate-500">Add a labour step first (Labour Steps page) before adding one here.</p>
+        )}
         {labourLines.map((line, i) => (
           <div key={i} className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
@@ -154,10 +157,13 @@ export function CostingTemplateCreatePage() {
       <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-slate-900">Consumable lines</h2>
-          <button type="button" onClick={addConsumableLine} disabled={isLoadingConsumables} className="rounded bg-slate-100 px-3 py-1 text-sm">
+          <button type="button" onClick={addConsumableLine} disabled={isLoadingConsumables || !consumables?.length} className="rounded bg-slate-100 px-3 py-1 text-sm">
             Add Consumable Line
           </button>
         </div>
+        {!isLoadingConsumables && consumables?.length === 0 && (
+          <p className="text-sm text-slate-500">Add a consumable first (Consumables page) before adding one here.</p>
+        )}
         {consumableLines.map((line, i) => (
           <div key={i} className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
