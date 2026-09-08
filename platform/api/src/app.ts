@@ -16,6 +16,8 @@ import { costingTemplatesRouter } from './routes/costing-templates.js';
 import { companyProfileRouter } from './routes/company-profile.js';
 import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
+import { billingRouter } from './routes/billing.js';
+import { webhooksRouter } from './routes/webhooks.js';
 
 export function buildApp() {
   const app = express();
@@ -31,6 +33,15 @@ export function buildApp() {
   app.use(cookieParser());
   app.use(healthRouter);
   app.use(createAuthRouter());
+  // Mounted here (before the auth-protected routers below) because every one
+  // of those routers applies `requireTenantAuth` via an unpathed `router.use`,
+  // which — since each router is itself mounted at `/` — intercepts every
+  // request that flows into it, not just requests matching its own routes.
+  // Payment-provider webhooks arrive with no session cookie, so webhooksRouter
+  // must get first refusal on its own paths before any blanket-auth router
+  // can short-circuit the request to a 401. webhooksRouter has no such
+  // blanket middleware itself, so unrelated requests pass through untouched.
+  app.use(webhooksRouter);
   app.use(customersRouter);
   app.use(printersRouter);
   app.use(printerPresetsRouter);
@@ -42,6 +53,7 @@ export function buildApp() {
   app.use(companyProfileRouter);
   app.use(quotesRouter);
   app.use(invoicesRouter);
+  app.use(billingRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
