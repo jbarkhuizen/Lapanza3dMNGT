@@ -115,6 +115,7 @@ export function createPaypalProvider(
     },
 
     parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
+      if (!req.body || typeof req.body !== 'object') return null;
       const body = req.body as { event_type: string; resource: Record<string, unknown> };
       const providerSubscriptionId =
         (body.resource?.billing_agreement_id as string | undefined) ??

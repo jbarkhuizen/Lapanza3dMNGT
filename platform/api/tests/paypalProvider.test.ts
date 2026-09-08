@@ -125,3 +125,13 @@ test('parseWebhookEvent normalizes BILLING.SUBSCRIPTION.CANCELLED to "canceled"'
   const event = provider.parseWebhookEvent(req);
   assert.deepEqual(event, { providerSubscriptionId: 'SUB-1', type: 'canceled' });
 });
+
+test('parseWebhookEvent returns null instead of throwing on a missing body', () => {
+  const provider = createPaypalProvider(config, (async () => ({})) as unknown as typeof fetch);
+
+  const missingBodyReq = { body: undefined } as unknown as Request;
+  assert.equal(provider.parseWebhookEvent(missingBodyReq), null);
+
+  const nullBodyReq = { body: null } as unknown as Request;
+  assert.equal(provider.parseWebhookEvent(nullBodyReq), null);
+});

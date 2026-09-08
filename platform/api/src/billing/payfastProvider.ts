@@ -88,6 +88,7 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
     },
 
     parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
+      if (!req.body || typeof req.body !== 'object') return null;
       const body = req.body as Record<string, string>;
       const providerSubscriptionId = body.token;
       if (!providerSubscriptionId) return null;

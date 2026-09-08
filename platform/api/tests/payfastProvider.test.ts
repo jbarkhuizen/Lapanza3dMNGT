@@ -100,3 +100,13 @@ test('parseWebhookEvent normalizes a FAILED payment_status to "payment_failed"',
   const event = provider.parseWebhookEvent(req);
   assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', type: 'payment_failed' });
 });
+
+test('parseWebhookEvent returns null instead of throwing on a missing body', () => {
+  const provider = createPayfastProvider(config);
+
+  const missingBodyReq = { body: undefined } as unknown as Request;
+  assert.equal(provider.parseWebhookEvent(missingBodyReq), null);
+
+  const nullBodyReq = { body: null } as unknown as Request;
+  assert.equal(provider.parseWebhookEvent(nullBodyReq), null);
+});
