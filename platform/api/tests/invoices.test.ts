@@ -48,7 +48,26 @@ test('POST /api/invoices creates a standalone invoice, numbered INV-0001, due in
   assert.equal(res.body.invoice.status, 'unpaid');
   assert.equal(res.body.invoice.total, '200.00');
   assert.equal(res.body.invoice.amountPaid, '0.00');
+  assert.equal(res.body.invoice.balanceDue, '200.00');
   assert.ok(res.body.invoice.dueDate);
+});
+
+test('balanceDue reflects total minus amountPaid at every payment status, computed server-side', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 100, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+  assert.equal(created.body.invoice.balanceDue, '100.00');
+
+  const partial = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'partially_paid', amountPaid: 40 });
+  assert.equal(partial.body.invoice.balanceDue, '60.00');
+
+  const paid = await agent.patch(`/api/invoices/${invoiceId}/status`).send({ status: 'paid', amountPaid: 100 });
+  assert.equal(paid.body.invoice.balanceDue, '0.00');
 });
 
 test('PATCH /api/invoices/:id/status requires amountPaid to equal total for paid', async () => {

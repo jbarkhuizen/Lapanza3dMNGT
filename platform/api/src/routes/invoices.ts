@@ -19,6 +19,7 @@ export function serializeInvoice(invoice: InvoiceWithOptionalLines) {
     vatAmount: invoice.vatAmount.toFixed(2),
     total: invoice.total.toFixed(2),
     amountPaid: invoice.amountPaid.toFixed(2),
+    balanceDue: invoice.total.minus(invoice.amountPaid).toFixed(2),
     lineItems: invoice.lineItems?.map((line) => ({
       ...line,
       unitPrice: line.unitPrice.toFixed(2),
