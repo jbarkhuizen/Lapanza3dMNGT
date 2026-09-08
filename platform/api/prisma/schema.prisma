@@ -52,6 +52,7 @@ model Tenant {
   quoteLineItems         QuoteLineItem[]
   invoices               Invoice[]
   invoiceLineItems       InvoiceLineItem[]
+  subscription           Subscription?
 
   @@map("tenants")
 }
@@ -400,4 +401,35 @@ model InvoiceLineItem {
   @@index([tenantId])
   @@index([invoiceId])
   @@map("invoice_line_items")
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  name         String
+  monthlyPrice Decimal  @db.Decimal(8, 2)
+  sortOrder    Int
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                     String    @id @default(uuid())
+  tenantId               String    @unique
+  planId                 String
+  status                 String
+  paymentProvider        String
+  providerSubscriptionId String?
+  trialEndsAt            DateTime  @db.Timestamptz(3)
+  currentPeriodEnd       DateTime? @db.Timestamptz(3)
+  createdAt              DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
 }

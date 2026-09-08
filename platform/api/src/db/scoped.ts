@@ -249,6 +249,20 @@ export interface UpdateCompanyProfileInput {
   invoiceNumberPrefix?: string;
 }
 
+export interface CreateSubscriptionInput {
+  planId: string;
+  status: string;
+  paymentProvider: string;
+  trialEndsAt: Date;
+  providerSubscriptionId?: string;
+  currentPeriodEnd?: Date;
+}
+
+export interface UpdateSubscriptionExtra {
+  providerSubscriptionId?: string;
+  currentPeriodEnd?: Date;
+}
+
 const companyProfileSelect = {
   businessName: true,
   contactName: true,
@@ -550,6 +564,17 @@ export function tenantScope(tenantId: string) {
         });
         return updated.value;
       },
+    },
+
+    subscription: {
+      get: () =>
+        prisma.subscription.findUnique({ where: { tenantId }, include: { plan: true } }),
+
+      create: (data: CreateSubscriptionInput) =>
+        prisma.subscription.create({ data: { ...data, tenantId }, include: { plan: true } }),
+
+      updateStatus: (status: string, extra?: UpdateSubscriptionExtra) =>
+        prisma.subscription.updateMany({ where: { tenantId }, data: { status, ...extra } }),
     },
   };
 }
