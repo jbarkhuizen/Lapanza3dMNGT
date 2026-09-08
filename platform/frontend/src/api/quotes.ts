@@ -95,3 +95,15 @@ export function useConvertQuoteToInvoice(id: string) {
     },
   });
 }
+
+export interface SendDocumentResponse {
+  pdfBase64: string;
+  sentTo: string;
+  devMode: boolean;
+}
+
+export function useSendQuote(id: string) {
+  return useMutation({
+    mutationFn: () => apiPost<SendDocumentResponse>(`/api/quotes/${id}/send`),
+  });
+}

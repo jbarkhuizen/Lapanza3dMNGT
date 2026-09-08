@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPatch } from './client.js';
+import { apiGet, apiPatch, apiPost } from './client.js';
 
 export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue';
 
@@ -63,5 +63,17 @@ export function useUpdateInvoiceStatus(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: INVOICES_QUERY_KEY });
     },
+  });
+}
+
+export interface SendDocumentResponse {
+  pdfBase64: string;
+  sentTo: string;
+  devMode: boolean;
+}
+
+export function useSendInvoice(id: string) {
+  return useMutation({
+    mutationFn: () => apiPost<SendDocumentResponse>(`/api/invoices/${id}/send`),
   });
 }
