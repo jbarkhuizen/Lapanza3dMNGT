@@ -27,6 +27,7 @@ import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
 import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
+import { BillingSettingsPage } from './pages/billing/BillingSettingsPage.js';
 
 export function App() {
   return (
@@ -51,6 +52,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CompanyProfilePage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/billing"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <BillingSettingsPage />
               </AppShell>
             </RequireAuth>
           }

@@ -7,6 +7,7 @@ export interface Tenant {
   businessName: string;
   email: string;
   emailVerified: boolean;
+  hasSubscription: boolean;
 }
 
 interface AuthContextValue {
@@ -62,6 +63,14 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
   if (!tenant) {
     return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  // A tenant with no subscription at all must pick a plan before doing
+  // anything else — but the plan-selection and billing-complete pages
+  // are themselves wrapped in RequireAuth (Task 6), so this check must
+  // not redirect a tenant who is ALREADY on one of those two pages,
+  // or picking a plan would infinite-loop back to itself.
+  if (!tenant.hasSubscription && location.pathname !== '/plans' && location.pathname !== '/billing/complete') {
+    return <Navigate to="/plans" replace />;
   }
   return <>{children}</>;
 }

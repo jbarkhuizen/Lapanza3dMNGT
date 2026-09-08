@@ -25,7 +25,7 @@ describe('App routing', () => {
   it('shows the dashboard at "/" for an authenticated tenant', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({
       ok: true,
-      tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+      tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
     });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/']}>
@@ -67,7 +67,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/company-profile') {
@@ -111,7 +111,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/customers') {
@@ -134,7 +134,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/filaments') {
@@ -157,7 +157,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/labour-steps') {
@@ -180,7 +180,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/consumables') {
@@ -203,7 +203,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/printers') {
@@ -226,7 +226,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/costing-templates') {
@@ -252,7 +252,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/filaments') {
@@ -287,7 +287,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/quotes') {
@@ -313,7 +313,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/customers') {
@@ -339,7 +339,7 @@ describe('App routing', () => {
       if (path === '/api/auth/me') {
         return Promise.resolve({
           ok: true,
-          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
         });
       }
       if (path === '/api/invoices') {
@@ -358,5 +358,126 @@ describe('App routing', () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Invoices' })).toBeInTheDocument());
+  });
+
+  it('renders the Billing settings page at "/billing" for an authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+        });
+      }
+      if (path === '/api/billing/subscription') {
+        return Promise.resolve({
+          ok: true,
+          subscription: {
+            id: 's1', status: 'active', paymentProvider: 'payfast',
+            trialEndsAt: '2026-09-22T00:00:00.000Z', currentPeriodEnd: '2026-10-22T00:00:00.000Z',
+            plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00', sortOrder: 1 },
+          },
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/billing']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Billing' })).toBeInTheDocument());
+  });
+
+  it('redirects an authenticated tenant with no subscription to /plans', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: {
+            id: 't1', businessName: 'Acme Prints', email: 'jane@acmeprints.co.za', emailVerified: true,
+            hasSubscription: false,
+          },
+        });
+      }
+      if (path === '/api/plans') {
+        return Promise.resolve({ ok: true, plans: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText('Choose a plan')).toBeInTheDocument());
+  });
+
+  it('does not redirect a subscription-less tenant away from /plans (no infinite loop)', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: {
+            id: 't1', businessName: 'Acme Prints', email: 'jane@acmeprints.co.za', emailVerified: true,
+            hasSubscription: false,
+          },
+        });
+      }
+      if (path === '/api/plans') {
+        return Promise.resolve({ ok: true, plans: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/plans']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText('Choose a plan')).toBeInTheDocument());
+  });
+
+  it('does not redirect a subscription-less tenant away from /billing/complete (no infinite loop)', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: {
+            id: 't1', businessName: 'Acme Prints', email: 'jane@acmeprints.co.za', emailVerified: true,
+            hasSubscription: false,
+          },
+        });
+      }
+      if (path === '/api/billing/subscription') {
+        return Promise.resolve({
+          ok: true,
+          subscription: {
+            id: 's1', status: 'trialing', paymentProvider: 'payfast',
+            trialEndsAt: '2026-09-22T00:00:00.000Z', currentPeriodEnd: null,
+            plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00', sortOrder: 1 },
+          },
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/billing/complete']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText("You're all set")).toBeInTheDocument());
   });
 });
