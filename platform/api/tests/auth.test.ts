@@ -176,6 +176,10 @@ test('POST /api/auth/resend-verification mints a fresh token that invalidates th
   const updated = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
   assert.ok(updated?.verificationToken, 'a new token should be set');
   assert.notEqual(updated?.verificationToken, originalToken, 'the token should have changed');
+  assert.ok(
+    updated!.verificationTokenExpires!.getTime() > original!.verificationTokenExpires!.getTime(),
+    'the expiry should have been refreshed to a later time',
+  );
 
   // The old token must no longer verify the account.
   const oldTokenAttempt = await request(app)
@@ -188,6 +192,49 @@ test('POST /api/auth/resend-verification mints a fresh token that invalidates th
     .post('/api/auth/verify-email')
     .send({ token: updated?.verificationToken });
   assert.equal(newTokenAttempt.status, 200);
+});
+
+test('POST /api/auth/resend-verification genuinely fixes a truly-expired verification window', async () => {
+  const app = buildApp();
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  // Simulate a token whose expiry has genuinely lapsed (not just "about to").
+  const pastExpiry = new Date(Date.now() - 60 * 60 * 1000);
+  await prisma.tenant.update({
+    where: { email: 'jane@acmeprints.co.za' },
+    data: { verificationTokenExpires: pastExpiry },
+  });
+
+  // The now-expired token must be rejected, proving the scenario is real.
+  const expired = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  const expiredAttempt = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: expired?.verificationToken });
+  assert.equal(expiredAttempt.status, 400);
+
+  const res = await request(app)
+    .post('/api/auth/resend-verification')
+    .send({ email: 'jane@acmeprints.co.za' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+
+  const updated = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  assert.notEqual(updated?.verificationToken, expired?.verificationToken, 'a new token should have been minted');
+
+  // The new token, issued after resend, must actually verify the account.
+  const newTokenAttempt = await request(app)
+    .post('/api/auth/verify-email')
+    .send({ token: updated?.verificationToken });
+  assert.equal(newTokenAttempt.status, 200);
+  assert.equal(newTokenAttempt.body.ok, true);
+
+  const verified = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  assert.ok(verified?.emailVerifiedAt, 'emailVerifiedAt should be set after verifying with the resent token');
 });
 
 test('POST /api/auth/login sets a session cookie for correct credentials', async () => {
