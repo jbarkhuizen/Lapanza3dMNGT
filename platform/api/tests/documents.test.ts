@@ -110,7 +110,95 @@ test('generateDocumentPdf paginates a long line-item table onto multiple pages w
 
   const pdfText = buffer.toString('latin1');
   const pageCount = (pdfText.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  assert.ok(pageCount > 1, `expected multiple pages for 30 line items, got ${pageCount}`);
+  // The pre-fix flat ROW_HEIGHT_ESTIMATE bug caused pdfkit's own automatic
+  // pagination to trigger mid-row on nearly every row once the estimate drifted
+  // out of sync with doc.y, producing 13 pages for this exact input. A correct
+  // pagination should pack these single-line rows tightly onto very few pages.
+  assert.ok(
+    pageCount > 1 && pageCount <= 3,
+    `expected a tight page count (<=3) for 30 single-line items, got ${pageCount}`,
+  );
+});
+
+test('generateDocumentPdf paginates wrapped multi-line descriptions without a page break per row', async () => {
+  const longDescription =
+    'This is a deliberately long line item description used to force the description ' +
+    'column to wrap onto two or more lines when rendered in the PDF table cell width.';
+  // 50 rows: measured empirically against this exact pdfkit version. At smaller
+  // counts (~18-20) the flat-estimate bug only bites once, near the single page
+  // boundary, and produces the same page count as the fix (so it isn't a
+  // reliable regression signal). At 50 rows the bug compounds across multiple
+  // page boundaries: the pre-fix flat ROW_HEIGHT_ESTIMATE=20 undercounts each
+  // ~3-line wrapped row's real ~35-40pt height, so pdfkit's own automatic
+  // pagination keeps triggering mid-row breaks, producing 6 pages pre-fix vs 4
+  // pages once the real per-row height is used for the fit check.
+  const wrappingLines = Array.from({ length: 50 }, (_, i) => ({
+    description: `${longDescription} (item ${i + 1})`,
+    quantity: 1,
+    unitPrice: '10.00',
+    lineTotal: '10.00',
+  }));
+  const buffer = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: 'QT-0003',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Valid until',
+    dateValue: new Date('2026-01-15T00:00:00.000Z'),
+    companyProfile: baseCompanyProfile,
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: wrappingLines,
+    subtotal: '500.00',
+    vatAmount: '75.00',
+    vatApplied: true,
+    total: '575.00',
+    notes: null,
+  });
+
+  const pdfText = buffer.toString('latin1');
+  const pageCount = (pdfText.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  assert.ok(
+    pageCount <= 4,
+    `expected wrapped rows to pack tightly (<=4 pages) for 50 wrapping items, got ${pageCount}`,
+  );
+});
+
+test('generateDocumentPdf keeps the totals block together instead of splitting it across a page boundary', async () => {
+  // 25 short single-line items: measured empirically to land the totals block
+  // (Subtotal/VAT/Total/Amount Paid/Balance Due) right at the pre-fix page
+  // boundary. Pre-fix, drawTotalsLine never checked doc.y before drawing, so
+  // pdfkit's automatic pagination tore a totals line's label from its value
+  // mid-row, producing 3 pages. Post-fix, the totals block gets pushed onto a
+  // fresh page as a whole, producing 2.
+  const lines = Array.from({ length: 25 }, (_, i) => ({
+    description: `Custom part ${i + 1}`,
+    quantity: 1,
+    unitPrice: '10.00',
+    lineTotal: '10.00',
+  }));
+  const buffer = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: 'QT-0004',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Valid until',
+    dateValue: new Date('2026-01-15T00:00:00.000Z'),
+    companyProfile: baseCompanyProfile,
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: lines,
+    subtotal: '250.00',
+    vatAmount: '37.50',
+    vatApplied: true,
+    total: '287.50',
+    amountPaid: '0.00',
+    balanceDue: '287.50',
+    notes: null,
+  });
+
+  const pdfText = buffer.toString('latin1');
+  const pageCount = (pdfText.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  assert.ok(
+    pageCount <= 2,
+    `expected the totals block to stay intact (<=2 pages) for 25 short line items, got ${pageCount}`,
+  );
 });
 
 test('sendDocumentEmail logs the send to console in dev mode', async () => {

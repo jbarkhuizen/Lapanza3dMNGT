@@ -76,31 +76,53 @@ function drawTableHeader(doc: PDFKit.PDFDocument): void {
   doc.moveDown(0.75);
 }
 
-const ROW_HEIGHT_ESTIMATE = 20;
+// Fixed conservative estimate for a totals line, which is always single-line.
+const TOTALS_LINE_HEIGHT_ESTIMATE = 20;
 
-function ensureRowFits(doc: PDFKit.PDFDocument): void {
+/**
+ * Advances to a new page (without drawing anything else) if the given
+ * height would not fit above the bottom margin on the current page.
+ * Returns true when a page break was inserted, so callers can redraw
+ * whatever per-page furniture (e.g. a table header) belongs at the top.
+ */
+function ensurePageSpace(doc: PDFKit.PDFDocument, estimatedHeight: number): boolean {
   const bottomLimit = doc.page.height - doc.page.margins.bottom;
-  if (doc.y + ROW_HEIGHT_ESTIMATE > bottomLimit) {
+  if (doc.y + estimatedHeight > bottomLimit) {
     doc.addPage();
+    return true;
+  }
+  return false;
+}
+
+function ensureRowFits(doc: PDFKit.PDFDocument, estimatedHeight: number): void {
+  if (ensurePageSpace(doc, estimatedHeight)) {
     drawTableHeader(doc);
     doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.5);
   }
 }
 
-function drawTableRow(doc: PDFKit.PDFDocument, line: PdfLineItem, currency: string): void {
+// Real (not estimated) content height of a row's description cell, which is
+// the tallest cell in the row since it's the only one that can wrap.
+function computeRowContentHeight(doc: PDFKit.PDFDocument, line: PdfLineItem): number {
+  const descWidth = COL_QTY - LEFT - 10;
+  doc.fontSize(10);
+  return Math.max(doc.heightOfString(line.description, { width: descWidth }), 14);
+}
+
+function drawTableRow(doc: PDFKit.PDFDocument, line: PdfLineItem, currency: string, rowContentHeight: number): void {
   const y = doc.y;
   const descWidth = COL_QTY - LEFT - 10;
   doc.fontSize(10);
   doc.text(line.description, LEFT, y, { width: descWidth });
-  const rowHeight = doc.heightOfString(line.description, { width: descWidth });
   doc.text(String(line.quantity), COL_QTY, y, { width: COL_UNIT_PRICE - COL_QTY - 10 });
   doc.text(formatMoney(line.unitPrice, currency), COL_UNIT_PRICE, y, { width: COL_TOTAL - COL_UNIT_PRICE - 10 });
   doc.text(formatMoney(line.lineTotal, currency), COL_TOTAL, y, { width: RIGHT - COL_TOTAL, align: 'right' });
-  doc.y = y + Math.max(rowHeight, 14) + 6;
+  doc.y = y + rowContentHeight + 6;
 }
 
 function drawTotalsLine(doc: PDFKit.PDFDocument, label: string, value: string, bold = false): void {
+  ensurePageSpace(doc, TOTALS_LINE_HEIGHT_ESTIMATE);
   const y = doc.y;
   doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(10);
   doc.text(label, COL_UNIT_PRICE, y, { width: COL_TOTAL - COL_UNIT_PRICE - 10 });
@@ -151,8 +173,9 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
     doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.5);
     for (const line of input.lineItems) {
-      ensureRowFits(doc);
-      drawTableRow(doc, line, currency);
+      const rowContentHeight = computeRowContentHeight(doc, line);
+      ensureRowFits(doc, rowContentHeight + 6);
+      drawTableRow(doc, line, currency, rowContentHeight);
     }
     doc.moveTo(LEFT, doc.y).lineTo(RIGHT, doc.y).strokeColor('#cccccc').stroke();
     doc.moveDown(0.75);
