@@ -25,6 +25,8 @@ import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
 import { InvoicesListPage } from './pages/invoices/InvoicesListPage.js';
 import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
+import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
+import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
 
 export function App() {
   return (
@@ -280,6 +282,22 @@ export function App() {
               <AppShell>
                 <InvoiceDetailPage />
               </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/plans"
+          element={
+            <RequireAuth>
+              <PlanSelectionPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/billing/complete"
+          element={
+            <RequireAuth>
+              <BillingCompletePage />
             </RequireAuth>
           }
         />
