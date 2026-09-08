@@ -68,7 +68,11 @@ export function InvoiceDetailPage() {
     try {
       const result = await sendMutation.mutateAsync();
       downloadBase64Pdf(result.pdfBase64, `${invoiceNumber}.pdf`);
-      setSuccessMessage(`Emailed to ${result.sentTo} (dev mode — check server console for the email log).`);
+      setSuccessMessage(
+        result.devMode
+          ? `Emailed to ${result.sentTo} (dev mode — check server console for the email log).`
+          : `Emailed to ${result.sentTo}.`,
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
     }
