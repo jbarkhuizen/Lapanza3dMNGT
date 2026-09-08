@@ -19,4 +19,10 @@ export const env = {
   frontendBasePath: process.env.FRONTEND_BASE_PATH ?? '',
   sessionCookieName: process.env.SESSION_COOKIE_NAME ?? 'barkie_session',
   trustProxy: process.env.TRUST_PROXY === 'true',
+  // Real SMTP is opt-in: unset in dev/test/CI (see src/lib/mailer.ts),
+  // set only in the VPS's production .env. Never required() — a missing
+  // value means "stay in dev-mode console-log", not a startup failure.
+  smtpUser: process.env.SMTP_USER,
+  smtpAppPassword: process.env.SMTP_APP_PASSWORD,
+  smtpFromName: process.env.SMTP_FROM_NAME ?? 'Barkie',
 };
