@@ -24,8 +24,13 @@ export async function getSession(token: string): Promise<{ subjectType: string; 
   if (session.expiresAt < new Date()) {
     // Self-pruning: an expired session naturally encountered by real
     // traffic gets cleaned up here — no scheduled job needed. See
-    // backlog item #12.
-    await prisma.session.deleteMany({ where: { token } });
+    // backlog item #12. Best-effort: a delete failure (e.g. a transient
+    // DB write issue) must not turn what should be a clean "session
+    // expired" outcome into a 500 — the row would just get pruned on a
+    // later request instead.
+    await prisma.session.deleteMany({ where: { token } }).catch((error) => {
+      console.error(`Failed to prune expired session ${token}:`, error);
+    });
     return null;
   }
   return { subjectType: session.subjectType, subjectId: session.subjectId };
