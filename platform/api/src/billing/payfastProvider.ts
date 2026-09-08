@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { Request } from 'express';
+import { env } from '../env.js';
 
 export interface PaymentProvider {
   createSubscriptionCheckout(params: {
@@ -42,6 +43,16 @@ function buildSignature(fields: Record<string, string>, passphrase: string): str
   return crypto.createHash('md5').update(paramString).digest('hex');
 }
 
+// Constant-time comparison so a webhook signature check (which gates whether
+// a subscription gets marked active) doesn't leak byte-by-byte timing
+// information to an attacker probing the endpoint.
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
   const baseUrl = config.live ? 'https://www.payfast.co.za' : 'https://sandbox.payfast.co.za';
 
@@ -69,10 +80,11 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
     },
 
     verifyWebhookSignature(req: Request): boolean {
+      if (!req.body || typeof req.body !== 'object') return false;
       const body = req.body as Record<string, string>;
       const { signature, ...rest } = body;
       if (!signature) return false;
-      return buildSignature(rest, config.passphrase) === signature;
+      return safeCompare(buildSignature(rest, config.passphrase), signature);
     },
 
     parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
@@ -94,8 +106,8 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
 }
 
 export const payfastProvider = createPayfastProvider({
-  merchantId: process.env.PAYFAST_MERCHANT_ID ?? '',
-  merchantKey: process.env.PAYFAST_MERCHANT_KEY ?? '',
-  passphrase: process.env.PAYFAST_PASSPHRASE ?? '',
-  live: process.env.NODE_ENV === 'production',
+  merchantId: env.payfastMerchantId ?? '',
+  merchantKey: env.payfastMerchantKey ?? '',
+  passphrase: env.payfastPassphrase ?? '',
+  live: env.paymentsLive,
 });

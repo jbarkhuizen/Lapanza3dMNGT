@@ -70,6 +70,19 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload and rejects 
   assert.equal(provider.verifyWebhookSignature(tamperedReq), false);
 });
 
+test('verifyWebhookSignature returns false instead of throwing on a missing or malformed body', () => {
+  const provider = createPayfastProvider(config);
+
+  const missingBodyReq = { body: undefined } as unknown as Request;
+  assert.equal(provider.verifyWebhookSignature(missingBodyReq), false);
+
+  const nullBodyReq = { body: null } as unknown as Request;
+  assert.equal(provider.verifyWebhookSignature(nullBodyReq), false);
+
+  const stringBodyReq = { body: 'not-an-object' } as unknown as Request;
+  assert.equal(provider.verifyWebhookSignature(stringBodyReq), false);
+});
+
 test('parseWebhookEvent normalizes a COMPLETE payment_status to "payment_succeeded"', () => {
   const provider = createPayfastProvider(config);
   const req = {
