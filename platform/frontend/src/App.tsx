@@ -14,6 +14,8 @@ import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js'
 import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
 import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
 import { ConsumableFormPage } from './pages/consumables/ConsumableFormPage.js';
+import { PrintersListPage } from './pages/printers/PrintersListPage.js';
+import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
@@ -159,6 +161,36 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <ConsumableFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/printers"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PrintersListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/printers/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PrinterFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/printers/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PrinterFormPage />
               </AppShell>
             </RequireAuth>
           }

@@ -197,4 +197,27 @@ describe('App routing', () => {
     );
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Consumables' })).toBeInTheDocument());
   });
+
+  it('renders the Printers list page at "/printers" for an authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true },
+        });
+      }
+      if (path === '/api/printers') {
+        return Promise.resolve({ ok: true, printers: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/printers']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Printers' })).toBeInTheDocument());
+  });
 });
