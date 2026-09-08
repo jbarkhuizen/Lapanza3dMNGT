@@ -8,6 +8,8 @@ import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { prisma } from '../db/client.js';
 import { serializeInvoice } from './invoices.js';
+import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
+import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
@@ -250,4 +252,46 @@ quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
     }
     throw err;
   }
+});
+
+quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const quote = await scoped.quotes.findById(req.params.id);
+  if (!quote) {
+    return res.status(404).json({ ok: false, error: 'Quote not found.' });
+  }
+  const customer = await scoped.customers.findById(quote.customerId);
+  if (!customer || !customer.email) {
+    return res.status(400).json({ ok: false, error: 'Customer has no email on file.' });
+  }
+  const profile = await scoped.companyProfile.get();
+  if (!profile) {
+    return res.status(404).json({ ok: false, error: 'Tenant not found.' });
+  }
+
+  const serialized = serializeQuote(quote);
+  const pdfBuffer = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: serialized.number,
+    createdAt: quote.createdAt,
+    dateLabel: 'Valid until',
+    dateValue: quote.validUntil,
+    companyProfile: profile,
+    customer: { name: customer.name, billingAddress: customer.billingAddress, vatNumber: customer.vatNumber },
+    lineItems: serialized.lineItems!.map((line) => ({
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      lineTotal: line.lineTotal,
+    })),
+    subtotal: serialized.subtotal,
+    vatAmount: serialized.vatAmount,
+    vatApplied: serialized.vatApplied,
+    total: serialized.total,
+    notes: serialized.notes,
+  });
+
+  await sendDocumentEmail(customer.email, 'quote', quote.number);
+
+  res.json({ ok: true, pdfBase64: pdfBuffer.toString('base64'), sentTo: customer.email, devMode: true });
 });

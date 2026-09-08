@@ -163,3 +163,62 @@ test('PATCH /api/quotes/:id/status enforces the draft -> sent -> accepted lifecy
   const backToSent = await agent.patch(`/api/quotes/${quoteId}/status`).send({ status: 'sent' });
   assert.equal(backToSent.status, 400);
 });
+
+async function makeCustomerWithEmail(agent: ReturnType<typeof request.agent>) {
+  const res = await agent.post('/api/customers').send({
+    name: 'Bob Client',
+    billingAddress: '5 Oak St',
+    email: 'bob@example.com',
+  });
+  return res.body.customer.id as string;
+}
+
+test('POST /api/quotes/:id/send returns a PDF and logs a dev-mode email when the customer has an email', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomerWithEmail(agent);
+  const created = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+
+  const res = await agent.post(`/api/quotes/${created.body.quote.id}/send`);
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.sentTo, 'bob@example.com');
+  assert.equal(res.body.devMode, true);
+  assert.ok(typeof res.body.pdfBase64 === 'string' && res.body.pdfBase64.length > 0);
+  const pdfBuffer = Buffer.from(res.body.pdfBase64, 'base64');
+  assert.equal(pdfBuffer.subarray(0, 4).toString('ascii'), '%PDF');
+});
+
+test('POST /api/quotes/:id/send rejects with 400 when the customer has no email on file', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+
+  const res = await agent.post(`/api/quotes/${created.body.quote.id}/send`);
+
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /no email on file/);
+});
+
+test('POST /api/quotes/:id/send returns 404 for a quote belonging to another tenant', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');
+  const customerId = await makeCustomerWithEmail(agentA);
+  const created = await agentA.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+
+  const agentB = await loggedInAgent(app, 'sam@othershop.co.za');
+  const res = await agentB.post(`/api/quotes/${created.body.quote.id}/send`);
+
+  assert.equal(res.status, 404);
+});

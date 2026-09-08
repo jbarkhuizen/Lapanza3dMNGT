@@ -6,6 +6,8 @@ import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { tenantScope } from '../db/scoped.js';
 import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
+import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
+import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireTenantAuth);
@@ -205,4 +207,48 @@ invoicesRouter.patch('/api/invoices/:id/status', async (req, res) => {
   await scoped.invoices.updateStatus(req.params.id, status, roundedAmountPaid?.toString());
   const updated = await scoped.invoices.findById(req.params.id);
   res.json({ ok: true, invoice: serializeInvoice(updated!) });
+});
+
+invoicesRouter.post('/api/invoices/:id/send', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const invoice = await scoped.invoices.findById(req.params.id);
+  if (!invoice) {
+    return res.status(404).json({ ok: false, error: 'Invoice not found.' });
+  }
+  const customer = await scoped.customers.findById(invoice.customerId);
+  if (!customer || !customer.email) {
+    return res.status(400).json({ ok: false, error: 'Customer has no email on file.' });
+  }
+  const profile = await scoped.companyProfile.get();
+  if (!profile) {
+    return res.status(404).json({ ok: false, error: 'Tenant not found.' });
+  }
+
+  const serialized = serializeInvoice(invoice);
+  const pdfBuffer = await generateDocumentPdf({
+    documentType: 'Invoice',
+    number: serialized.number,
+    createdAt: invoice.createdAt,
+    dateLabel: 'Due date',
+    dateValue: invoice.dueDate,
+    companyProfile: profile,
+    customer: { name: customer.name, billingAddress: customer.billingAddress, vatNumber: customer.vatNumber },
+    lineItems: serialized.lineItems!.map((line) => ({
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      lineTotal: line.lineTotal,
+    })),
+    subtotal: serialized.subtotal,
+    vatAmount: serialized.vatAmount,
+    vatApplied: serialized.vatApplied,
+    total: serialized.total,
+    amountPaid: serialized.amountPaid,
+    balanceDue: serialized.balanceDue,
+    notes: serialized.notes,
+  });
+
+  await sendDocumentEmail(customer.email, 'invoice', invoice.number);
+
+  res.json({ ok: true, pdfBase64: pdfBuffer.toString('base64'), sentTo: customer.email, devMode: true });
 });
