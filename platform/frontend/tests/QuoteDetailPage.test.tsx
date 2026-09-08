@@ -18,10 +18,20 @@ const draftQuote = {
   lineItems: [{ id: 'li1', costingTemplateId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
 };
 
-function mockData(quote = draftQuote) {
+const testCompanyProfile = {
+  businessName: 'Acme Prints', contactName: 'Jane Doe', email: 'jane@acmeprints.co.za',
+  registrationNumber: null, vatRegistered: false, vatNumber: null, logoUrl: null,
+  addressLine1: null, addressLine2: null, city: null, postalCode: null, phone: null, website: null,
+  bankName: null, bankAccountHolder: null, bankAccountNumber: null, bankBranchCode: null,
+  termsAndConditionsText: null, defaultCurrency: 'ZAR', defaultQuoteValidityDays: null,
+  quoteNumberPrefix: 'QT', invoiceNumberPrefix: 'INV',
+};
+
+function mockData(quote = draftQuote, companyProfile = testCompanyProfile) {
   vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
     if (path === `/api/quotes/${quote.id}`) return Promise.resolve({ ok: true, quote });
     if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [{ id: 'c1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
+    if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile });
     return Promise.reject(new client.ApiError('not found', 404));
   });
 }
@@ -107,6 +117,7 @@ describe('QuoteDetailPage', () => {
           customers: [{ id: 'c1', name: 'Bob Client', company: null, email: 'bob@example.com', phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' }],
         });
       }
+      if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile: testCompanyProfile });
       return Promise.reject(new client.ApiError('not found', 404));
     });
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ pdfBase64: 'ZmFrZQ==', sentTo: 'bob@example.com', devMode: true });
@@ -119,5 +130,20 @@ describe('QuoteDetailPage', () => {
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/quotes/q1/send'));
     expect(downloadSpy).toHaveBeenCalledWith('ZmFrZQ==', 'QT-0001.pdf');
     await waitFor(() => expect(screen.getByText(/Emailed to bob@example\.com/)).toBeInTheDocument());
+  });
+
+  it('labels the VAT row "VAT (15%)" to match the generated PDF', async () => {
+    mockData({ ...draftQuote, vatApplied: true, vatAmount: '15.00' });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByText('VAT (15%)')).toBeInTheDocument());
+  });
+
+  it('formats money using the tenant\'s actual currency, not the ZAR default', async () => {
+    mockData(draftQuote, { ...testCompanyProfile, defaultCurrency: 'USD' });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'QT-0001' })).toBeInTheDocument());
+    // Subtotal/total/lineTotal are all '100.00' in this fixture, so multiple elements render
+    // "USD 100.00" — assert at least one exists rather than requiring a single unique match.
+    expect(screen.getAllByText('USD 100.00').length).toBeGreaterThan(0);
   });
 });

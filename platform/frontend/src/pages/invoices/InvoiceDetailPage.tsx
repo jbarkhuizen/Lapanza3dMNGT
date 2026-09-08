@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useInvoice, useUpdateInvoiceStatus, useSendInvoice, VALID_INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
+import { useCompanyProfile } from '../../api/companyProfile.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
 import { FormField } from '../../components/FormField.js';
@@ -18,6 +19,7 @@ export function InvoiceDetailPage() {
   const { id } = useParams();
   const { data: invoice, isLoading, isError } = useInvoice(id);
   const { lookup: customerLookup } = useCustomerLookup();
+  const { data: companyProfile } = useCompanyProfile();
   const updateStatusMutation = useUpdateInvoiceStatus(id ?? '');
   const sendMutation = useSendInvoice(id ?? '');
   const [amountPaid, setAmountPaid] = useState('');
@@ -98,14 +100,14 @@ export function InvoiceDetailPage() {
               <span>{line.description}</span>
               <span className="text-slate-500"> × {line.quantity}</span>
             </span>
-            <span>{formatCurrency(line.lineTotal)}</span>
+            <span>{formatCurrency(line.lineTotal, companyProfile?.defaultCurrency)}</span>
           </div>
         ))}
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-        {invoice.vatApplied && <div className="flex justify-between"><span>VAT</span><span>{formatCurrency(invoice.vatAmount)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
-        <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid)}</span></div>
-        <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue)}</span></div>
+        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal, companyProfile?.defaultCurrency)}</span></div>
+        {invoice.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(invoice.vatAmount, companyProfile?.defaultCurrency)}</span></div>}
+        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total, companyProfile?.defaultCurrency)}</span></div>
+        <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid, companyProfile?.defaultCurrency)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue, companyProfile?.defaultCurrency)}</span></div>
       </section>
 
       {invoice.notes && (

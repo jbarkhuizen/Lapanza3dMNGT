@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuote, useUpdateQuoteStatus, useConvertQuoteToInvoice, useSendQuote, VALID_QUOTE_STATUS_TRANSITIONS, type QuoteStatus } from '../../api/quotes.js';
 import { useCustomerLookup } from '../../api/customers.js';
+import { useCompanyProfile } from '../../api/companyProfile.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
 import { ApiError } from '../../api/client.js';
@@ -18,6 +19,7 @@ export function QuoteDetailPage() {
   const navigate = useNavigate();
   const { data: quote, isLoading, isError } = useQuote(id);
   const { lookup: customerLookup } = useCustomerLookup();
+  const { data: companyProfile } = useCompanyProfile();
   const updateStatusMutation = useUpdateQuoteStatus(id ?? '');
   const convertMutation = useConvertQuoteToInvoice(id ?? '');
   const sendMutation = useSendQuote(id ?? '');
@@ -89,12 +91,12 @@ export function QuoteDetailPage() {
             <span>
               <span>{line.description}</span> × {line.quantity}
             </span>
-            <span>{formatCurrency(line.lineTotal)}</span>
+            <span>{formatCurrency(line.lineTotal, companyProfile?.defaultCurrency)}</span>
           </div>
         ))}
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(quote.subtotal)}</span></div>
-        {quote.vatApplied && <div className="flex justify-between"><span>VAT</span><span>{formatCurrency(quote.vatAmount)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total)}</span></div>
+        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(quote.subtotal, companyProfile?.defaultCurrency)}</span></div>
+        {quote.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(quote.vatAmount, companyProfile?.defaultCurrency)}</span></div>}
+        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total, companyProfile?.defaultCurrency)}</span></div>
       </section>
 
       {quote.notes && (

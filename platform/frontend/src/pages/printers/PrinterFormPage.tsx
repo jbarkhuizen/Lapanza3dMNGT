@@ -124,6 +124,7 @@ export function PrinterFormPage() {
         <FormField id="buildVolumeYMm" label="Build volume Y (mm)" type="number" value={form.buildVolumeYMm ?? ''} onChange={(e) => setNumber('buildVolumeYMm', e.target.value)} />
         <FormField id="buildVolumeZMm" label="Build volume Z (mm)" type="number" value={form.buildVolumeZMm ?? ''} onChange={(e) => setNumber('buildVolumeZMm', e.target.value)} />
         <FormField id="purchaseDate" label="Purchase date" type="date" value={form.purchaseDate ?? ''} onChange={(e) => set('purchaseDate', e.target.value)} />
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Required for job costing</p>
         <FormField id="purchaseCost" label="Purchase cost" type="number" value={form.purchaseCost ?? ''} onChange={(e) => setNumber('purchaseCost', e.target.value)} />
         <FormField id="powerDrawWatts" label="Power draw (W)" type="number" value={form.powerDrawWatts ?? ''} onChange={(e) => setNumber('powerDrawWatts', e.target.value)} />
         <FormField id="electricityRatePerKwh" label="Electricity rate per kWh" type="number" value={form.electricityRatePerKwh ?? ''} onChange={(e) => setNumber('electricityRatePerKwh', e.target.value)} />

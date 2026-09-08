@@ -69,6 +69,11 @@ describe('PrinterFormPage — create mode', () => {
     expect(screen.queryByText('Printer Presets')).not.toBeInTheDocument();
     expect(screen.queryByText('Maintenance Log')).not.toBeInTheDocument();
   });
+
+  it('shows a hint that purchase cost, power draw, electricity rate, and expected lifetime are needed for job costing', async () => {
+    renderAt('/printers/new');
+    expect(screen.getByText(/required for job costing/i)).toBeInTheDocument();
+  });
 });
 
 describe('PrinterFormPage — edit mode', () => {
