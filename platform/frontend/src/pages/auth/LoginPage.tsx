@@ -14,6 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
   const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [resendError, setResendError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { refetch } = useAuth();
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export function LoginPage() {
     setError(null);
     setNeedsVerification(false);
     setResendStatus('idle');
+    setResendError(null);
     setSubmitting(true);
     try {
       await apiPost('/api/auth/login', { email, password });
@@ -44,10 +46,12 @@ export function LoginPage() {
 
   async function handleResend() {
     setResendStatus('sending');
+    setResendError(null);
     try {
       await apiPost('/api/auth/resend-verification', { email });
       setResendStatus('sent');
-    } catch {
+    } catch (err) {
+      setResendError(err instanceof ApiError ? err.message : "Couldn't resend. Try again shortly.");
       setResendStatus('error');
     }
   }
@@ -87,7 +91,7 @@ export function LoginPage() {
               <p className="text-sm text-green-700">Verification email sent — check your inbox.</p>
             )}
             {resendStatus === 'error' && (
-              <p className="text-sm text-red-600">Couldn't resend. Try again shortly.</p>
+              <p className="text-sm text-red-600">{resendError}</p>
             )}
           </div>
         )}

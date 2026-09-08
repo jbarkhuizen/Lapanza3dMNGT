@@ -123,4 +123,29 @@ describe('LoginPage', () => {
     );
     await waitFor(() => expect(screen.getByText(/verification email sent/i)).toBeInTheDocument());
   });
+
+  it('shows the backend\'s real error message when resend fails, not a generic fallback', async () => {
+    vi.spyOn(client, 'apiPost').mockImplementation((path: string) => {
+      if (path === '/api/auth/login') {
+        return Promise.reject(new client.ApiError('Verify your email address before logging in.', 403));
+      }
+      if (path === '/api/auth/resend-verification') {
+        return Promise.reject(new client.ApiError('This account is already verified. Log in instead.', 400));
+      }
+      return Promise.reject(new client.ApiError('unexpected path', 500));
+    });
+    renderLogin();
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resend verification email' })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resend verification email' }));
+
+    await waitFor(() =>
+      expect(screen.getByText('This account is already verified. Log in instead.')).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("Couldn't resend. Try again shortly.")).not.toBeInTheDocument();
+  });
 });
