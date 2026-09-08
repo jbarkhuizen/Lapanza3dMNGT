@@ -47,15 +47,17 @@ describe('PlanSelectionPage', () => {
     // @ts-expect-error -- test-only override
     window.location = { ...originalLocation, href: '' };
 
-    renderPage();
-    await waitFor(() => expect(screen.getByText('Tier 1')).toBeInTheDocument());
+    try {
+      renderPage();
+      await waitFor(() => expect(screen.getByText('Tier 1')).toBeInTheDocument());
 
-    fireEvent.click(screen.getAllByRole('button', { name: /start free trial/i })[0]);
+      fireEvent.click(screen.getAllByRole('button', { name: /start free trial/i })[0]);
 
-    await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/billing/checkout', { planId: 'p1', provider: 'payfast' }));
-    await waitFor(() => expect(window.location.href).toBe('https://sandbox.payfast.co.za/eng/process?x=1'));
-
-    // @ts-expect-error -- restore
-    window.location = originalLocation;
+      await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/billing/checkout', { planId: 'p1', provider: 'payfast' }));
+      await waitFor(() => expect(window.location.href).toBe('https://sandbox.payfast.co.za/eng/process?x=1'));
+    } finally {
+      // @ts-expect-error -- restore
+      window.location = originalLocation;
+    }
   });
 });
