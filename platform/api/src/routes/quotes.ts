@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { Quote, QuoteLineItem } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 import { calculateQuoteTotals } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
@@ -14,6 +15,7 @@ import { mailer } from '../lib/mailer.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
+quotesRouter.use(requireActiveSubscription);
 
 type QuoteWithOptionalLines = Quote & { lineItems?: QuoteLineItem[] };
 

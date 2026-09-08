@@ -283,6 +283,20 @@ test('GET /api/auth/me returns the tenant when logged in, 401 otherwise', async 
   assert.equal(anonymous.status, 401);
 });
 
+test('GET /api/auth/me reports hasSubscription: false for a tenant with no subscription yet', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({
+    email: 'jane@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  const res = await agent.get('/api/auth/me');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.tenant.hasSubscription, false);
+});
+
 test('POST /api/auth/logout clears the session', async () => {
   const app = buildApp();
   await registerAndVerify(app, 'jane@acmeprints.co.za');

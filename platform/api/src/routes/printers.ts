@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { Printer } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const printersRouter = Router();
@@ -18,6 +19,7 @@ function serializePrinter(printer: Printer) {
   };
 }
 printersRouter.use(requireTenantAuth);
+printersRouter.use(requireActiveSubscription);
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
 

@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from '../auth/password.js';
 import { sendVerificationEmail } from '../auth/email.js';
 import { createSession, destroySession } from '../auth/session.js';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { tenantScope } from '../db/scoped.js';
 import { env } from '../env.js';
 
 export function createAuthRouter() {
@@ -191,6 +192,7 @@ export function createAuthRouter() {
     if (!tenant) {
       return res.status(401).json({ ok: false, error: 'Log in to continue.' });
     }
+    const subscription = await tenantScope(tenant.id).subscription.get();
     res.json({
       ok: true,
       tenant: {
@@ -198,6 +200,7 @@ export function createAuthRouter() {
         businessName: tenant.businessName,
         email: tenant.email,
         emailVerified: tenant.emailVerifiedAt !== null,
+        hasSubscription: subscription !== null,
       },
     });
   });

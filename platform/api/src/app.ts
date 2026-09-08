@@ -48,6 +48,17 @@ export function buildApp() {
   // can short-circuit the request to a 401. webhooksRouter has no such
   // blanket middleware itself, so unrelated requests pass through untouched.
   app.use(webhooksRouter);
+  // Also mounted here, before the resource routers below, for the same
+  // reason as webhooksRouter above: every one of those routers now applies
+  // `requireActiveSubscription` via an unpathed `router.use`, which — since
+  // each router is mounted at `/` — intercepts every request that reaches
+  // it, not just requests matching its own routes. A tenant with no
+  // subscription yet must be able to reach POST /api/billing/checkout (the
+  // endpoint that gives them one), so billingRouter needs first refusal on
+  // its own paths before any resource router's subscription gate can
+  // short-circuit the request to a 402. billingRouter still applies its own
+  // `requireTenantAuth` (unlike webhooksRouter, which needs no auth at all).
+  app.use(billingRouter);
   app.use(customersRouter);
   app.use(printersRouter);
   app.use(printerPresetsRouter);
@@ -59,7 +70,6 @@ export function buildApp() {
   app.use(companyProfileRouter);
   app.use(quotesRouter);
   app.use(invoicesRouter);
-  app.use(billingRouter);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { CostingTemplate, CostingLabourLine, CostingConsumableLine } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 import { calculateCosting, CostingInputError } from '../costing/calculate.js';
 
 export const costingTemplatesRouter = Router();
 costingTemplatesRouter.use(requireTenantAuth);
+costingTemplatesRouter.use(requireActiveSubscription);
 
 // Same reasoning as printers.ts's serializePrinter(): Prisma's Decimal
 // normalizes trailing zeros away by default, so fix the display scale to

@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const consumablesRouter = Router();
 consumablesRouter.use(requireTenantAuth);
+consumablesRouter.use(requireActiveSubscription);
 
 const CATEGORIES = ['resin', 'nozzle', 'build-plate-adhesive', 'post-processing', 'packaging', 'other'] as const;
 

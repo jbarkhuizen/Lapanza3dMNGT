@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const companyProfileRouter = Router();
 companyProfileRouter.use(requireTenantAuth);
+companyProfileRouter.use(requireActiveSubscription);
 
 const updateCompanyProfileSchema = z
   .object({

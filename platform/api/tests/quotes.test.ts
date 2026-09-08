@@ -19,6 +19,18 @@ async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acm
 
   const agent = request.agent(app);
   await agent.post('/api/auth/login').send({ email, password: 'correct horse battery staple' });
+
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant!.id,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
   return agent;
 }
 

@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const printerPresetsRouter = Router();
 printerPresetsRouter.use(requireTenantAuth);
+printerPresetsRouter.use(requireActiveSubscription);
 
 const createPresetSchema = z.object({
   name: z.string().min(1),

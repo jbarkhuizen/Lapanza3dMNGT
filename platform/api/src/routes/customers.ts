@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const customersRouter = Router();
 customersRouter.use(requireTenantAuth);
+customersRouter.use(requireActiveSubscription);
 
 const createCustomerSchema = z.object({
   name: z.string().min(1),

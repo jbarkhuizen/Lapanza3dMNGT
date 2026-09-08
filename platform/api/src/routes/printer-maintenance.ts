@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const printerMaintenanceRouter = Router();
 printerMaintenanceRouter.use(requireTenantAuth);
+printerMaintenanceRouter.use(requireActiveSubscription);
 
 const createMaintenanceLogSchema = z.object({
   date: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.'),
