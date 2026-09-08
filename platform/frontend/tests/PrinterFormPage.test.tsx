@@ -63,6 +63,12 @@ describe('PrinterFormPage — create mode', () => {
     const [, body] = postSpy.mock.calls[0];
     expect((body as Record<string, unknown>).purchaseDate).toBeUndefined();
   });
+
+  it('does not render Presets/Maintenance Log sections in create mode', async () => {
+    renderAt('/printers/new');
+    expect(screen.queryByText('Printer Presets')).not.toBeInTheDocument();
+    expect(screen.queryByText('Maintenance Log')).not.toBeInTheDocument();
+  });
 });
 
 describe('PrinterFormPage — edit mode', () => {
@@ -127,5 +133,32 @@ describe('PrinterFormPage — edit mode', () => {
     await waitFor(() =>
       expect(patchSpy).toHaveBeenCalledWith('/api/printers/1', expect.objectContaining({ electricityRatePerKwh: 2.5 })),
     );
+  });
+
+  it('renders Presets/Maintenance Log sections in edit mode', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/printers/1') {
+        return Promise.resolve({
+          ok: true,
+          printer: {
+            id: '1', name: 'Prusa MK4', make: null, model: null,
+            buildVolumeXMm: null, buildVolumeYMm: null, buildVolumeZMm: null,
+            purchaseDate: null, purchaseCost: null, powerDrawWatts: null,
+            electricityRatePerKwh: null, expectedLifetimeHours: null,
+            status: 'active', createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        });
+      }
+      if (path === '/api/printers/1/presets') {
+        return Promise.resolve({ ok: true, presets: [] });
+      }
+      if (path === '/api/printers/1/maintenance-log') {
+        return Promise.resolve({ ok: true, entries: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderAt('/printers/1');
+    await waitFor(() => expect(screen.getByText('Printer Presets')).toBeInTheDocument());
+    expect(screen.getByText('Maintenance Log')).toBeInTheDocument();
   });
 });

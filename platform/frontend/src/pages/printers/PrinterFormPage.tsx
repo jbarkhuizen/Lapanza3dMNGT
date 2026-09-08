@@ -9,6 +9,8 @@ import {
   type PrinterFormInput,
 } from '../../api/printers.js';
 import { omitBlankFields } from '../../lib/omitBlankFields.js';
+import { PresetsSection } from '../../components/printers/PresetsSection.js';
+import { MaintenanceLogSection } from '../../components/printers/MaintenanceLogSection.js';
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
 
@@ -150,6 +152,12 @@ export function PrinterFormPage() {
           Save
         </button>
       </form>
+      {isEditMode && id && (
+        <>
+          <PresetsSection printerId={id} />
+          <MaintenanceLogSection printerId={id} />
+        </>
+      )}
     </div>
   );
 }
