@@ -22,6 +22,8 @@ import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTempl
 import { QuotesListPage } from './pages/quotes/QuotesListPage.js';
 import { QuoteCreatePage } from './pages/quotes/QuoteCreatePage.js';
 import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
+import { InvoicesListPage } from './pages/invoices/InvoicesListPage.js';
+import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 
 export function App() {
@@ -257,6 +259,26 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <QuoteDetailPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/invoices"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <InvoicesListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/invoices/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <InvoiceDetailPage />
               </AppShell>
             </RequireAuth>
           }
