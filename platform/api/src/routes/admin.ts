@@ -247,12 +247,32 @@ adminRouter.post(
       return res.redirect(`/api/admin/tenants/${tenantId}`);
     }
 
-    const data: { status: string; currentPeriodEnd?: Date } = { status };
+    const existing = await prisma.subscription.findUnique({ where: { tenantId } });
+    if (!existing) {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    const data: { status: string; currentPeriodEnd?: Date; pastDueSince?: Date | null } = { status };
     if (typeof currentPeriodEnd === 'string' && currentPeriodEnd.trim() !== '') {
       const parsed = new Date(currentPeriodEnd);
       if (!Number.isNaN(parsed.getTime())) {
         data.currentPeriodEnd = parsed;
       }
+    }
+
+    // Mirror webhooks.ts's applyEvent semantics for pastDueSince so an
+    // admin's manual status change doesn't diverge from the real
+    // webhook-driven flow (see webhooks.ts lines ~84-97 for the full
+    // reasoning): stamp it on first entry into 'past_due' (never
+    // re-stamp — that would reset the 7-day grace clock), and clear it
+    // back to null when recovering out of 'past_due'. Anchored on the
+    // field itself and on existing.status, not on a status-vs-status
+    // diff, so 'trialing' -> 'active' (never past_due on either side)
+    // leaves pastDueSince untouched.
+    if (status === 'past_due') {
+      data.pastDueSince = existing.pastDueSince ?? new Date();
+    } else if (existing.status === 'past_due') {
+      data.pastDueSince = null;
     }
 
     await prisma.subscription.update({ where: { tenantId }, data });

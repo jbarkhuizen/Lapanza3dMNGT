@@ -231,3 +231,29 @@ test('cancel on a subscription with no providerSubscriptionId cancels locally wi
   const cancelled = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
   assert.equal(cancelled.status, 'canceled');
 });
+
+test('adjust manages pastDueSince like the webhook flow: stamps on first past_due, does not re-stamp on a second, clears on recovery', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  const granted = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(granted.status, 'active');
+  assert.equal(granted.pastDueSince, null);
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'past_due' });
+  const firstPastDue = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(firstPastDue.status, 'past_due');
+  assert.ok(firstPastDue.pastDueSince);
+  const firstStampedAt = firstPastDue.pastDueSince;
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'past_due' });
+  const secondPastDue = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(secondPastDue.status, 'past_due');
+  assert.deepEqual(secondPastDue.pastDueSince, firstStampedAt);
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'active' });
+  const recovered = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(recovered.status, 'active');
+  assert.equal(recovered.pastDueSince, null);
+});
