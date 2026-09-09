@@ -96,7 +96,10 @@ test('soft (recommends*) requirements never disqualify a material', () => {
 test('drops a material that fails a ticked capability requirement', () => {
   const result = filterAndRank([PLA_LIKE], PROFILE_HOBBYIST, { outdoorUV: true });
   assert.equal(result.matches.length, 0);
-  assert.match(result.dropped[0].reason, /outdoor/i);
+  // Capability drops return the raw capability key rather than pre-formatted
+  // prose — materials.js is responsible for turning this into a human-facing
+  // label via its own CAPABILITY_TILES lookup.
+  assert.equal(result.dropped[0].failedCapabilityKey, 'outdoorUV');
 });
 
 test('a material passes when it satisfies every ticked capability', () => {
@@ -131,4 +134,59 @@ test('an unticked capability never filters anything out', () => {
     result.matches.map((m) => m.id).sort(),
     ['outdoor-advanced', 'pla-like'],
   );
+});
+
+test('drops a material whose bed temp exceeds the printer profile', () => {
+  const hotBed = {
+    ...PLA_LIKE,
+    id: 'hot-bed',
+    printerRequirements: { ...PLA_LIKE.printerRequirements, bedTempC: 150 },
+  };
+  const result = filterAndRank([hotBed], PROFILE_HOBBYIST, {});
+  assert.equal(result.matches.length, 0);
+  assert.equal(result.dropped.length, 1);
+  assert.equal(result.dropped[0].material.id, 'hot-bed');
+  assert.match(result.dropped[0].reason, /bed/i);
+});
+
+test('drops a material requiring a hardened nozzle the printer profile lacks', () => {
+  const needsHardened = {
+    ...PLA_LIKE,
+    id: 'needs-hardened-nozzle',
+    printerRequirements: { ...PLA_LIKE.printerRequirements, requiresHardenedNozzle: true },
+  };
+  const result = filterAndRank([needsHardened], PROFILE_HOBBYIST, {});
+  assert.equal(result.matches.length, 0);
+  assert.equal(result.dropped[0].material.id, 'needs-hardened-nozzle');
+  assert.match(result.dropped[0].reason, /hardened/i);
+});
+
+test('drops a material requiring a direct-drive extruder the printer profile lacks', () => {
+  const needsDirectDrive = {
+    ...PLA_LIKE,
+    id: 'needs-direct-drive',
+    printerRequirements: { ...PLA_LIKE.printerRequirements, requiresDirectDrive: true },
+  };
+  const result = filterAndRank([needsDirectDrive], PROFILE_HOBBYIST, {});
+  assert.equal(result.matches.length, 0);
+  assert.equal(result.dropped[0].material.id, 'needs-direct-drive');
+  assert.match(result.dropped[0].reason, /direct-drive/i);
+});
+
+test('ranking prefers lower price among survivors of equal difficulty', () => {
+  const cheaper = {
+    ...PLA_LIKE,
+    id: 'cheaper-beginner',
+    priceZarPerKg: { low: 150, high: 250, estimated: false },
+  };
+  const pricier = {
+    ...PLA_LIKE,
+    id: 'pricier-beginner',
+    priceZarPerKg: { low: 400, high: 500, estimated: false },
+  };
+  // Both are 'Beginner' difficulty (same as PLA_LIKE) — only price differs,
+  // so this isolates the tie-break from the earlier "differs on both" test.
+  const result = filterAndRank([pricier, cheaper], PROFILE_HOBBYIST, {});
+  assert.equal(result.matches[0].id, 'cheaper-beginner');
+  assert.equal(result.matches[1].id, 'pricier-beginner');
 });

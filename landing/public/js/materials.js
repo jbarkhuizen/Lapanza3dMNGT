@@ -134,10 +134,18 @@ function matchesFilters(material) {
 function renderGrid() {
   const grid = document.getElementById('material-grid');
   grid.textContent = '';
+  let shown = 0;
   for (const material of MATERIALS) {
     if (matchesFilters(material)) {
       grid.appendChild(renderMaterialCard(material));
+      shown += 1;
     }
+  }
+  if (shown === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'material-grid__empty';
+    empty.textContent = 'No materials match this filter — try a different tag or search term.';
+    grid.appendChild(empty);
   }
 }
 
@@ -194,12 +202,22 @@ const CAPABILITY_TILES = [
   { key: 'highDimensionalAccuracy', label: 'High dimensional accuracy', desc: 'Press fits, threads, mating parts.' },
 ];
 
+const CAPABILITY_LABELS = Object.fromEntries(CAPABILITY_TILES.map((tile) => [tile.key, tile.label]));
+
+function droppedReason(entry) {
+  if (entry.failedCapabilityKey) {
+    const label = CAPABILITY_LABELS[entry.failedCapabilityKey] ?? entry.failedCapabilityKey;
+    return `Doesn’t meet your "${label}" requirement.`;
+  }
+  return entry.reason;
+}
+
 const printerProfile = {
   maxNozzleTempC: 260,
   maxBedTempC: 100,
   hasEnclosure: false,
   hasHardenedNozzle: false,
-  hasDirectDrive: true,
+  hasDirectDrive: false,
 };
 const requiredCapabilities = {};
 
@@ -409,12 +427,12 @@ function renderSelectorResults() {
   notRecommended.appendChild(summary);
 
   const list = document.createElement('ul');
-  for (const { material, reason } of dropped) {
+  for (const entry of dropped) {
     const li = document.createElement('li');
     const nameStrong = document.createElement('strong');
-    nameStrong.textContent = material.name;
+    nameStrong.textContent = entry.material.name;
     li.appendChild(nameStrong);
-    li.appendChild(document.createTextNode(` — ${reason}`));
+    li.appendChild(document.createTextNode(` — ${droppedReason(entry)}`));
     list.appendChild(li);
   }
   notRecommended.appendChild(list);
@@ -467,7 +485,8 @@ const COMPARE_ROWS = [
   { label: 'Typical price (low end)', get: (m) => m.priceZarPerKg.low, unit: '/kg', prefix: 'R', lowerIsBetter: true },
 ];
 
-function renderCompareOptions(selectEl) {
+function renderCompareOptions(selectEl, excludeId) {
+  const previousValue = selectEl.value;
   selectEl.textContent = '';
   const placeholder = document.createElement('option');
   placeholder.value = '';
@@ -475,11 +494,13 @@ function renderCompareOptions(selectEl) {
   selectEl.appendChild(placeholder);
 
   for (const material of window.__MATERIALS__) {
+    if (material.id === excludeId) continue;
     const opt = document.createElement('option');
     opt.value = material.id;
     opt.textContent = material.name;
     selectEl.appendChild(opt);
   }
+  selectEl.value = previousValue;
 }
 
 function renderCompareResult() {
@@ -592,15 +613,24 @@ function initCompareView() {
   result.id = 'compare-result';
   container.appendChild(result);
 
-  renderCompareOptions(firstSelect);
-  renderCompareOptions(secondSelect);
+  renderCompareOptions(firstSelect, compareState.second);
+  renderCompareOptions(secondSelect, compareState.first);
 
   firstSelect.addEventListener('change', () => {
     compareState.first = firstSelect.value || null;
+    // Exclude whatever's now picked here from the other dropdown, so the
+    // user can't compare a material against itself. If the excluded value
+    // was the other dropdown's current selection, its option disappears and
+    // the browser resets it to the placeholder — re-read its value so state
+    // stays in sync with what's actually selected.
+    renderCompareOptions(secondSelect, compareState.first);
+    compareState.second = secondSelect.value || null;
     renderCompareResult();
   });
   secondSelect.addEventListener('change', () => {
     compareState.second = secondSelect.value || null;
+    renderCompareOptions(firstSelect, compareState.second);
+    compareState.first = firstSelect.value || null;
     renderCompareResult();
   });
 

@@ -4,7 +4,7 @@ const DIFFICULTY_RANK = { Beginner: 0, Intermediate: 1, Advanced: 2 };
  * @param {import('./materials-data.js').Material[]} materials
  * @param {{ maxNozzleTempC: number, maxBedTempC: number, hasEnclosure: boolean, hasHardenedNozzle: boolean, hasDirectDrive: boolean }} printerProfile
  * @param {Partial<Record<keyof import('./materials-data.js').Material['capabilities'], boolean>>} requiredCapabilities
- * @returns {{ matches: Array, dropped: Array<{ material: Object, reason: string }> }}
+ * @returns {{ matches: Array, dropped: Array<{ material: Object, reason: string } | { material: Object, failedCapabilityKey: string }> }}
  */
 export function filterAndRank(materials, printerProfile, requiredCapabilities) {
   const matches = [];
@@ -38,7 +38,7 @@ export function filterAndRank(materials, printerProfile, requiredCapabilities) {
       ([capability, required]) => required && !material.capabilities[capability],
     );
     if (failedCapability) {
-      dropped.push({ material, reason: `Doesn’t meet your "${failedCapability[0]}" requirement.` });
+      dropped.push({ material, failedCapabilityKey: failedCapability[0] });
       continue;
     }
 

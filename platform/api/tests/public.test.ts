@@ -9,14 +9,13 @@ const app = buildApp();
 
 beforeEach(resetTestDatabase);
 
-// resetTestDatabase() seeds Tier 1/Tier 2/Tier 3 by find-if-missing, not
-// delete-and-recreate — Plan is never wiped between tests anywhere in this
-// suite, so any test that creates its own ad-hoc plan leaves it sitting
-// there for every other test that runs afterward, in whatever order the
-// suite happens to execute in. Tests below reuse the already-seeded Tier 1
-// plan for a Subscription's required planId rather than creating a new
-// one, and the one test that genuinely needs a throwaway plan cleans it up
-// itself.
+// resetTestDatabase() deletes and recreates the Plan table (seeding
+// Tier 1/Tier 2/Tier 3 fresh) before every test in this suite, so nothing
+// leaks between tests regardless of execution order. Tests below still
+// reuse the already-seeded Tier 1 plan for a Subscription's required
+// planId rather than creating a new one, and the one test that genuinely
+// needs a throwaway plan cleans it up itself via try/finally — defensive
+// practice kept even though the per-test reset would also catch it.
 
 test('GET /api/public/stats returns real counts with no auth', async () => {
   const tenant1 = await prisma.tenant.create({
@@ -115,9 +114,9 @@ test('GET /api/public/plans returns active plans sorted, with no auth', async ()
     const tier3Index = plans.findIndex((p) => p.name === 'Tier 3');
     assert.ok(tier1Index < tier2Index && tier2Index < tier3Index, 'plans must be sorted by sortOrder');
   } finally {
-    // Plan is never wiped between tests (see the note at the top of this
-    // file) — clean up the throwaway row so it doesn't leak into whatever
-    // test runs next.
+    // resetTestDatabase() would also clean this up before the next test
+    // (see the note at the top of this file), but delete it explicitly
+    // anyway so this test doesn't rely on run order to stay tidy.
     await prisma.plan.delete({ where: { id: retired.id } });
   }
 });
@@ -127,4 +126,16 @@ test('public routes are reachable with no session cookie at all (no 401)', async
   const plansRes = await request(app).get('/api/public/plans');
   assert.notEqual(statsRes.status, 401);
   assert.notEqual(plansRes.status, 401);
+});
+
+test('GET /api/public/stats is rate-limited after repeated requests', async () => {
+  // Fresh app so this test's own limiter bucket doesn't bleed into the
+  // shared module-level `app` the other tests in this file reuse.
+  const freshApp = buildApp();
+  let lastStatus = 0;
+  for (let i = 0; i < 61; i++) {
+    const res = await request(freshApp).get('/api/public/stats');
+    lastStatus = res.status;
+  }
+  assert.equal(lastStatus, 429);
 });

@@ -78,7 +78,7 @@ export const MATERIALS = [
     avoidWhenText: 'You print in a bedroom or unventilated space (styrene fumes) or your printer has no enclosure — ABS warps and delaminates badly without one.',
     tags: ['engineering'],
     capabilities: {
-      outdoorUV: false, flexibility: false, chemicalResistance: true, foodContact: false,
+      outdoorUV: false, flexibility: false, chemicalResistance: false, foodContact: false,
       easyToPrint: false, lowCost: true, smoothAppearance: true, highDimensionalAccuracy: false,
     },
   },
@@ -98,7 +98,7 @@ export const MATERIALS = [
     priceZarPerKg: { low: 8000, high: 15000, estimated: true },
     whyChooseIt: 'Metal-like strength and stiffness, holds up past 250°C, chemically near-inert.',
     avoidWhenText: 'You don’t have a genuine high-temperature industrial printer — most desktop machines simply cannot reach PEEK’s processing temperature at all.',
-    tags: ['engineering'],
+    tags: ['engineering', 'outdoor-safe'],
     capabilities: {
       outdoorUV: true, flexibility: false, chemicalResistance: true, foodContact: false,
       easyToPrint: false, lowCost: false, smoothAppearance: false, highDimensionalAccuracy: true,
@@ -189,7 +189,7 @@ export const MATERIALS = [
     tags: ['beginner-friendly'],
     capabilities: {
       outdoorUV: false, flexibility: false, chemicalResistance: false, foodContact: false,
-      easyToPrint: true, lowCost: true, smoothAppearance: false, highDimensionalAccuracy: true,
+      easyToPrint: true, lowCost: true, smoothAppearance: false, highDimensionalAccuracy: false,
     },
   },
   {
@@ -384,9 +384,9 @@ export const MATERIALS = [
     priceZarPerKg: { low: 450, high: 650, estimated: false },
     whyChooseIt: 'Exceptional impact strength and heat resistance (past 110°C) — genuinely tough, load-bearing parts.',
     avoidWhenText: 'Your printer can’t sustain a hot enclosure and high bed temps — PC warps and delaminates badly on open-frame printers.',
-    tags: ['engineering', 'outdoor-safe'],
+    tags: ['engineering'],
     capabilities: {
-      outdoorUV: true, flexibility: false, chemicalResistance: true, foodContact: false,
+      outdoorUV: false, flexibility: false, chemicalResistance: true, foodContact: false,
       easyToPrint: false, lowCost: false, smoothAppearance: true, highDimensionalAccuracy: true,
     },
   },
@@ -475,7 +475,7 @@ export const MATERIALS = [
     tags: [],
     capabilities: {
       outdoorUV: false, flexibility: false, chemicalResistance: false, foodContact: false,
-      easyToPrint: false, lowCost: true, smoothAppearance: true, highDimensionalAccuracy: false,
+      easyToPrint: false, lowCost: false, smoothAppearance: true, highDimensionalAccuracy: false,
     },
   },
   {
