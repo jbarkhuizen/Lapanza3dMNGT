@@ -250,7 +250,7 @@ test('parseWebhookEvent leaves subscriptionId undefined when m_payment_id does n
   assert.equal(event?.subscriptionId, undefined);
 });
 
-test('cancelSubscription PUTs to the PayFast subscriptions API with a signed header set', async () => {
+test('cancelSubscription PUTs to the PayFast subscriptions API with a correctly-signed header set', async () => {
   const provider = createPayfastProvider(config);
   const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
   mock.method(globalThis, 'fetch', async (url: string, init: Record<string, unknown>) => {
@@ -269,8 +269,33 @@ test('cancelSubscription PUTs to the PayFast subscriptions API with a signed hea
     const headers = init.headers as Record<string, string>;
     assert.equal(headers['merchant-id'], config.merchantId);
     assert.equal(headers.version, 'v1');
-    assert.ok(headers.timestamp);
-    assert.ok(headers.signature);
+    // PayFast's management API requires an offset-bearing timestamp
+    // (PHP's date("Y-m-d\TH:i:sO"), e.g. "2026-09-09T14:11:56+0200") — a
+    // bare toISOString().slice(0, 19) with no offset was part of the real
+    // 401 "Merchant authorization failed" this test now guards against.
+    assert.match(headers.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4}$/);
+
+    // Recompute the signature the way PayFast's own management API expects
+    // (confirmed against the official payfast-php-sdk's
+    // Auth::generateApiSignature + Request::sendApiRequest, NOT the
+    // checkout/ITN rules above): merge the sent headers with the
+    // passphrase into one object, sort ALL keys alphabetically (passphrase
+    // included at its sorted position, not appended last), urlencode each
+    // value PHP-style, join with "&", MD5. This is what actually
+    // distinguishes the fix from the original buggy implementation, which
+    // reused the checkout rule (append-passphrase-last, no `version` field
+    // in the hash at all) and got a real 401 from PayFast's sandbox.
+    const toSign: Record<string, string> = {
+      'merchant-id': config.merchantId,
+      version: 'v1',
+      timestamp: headers.timestamp,
+      passphrase: config.passphrase,
+    };
+    const pairs = Object.keys(toSign)
+      .sort()
+      .map((key) => `${key}=${phpUrlencode(toSign[key])}`);
+    const expectedSignature = crypto.createHash('md5').update(pairs.join('&')).digest('hex');
+    assert.equal(headers.signature, expectedSignature);
   } finally {
     mock.restoreAll();
   }

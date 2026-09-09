@@ -63,6 +63,48 @@ function buildItnSignature(fields: Record<string, string>, passphrase: string): 
   return crypto.createHash('md5').update(paramString).digest('hex');
 }
 
+// The subscription-management API (cancel/pause/update/fetch) uses a THIRD
+// signature rule, distinct from both the checkout and ITN rules above —
+// confirmed against the official payfast-php-sdk's Auth::generateApiSignature
+// and Request::sendApiRequest (lib/Auth.php, lib/Request.php): every header
+// and body value sent is merged with the passphrase into ONE object, sorted
+// ALPHABETICALLY BY KEY (passphrase included at its sorted position, not
+// appended last the way the checkout/ITN rules do), then joined and hashed —
+// no blank-skipping. Found live: the original implementation reused
+// buildSignature (checkout's append-passphrase-last, no version field) and
+// got a real 401 "Merchant authorization failed" from PayFast's sandbox.
+function buildApiSignature(fields: Record<string, string>, passphrase: string): string {
+  const withPassphrase: Record<string, string> = { ...fields, passphrase };
+  const pairs = Object.keys(withPassphrase)
+    .sort()
+    .filter((key) => key !== 'signature')
+    .map((key) => `${key}=${payfastEncode(withPassphrase[key])}`);
+  return crypto.createHash('md5').update(pairs.join('&')).digest('hex');
+}
+
+// PayFast's Request::sendApiRequest builds this timestamp with PHP's
+// date("Y-m-d\TH:i:sO") — an ISO 8601 timestamp WITH a timezone offset in
+// +HHMM form (e.g. "+0200"), using the server's local timezone. The original
+// implementation used `toISOString().slice(0, 19)`, which drops the offset
+// entirely — not just cosmetically wrong, but a real contributor to the same
+// live 401 (the signed string didn't match what PayFast's backend expected
+// to parse). This VPS and this project's local dev machine are both SAST
+// (+02:00, no DST in South Africa), matching typical PayFast integrations.
+function payfastApiTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const offsetMinutes = -now.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absMinutes = Math.abs(offsetMinutes);
+  const offsetHours = pad(Math.floor(absMinutes / 60));
+  const offsetMins = pad(absMinutes % 60);
+  return (
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` +
+    `${sign}${offsetHours}${offsetMins}`
+  );
+}
+
 // Constant-time comparison so a webhook signature check (which gates whether
 // a subscription gets marked active) doesn't leak byte-by-byte timing
 // information to an attacker probing the endpoint.
@@ -161,24 +203,23 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
     },
 
     async cancelSubscription(providerSubscriptionId: string): Promise<void> {
-      // PayFast's subscription-cancel API — distinct from the checkout
-      // signature scheme above (this one signs merchant-id + timestamp,
-      // not the request body), and it's a single host (api.payfast.co.za)
+      // PayFast's subscription-cancel API — a single host (api.payfast.co.za)
       // for both sandbox and live — sandbox mode is selected via the
       // ?testing=true query param, not a different host the way the
-      // checkout redirect and ITN-validate endpoints are. Header names
-      // and the exact signed-field set are per PayFast's published API
-      // docs as of this plan's writing; like the ITN field names in
-      // Task 2, this needs one live sandbox call to confirm before real
-      // money is involved (see this plan's "After all tasks" section).
-      const timestamp = new Date().toISOString().slice(0, 19);
-      const signature = buildSignature({ 'merchant-id': config.merchantId, timestamp }, config.passphrase);
+      // checkout redirect and ITN-validate endpoints are. The signature is
+      // computed over ALL THREE headers sent (merchant-id, version,
+      // timestamp) via buildApiSignature — confirmed live against PayFast's
+      // sandbox on 2026-09-09 after the original merchant-id+timestamp-only,
+      // append-passphrase-last version returned a real 401.
+      const timestamp = payfastApiTimestamp();
+      const version = 'v1';
+      const signature = buildApiSignature({ 'merchant-id': config.merchantId, version, timestamp }, config.passphrase);
       const testingParam = config.live ? '' : '?testing=true';
       const res = await fetch(`https://api.payfast.co.za/subscriptions/${providerSubscriptionId}/cancel${testingParam}`, {
         method: 'PUT',
         headers: {
           'merchant-id': config.merchantId,
-          version: 'v1',
+          version,
           timestamp,
           signature,
         },
