@@ -450,3 +450,157 @@ function initSelectorView() {
 }
 
 initSelectorView();
+
+// ---- Compare view ----
+const compareState = { first: null, second: null };
+
+const COMPARE_ROWS = [
+  { label: 'Nozzle temperature', get: (m) => m.printerRequirements.nozzleTempC, unit: '°C', lowerIsBetter: false },
+  { label: 'Bed temperature', get: (m) => m.printerRequirements.bedTempC, unit: '°C', lowerIsBetter: false },
+  { label: 'Difficulty', get: (m) => m.difficulty, rank: () => ({ Beginner: 0, Intermediate: 1, Advanced: 2 }), lowerIsBetter: true },
+  { label: 'Moisture sensitivity', get: (m) => m.moisture, rank: () => ({ Low: 0, Medium: 1, High: 2 }), lowerIsBetter: true },
+  { label: 'Abrasive to nozzles', get: (m) => (m.abrasive ? 'Yes' : 'No'), lowerIsBetter: null },
+  { label: 'Typical price (low end)', get: (m) => m.priceZarPerKg.low, unit: '/kg', prefix: 'R', lowerIsBetter: true },
+];
+
+function renderCompareOptions(selectEl) {
+  selectEl.textContent = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Choose a material…';
+  selectEl.appendChild(placeholder);
+
+  for (const material of window.__MATERIALS__) {
+    const opt = document.createElement('option');
+    opt.value = material.id;
+    opt.textContent = material.name;
+    selectEl.appendChild(opt);
+  }
+}
+
+function renderCompareResult() {
+  const resultEl = document.getElementById('compare-result');
+  resultEl.textContent = '';
+
+  if (!compareState.first || !compareState.second) {
+    const empty = document.createElement('div');
+    empty.className = 'compare-empty';
+    empty.textContent = 'Pick two materials to compare them side by side.';
+    resultEl.appendChild(empty);
+    return;
+  }
+
+  const a = window.__MATERIALS__.find((m) => m.id === compareState.first);
+  const b = window.__MATERIALS__.find((m) => m.id === compareState.second);
+
+  const table = document.createElement('table');
+  table.className = 'compare-table';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const pointTh = document.createElement('th');
+  pointTh.textContent = 'Point';
+  const aTh = document.createElement('th');
+  aTh.textContent = a.name;
+  const bTh = document.createElement('th');
+  bTh.textContent = b.name;
+  headRow.appendChild(pointTh);
+  headRow.appendChild(aTh);
+  headRow.appendChild(bTh);
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  for (const row of COMPARE_ROWS) {
+    const tr = document.createElement('tr');
+    const aVal = row.get(a);
+    const bVal = row.get(b);
+    const aCell = document.createElement('td');
+    const bCell = document.createElement('td');
+    aCell.textContent = `${row.prefix ?? ''}${aVal}${row.unit ?? ''}`;
+    bCell.textContent = `${row.prefix ?? ''}${bVal}${row.unit ?? ''}`;
+
+    if (row.lowerIsBetter !== null) {
+      // row.rank(), when present, returns a { value: rankNumber } lookup
+      // table — index into it, never call the result as a function.
+      const lookup = row.rank ? row.rank() : null;
+      const aRank = lookup ? lookup[aVal] : aVal;
+      const bRank = lookup ? lookup[bVal] : bVal;
+      if (aRank !== bRank) {
+        const aWins = row.lowerIsBetter ? aRank < bRank : aRank > bRank;
+        aCell.dataset.winner = String(aWins);
+        bCell.dataset.winner = String(!aWins);
+      }
+    }
+
+    const labelCell = document.createElement('th');
+    labelCell.textContent = row.label;
+    tr.appendChild(labelCell);
+    tr.appendChild(aCell);
+    tr.appendChild(bCell);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  resultEl.appendChild(table);
+
+  const verdict = document.createElement('p');
+  verdict.style.marginTop = '16px';
+  verdict.textContent = `${a.name} needs a ${a.printerRequirements.nozzleTempC}°C nozzle and ${a.difficulty.toLowerCase()}-level printing; ${b.name} needs ${b.printerRequirements.nozzleTempC}°C and is ${b.difficulty.toLowerCase()}-level. Pick whichever's requirements your printer and skill level actually clear.`;
+  resultEl.appendChild(verdict);
+}
+
+function initCompareView() {
+  const container = document.getElementById('view-compare');
+  container.textContent = '';
+
+  const heading = document.createElement('h2');
+  heading.style.fontFamily = 'var(--font-serif)';
+  heading.textContent = 'Head to head';
+  container.appendChild(heading);
+
+  const intro = document.createElement('p');
+  intro.style.color = 'var(--ink-muted)';
+  intro.style.fontSize = '14px';
+  intro.style.margin = '0 0 16px';
+  intro.textContent = 'Pick two materials and see how they actually differ.';
+  container.appendChild(intro);
+
+  const pickers = document.createElement('div');
+  pickers.className = 'compare-pickers';
+
+  const firstSelect = document.createElement('select');
+  firstSelect.id = 'compare-first';
+  firstSelect.setAttribute('aria-label', 'First material');
+
+  const vsSpan = document.createElement('span');
+  vsSpan.textContent = 'vs';
+
+  const secondSelect = document.createElement('select');
+  secondSelect.id = 'compare-second';
+  secondSelect.setAttribute('aria-label', 'Second material');
+
+  pickers.appendChild(firstSelect);
+  pickers.appendChild(vsSpan);
+  pickers.appendChild(secondSelect);
+  container.appendChild(pickers);
+
+  const result = document.createElement('div');
+  result.id = 'compare-result';
+  container.appendChild(result);
+
+  renderCompareOptions(firstSelect);
+  renderCompareOptions(secondSelect);
+
+  firstSelect.addEventListener('change', () => {
+    compareState.first = firstSelect.value || null;
+    renderCompareResult();
+  });
+  secondSelect.addEventListener('change', () => {
+    compareState.second = secondSelect.value || null;
+    renderCompareResult();
+  });
+
+  renderCompareResult();
+}
+
+initCompareView();
