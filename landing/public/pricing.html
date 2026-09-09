@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pricing — Barkie</title>
+  <meta name="description" content="Barkie pricing: three plans, R25 to R70 a month, 14-day free trial." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__inner">
+      <span class="wordmark">Barkie</span>
+      <nav aria-label="Primary">
+        <ul class="site-nav">
+          <li><a href="/">Home</a></li>
+          <li><a href="/pricing.html" aria-current="page">Pricing</a></li>
+          <li><a href="/materials.html">Materials Guide</a></li>
+        </ul>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost" href="/app/login">Log in</a>
+        <a class="btn btn--primary" href="/app/register">Start free trial</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-header wrap">
+      <h1>Simple, honest pricing.</h1>
+      <p>Three plans, priced by how many printers you run. Every plan includes the full toolset — customers, printers, costing, quotes and invoices. 14-day free trial, card required upfront, cancel anytime.</p>
+    </section>
+
+    <div class="pricing-status wrap" id="pricing-status">Loading plans…</div>
+    <section class="tier-grid wrap" id="tier-grid" hidden aria-label="Pricing plans"></section>
+
+    <section class="compare-note wrap">
+      <h2>What's the same on every plan</h2>
+      <p>Every Barkie plan includes the full costing engine, unlimited customers, quotes and invoices with PDF generation and email sending, and printer/filament tracking. The plans differ only in price, sized to how many printers a shop typically runs — Barkie doesn't yet enforce a hard printer or document limit, so pick whichever tier matches your business honestly rather than worrying about hitting a wall.</p>
+    </section>
+
+    <section class="faq wrap">
+      <h2>Still deciding?</h2>
+      <details class="faq-item">
+        <summary>When do I actually get charged?</summary>
+        <p>Your card is captured at signup but not charged. You get a 14-day free trial; the real monthly charge happens automatically when the trial ends, unless you cancel first.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I cancel anytime?</summary>
+        <p>Yes, from your billing settings inside Barkie. Cancelling stops future billing immediately.</p>
+      </details>
+      <details class="faq-item">
+        <summary>What happens if a payment fails?</summary>
+        <p>Your account gets a 7-day grace period where everything still works. If the card still hasn't gone through after 7 days, your account becomes read-only — your data is safe, you just can't create or edit anything until you resubscribe.</p>
+      </details>
+      <details class="faq-item">
+        <summary>Can I switch plans later?</summary>
+        <p>Not as an in-place upgrade yet — cancel your current plan and start a new one on the tier you want.</p>
+      </details>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>&copy; <span id="year"></span> Barkie</span>
+      <a href="mailto:hello@barkie.co.za">hello@barkie.co.za</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/materials.html">Materials Guide</a>
+    </div>
+  </footer>
+
+  <script src="/js/shared.js"></script>
+  <script src="/js/pricing.js"></script>
+</body>
+</html>

@@ -373,3 +373,146 @@ body {
     gap: 12px 20px;
   }
 }
+
+.page-header {
+  padding: 56px 24px 32px;
+}
+
+.page-header h1 {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 40px);
+  margin: 0 0 12px;
+}
+
+.page-header p {
+  color: var(--ink-muted);
+  font-size: 17px;
+  max-width: 60ch;
+  margin: 0;
+}
+
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  padding: 0 24px 48px;
+}
+
+.tier-card {
+  background: var(--surface-soft);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 28px;
+  box-shadow: 7px 7px 0 0 var(--ink);
+  display: flex;
+  flex-direction: column;
+}
+
+.tier-card h2 {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.tier-card__positioning {
+  color: var(--ink-muted);
+  font-size: 14px;
+  margin: 0 0 16px;
+}
+
+.tier-card__price {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.tier-card__price span {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+
+.tier-card__features {
+  list-style: none;
+  margin: 16px 0 24px;
+  padding: 0;
+  flex: 1;
+}
+
+.tier-card__features li {
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--surface);
+}
+
+.compare-note {
+  margin: 0 24px 48px;
+  padding: 20px 24px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--surface);
+  max-width: 720px;
+}
+
+.compare-note h2 {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  margin: 0 0 8px;
+}
+
+.compare-note p {
+  color: var(--ink-muted);
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+
+.faq {
+  padding: 0 24px 64px;
+  max-width: 720px;
+}
+
+.faq h2 {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  margin: 0 0 20px;
+}
+
+.faq-item {
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.faq-item summary {
+  padding: 14px 18px;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary::after {
+  content: '+';
+  float: right;
+}
+
+.faq-item[open] summary::after {
+  content: '−';
+}
+
+.faq-item p {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.pricing-status {
+  padding: 0 24px 24px;
+  color: var(--ink-muted);
+}
