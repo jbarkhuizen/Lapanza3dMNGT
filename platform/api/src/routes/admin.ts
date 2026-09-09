@@ -319,3 +319,70 @@ adminRouter.post(
     res.redirect(`/api/admin/tenants/${tenantId}`);
   },
 );
+
+// Read-only support-visibility views onto a tenant's quotes and invoices —
+// no forms, no edit actions. Scoped strictly to tenantId from req.params.id
+// via prisma directly (never tenantScope(), which is for tenant-session
+// requests, not platform-admin ones).
+adminRouter.get(
+  '/tenants/:id/quotes',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+    if (!tenant) {
+      return res.status(404).type('html').send(adminPage('Not found', '<p>No such tenant.</p>'));
+    }
+    const quotes = await prisma.quote.findMany({
+      where: { tenantId: tenant.id },
+      include: { customer: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const rows = quotes.map((q) => `
+      <tr>
+        <td>${escapeHtml(q.number)}</td>
+        <td>${escapeHtml(q.customer.name)}</td>
+        <td>${escapeHtml(q.status)}</td>
+        <td>R${q.total.toFixed(2)}</td>
+        <td>${q.createdAt.toISOString().slice(0, 10)}</td>
+      </tr>`).join('');
+    res.type('html').send(adminPage(`${tenant.businessName} — Quotes`, `
+      <p><a href="/api/admin/tenants/${tenant.id}">&larr; Back to tenant</a></p>
+      <table>
+        <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">No quotes.</td></tr>'}</tbody>
+      </table>
+    `));
+  },
+);
+
+adminRouter.get(
+  '/tenants/:id/invoices',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenant = await prisma.tenant.findUnique({ where: { id: req.params.id } });
+    if (!tenant) {
+      return res.status(404).type('html').send(adminPage('Not found', '<p>No such tenant.</p>'));
+    }
+    const invoices = await prisma.invoice.findMany({
+      where: { tenantId: tenant.id },
+      include: { customer: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    const rows = invoices.map((inv) => `
+      <tr>
+        <td>${escapeHtml(inv.number)}</td>
+        <td>${escapeHtml(inv.customer.name)}</td>
+        <td>${escapeHtml(inv.status)}</td>
+        <td>R${inv.total.toFixed(2)}</td>
+        <td>R${inv.amountPaid.toFixed(2)}</td>
+        <td>${inv.createdAt.toISOString().slice(0, 10)}</td>
+      </tr>`).join('');
+    res.type('html').send(adminPage(`${tenant.businessName} — Invoices`, `
+      <p><a href="/api/admin/tenants/${tenant.id}">&larr; Back to tenant</a></p>
+      <table>
+        <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Paid</th><th>Date</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6">No invoices.</td></tr>'}</tbody>
+      </table>
+    `));
+  },
+);

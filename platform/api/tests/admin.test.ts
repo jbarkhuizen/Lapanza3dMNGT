@@ -258,6 +258,78 @@ test('adjust manages pastDueSince like the webhook flow: stamps on first past_du
   assert.equal(recovered.pastDueSince, null);
 });
 
+async function makeTenantWithCustomerAndQuote() {
+  const passwordHash = await hashPassword('irrelevant password value');
+  const tenant = await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane', email: 'jane@acmeprints.co.za', passwordHash },
+  });
+  const customer = await prisma.customer.create({
+    data: { tenantId: tenant.id, name: 'Bob Buyer', billingAddress: '1 Main St' },
+  });
+  const quote = await prisma.quote.create({
+    data: {
+      tenantId: tenant.id, number: 'QT-0001', customerId: customer.id,
+      vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00',
+    },
+  });
+  return { tenant, customer, quote };
+}
+
+test('GET /api/admin/tenants/:id/quotes lists that tenant\'s quotes only', async () => {
+  const { tenant, quote } = await makeTenantWithCustomerAndQuote();
+  const passwordHash = await hashPassword('irrelevant password value');
+  const otherTenant = await prisma.tenant.create({
+    data: { businessName: 'Other Co', contactName: 'Bob', email: 'bob@other.co.za', passwordHash },
+  });
+  const otherCustomer = await prisma.customer.create({
+    data: { tenantId: otherTenant.id, name: 'Someone Else', billingAddress: '2 Other St' },
+  });
+  await prisma.quote.create({
+    data: {
+      tenantId: otherTenant.id, number: 'QT-0001', customerId: otherCustomer.id,
+      vatApplied: false, subtotal: '999.00', vatAmount: '0.00', total: '999.00',
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get(`/api/admin/tenants/${tenant.id}/quotes`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /QT-0001/);
+  assert.match(res.text, /Bob Buyer/);
+  assert.ok(!res.text.includes('999.00'), 'must not show the other tenant\'s quote');
+});
+
+test('GET /api/admin/tenants/:id/invoices lists that tenant\'s invoices only', async () => {
+  const { tenant, customer } = await makeTenantWithCustomerAndQuote();
+  await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id, number: 'INV-0001', customerId: customer.id, dueDate: new Date(),
+      vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', amountPaid: '0.00',
+    },
+  });
+
+  const passwordHash = await hashPassword('irrelevant password value');
+  const otherTenant = await prisma.tenant.create({
+    data: { businessName: 'Other Co', contactName: 'Bob', email: 'bob@other.co.za', passwordHash },
+  });
+  const otherCustomer = await prisma.customer.create({
+    data: { tenantId: otherTenant.id, name: 'Someone Else', billingAddress: '2 Other St' },
+  });
+  await prisma.invoice.create({
+    data: {
+      tenantId: otherTenant.id, number: 'INV-0001', customerId: otherCustomer.id, dueDate: new Date(),
+      vatApplied: false, subtotal: '888.00', vatAmount: '0.00', total: '888.00', amountPaid: '0.00',
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get(`/api/admin/tenants/${tenant.id}/invoices`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /INV-0001/);
+  assert.match(res.text, /Bob Buyer/);
+  assert.ok(!res.text.includes('888.00'), 'must not show the other tenant\'s invoice');
+});
+
 test('adjust clears pastDueSince on recovery to active even when the row went through lapsed (self-heal) first, not directly from past_due', async () => {
   const { tenant, plan } = await makeTenantAndPlan();
   const agent = await loggedInAdminAgent();
