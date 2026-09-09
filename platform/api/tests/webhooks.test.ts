@@ -327,6 +327,48 @@ test('a first-contact event for an already canceled row is ignored (a stale ITN 
   }
 });
 
+test('a late payment_succeeded event for an already-canceled row with providerSubscriptionId still bound is ignored (does not resurrect it)', async () => {
+  // This is the realistic post-cancel state: billing.ts's cancel route
+  // calls the provider's cancelSubscription() then just flips status to
+  // 'canceled' — it does NOT clear providerSubscriptionId. So unlike the
+  // first-contact canceled test above, this row already has its token
+  // bound, meaning it passes the token-match guard too. A delayed ITN for
+  // an in-flight charge that was already processing when the tenant
+  // clicked cancel must still be dropped by the hoisted canceled check.
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'canceled', providerSubscriptionId: 'pf-sub-bound' },
+  });
+  const beforeSnapshot = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  // Same subscription, same token — not a stale/mismatched-id event, just
+  // a late positive one arriving after the tenant already canceled.
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-bound',
+    subscriptionId,
+    type: 'payment_succeeded' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-bound', payment_status: 'COMPLETE', m_payment_id: `sub_${subscriptionId}` });
+    assert.equal(res.status, 200);
+
+    const afterSnapshot = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    assert.deepEqual(
+      afterSnapshot,
+      beforeSnapshot,
+      'a late positive event for a bound-token canceled row must leave the row completely unchanged',
+    );
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a first-contact event for a subscription that self-healed to lapsed DOES bind and reactivate it (the lockout fix)', async () => {
   // Before this fix, the first-contact guard blocked binding onto anything
   // except 'trialing'/'active', which permanently stranded a legitimately-

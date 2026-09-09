@@ -36,15 +36,21 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
   if (subscription.providerSubscriptionId && subscription.providerSubscriptionId !== event.providerSubscriptionId) {
     return;
   }
-  // First contact (no providerSubscriptionId bound yet) binding onto this
-  // row is now scoped to this exact row's id, not shared across every
-  // resubscribe attempt a tenant has ever made — so a legitimately-paid
-  // subscription that self-healed to 'lapsed' while awaiting its first
-  // ITN (e.g. the charge clears a little after the grace-period slack
-  // runs out) must still be able to bind and reactivate. Only a
-  // 'canceled' row — a deliberate tenant action — refuses to be
-  // resurrected by a late positive event.
-  if (!subscription.providerSubscriptionId && subscription.status === 'canceled') {
+  // A 'canceled' row reflects a deliberate tenant action (POST
+  // /api/billing/cancel), regardless of whether providerSubscriptionId is
+  // still bound — the normal cancel flow leaves the token in place, it
+  // only flips status. So a canceled row is NOT limited to the
+  // first-contact case: a delayed 'activated'/'payment_succeeded' ITN for
+  // an in-flight charge that was already processing when the tenant
+  // clicked cancel would otherwise pass the token-match guard above (same
+  // subscription, same token) and silently resurrect access. Block every
+  // event type except 'canceled' itself (idempotent — the row is already
+  // canceled, applying it again is harmless). This is intentionally
+  // narrower than 'lapsed': a lapsed row self-healed locally because the
+  // provider never told us anything, so it legitimately needs to accept
+  // its real first-contact ITN (see the token-match guard above) — that
+  // must keep working and this check does not touch it.
+  if (subscription.status === 'canceled' && event.type !== 'canceled') {
     return;
   }
 
