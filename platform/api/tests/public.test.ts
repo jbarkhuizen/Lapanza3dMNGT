@@ -129,8 +129,10 @@ test('public routes are reachable with no session cookie at all (no 401)', async
 });
 
 test('GET /api/public/stats is rate-limited after repeated requests', async () => {
-  // Fresh app so this test's own limiter bucket doesn't bleed into the
-  // shared module-level `app` the other tests in this file reuse.
+  // publicLimiter is a module-scope singleton (public.ts), so every
+  // buildApp() call shares the same bucket regardless of which `app`
+  // variable calls it — building a separate one here doesn't isolate
+  // anything, it's just this test's own local handle on the shared app.
   const freshApp = buildApp();
   let lastStatus = 0;
   for (let i = 0; i < 61; i++) {
