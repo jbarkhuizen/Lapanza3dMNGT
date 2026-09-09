@@ -71,3 +71,66 @@ test('POST /api/admin/logout destroys the session', async () => {
   assert.equal(res.status, 302);
   assert.equal(res.headers.location, '/api/admin/login');
 });
+
+test('GET /api/admin/tenants lists tenants with subscription status', async () => {
+  const passwordHash = await hashPassword('irrelevant password value');
+  await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane', email: 'jane@acmeprints.co.za', passwordHash },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/tenants');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Acme Prints/);
+  assert.match(res.text, /jane@acmeprints\.co\.za/);
+  assert.match(res.text, /None/); // no subscription yet
+});
+
+test('GET /api/admin/tenants/:id shows tenant detail with an edit form pre-filled', async () => {
+  const passwordHash = await hashPassword('irrelevant password value');
+  const tenant = await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane Doe', email: 'jane@acmeprints.co.za', passwordHash },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get(`/api/admin/tenants/${tenant.id}`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /value="Acme Prints"/);
+  assert.match(res.text, /value="Jane Doe"/);
+  assert.match(res.text, /value="jane@acmeprints\.co\.za"/);
+});
+
+test('GET /api/admin/tenants/:id 404s for an unknown id', async () => {
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/tenants/does-not-exist');
+  assert.equal(res.status, 404);
+});
+
+test('POST /api/admin/tenants/:id/edit updates exactly that tenant, not others', async () => {
+  const passwordHash = await hashPassword('irrelevant password value');
+  const tenantA = await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane', email: 'jane@acmeprints.co.za', passwordHash },
+  });
+  const tenantB = await prisma.tenant.create({
+    data: { businessName: 'Other Co', contactName: 'Bob', email: 'bob@other.co.za', passwordHash },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/tenants/${tenantA.id}/edit`).send({
+    businessName: 'Acme 3D Prints', contactName: 'Jane Smith', email: 'jane.smith@acmeprints.co.za',
+  });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.location, `/api/admin/tenants/${tenantA.id}`);
+
+  const updatedA = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantA.id } });
+  assert.equal(updatedA.businessName, 'Acme 3D Prints');
+  assert.equal(updatedA.contactName, 'Jane Smith');
+  assert.equal(updatedA.email, 'jane.smith@acmeprints.co.za');
+
+  const untouchedB = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantB.id } });
+  assert.equal(untouchedB.businessName, 'Other Co');
+});
+
+test('admin tenant routes require a platform-admin session', async () => {
+  const res1 = await request(app).get('/api/admin/tenants');
+  assert.equal(res1.status, 302);
+  const res2 = await request(app).post('/api/admin/tenants/some-id/edit').send({ businessName: 'x' });
+  assert.equal(res2.status, 302);
+});

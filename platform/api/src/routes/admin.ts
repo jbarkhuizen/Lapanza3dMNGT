@@ -92,3 +92,62 @@ adminRouter.get('/', requirePlatformAdminAuth, (_req, res) => {
     </ul>
   `));
 });
+
+adminRouter.get('/tenants', requirePlatformAdminAuth, async (_req, res) => {
+  const tenants = await prisma.tenant.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { subscription: true },
+  });
+  const rows = tenants.map((t) => `
+    <tr>
+      <td><a href="/api/admin/tenants/${t.id}">${escapeHtml(t.businessName)}</a></td>
+      <td>${escapeHtml(t.email)}</td>
+      <td>${t.createdAt.toISOString().slice(0, 10)}</td>
+      <td>${t.emailVerifiedAt ? 'Yes' : 'No'}</td>
+      <td>${t.subscription ? escapeHtml(t.subscription.status) : 'None'}</td>
+    </tr>`).join('');
+  res.type('html').send(adminPage('Tenants', `
+    <table>
+      <thead><tr><th>Business</th><th>Email</th><th>Signed up</th><th>Verified</th><th>Subscription</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">No tenants yet.</td></tr>'}</tbody>
+    </table>
+  `));
+});
+
+adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: req.params.id as string },
+    include: { subscription: { include: { plan: true } } },
+  });
+  if (!tenant) {
+    return res.status(404).type('html').send(adminPage('Not found', '<p>No such tenant.</p>'));
+  }
+
+  const editForm = `
+    <div class="card">
+      <h2>Edit tenant</h2>
+      <form method="post" action="/api/admin/tenants/${tenant.id}/edit">
+        <label>Business name<br /><input name="businessName" value="${escapeHtml(tenant.businessName)}" required /></label><br /><br />
+        <label>Contact name<br /><input name="contactName" value="${escapeHtml(tenant.contactName)}" required /></label><br /><br />
+        <label>Email<br /><input type="email" name="email" value="${escapeHtml(tenant.email)}" required /></label><br /><br />
+        <button type="submit">Save</button>
+      </form>
+    </div>`;
+
+  res.type('html').send(adminPage(tenant.businessName, `
+    ${editForm}
+    <p><a href="/api/admin/tenants/${tenant.id}/quotes">View quotes</a> &middot; <a href="/api/admin/tenants/${tenant.id}/invoices">View invoices</a></p>
+  `));
+});
+
+adminRouter.post('/tenants/:id/edit', requirePlatformAdminAuth, async (req, res) => {
+  const { businessName, contactName, email } = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof businessName !== 'string' || typeof contactName !== 'string' || typeof email !== 'string') {
+    return res.redirect(`/api/admin/tenants/${req.params.id}`);
+  }
+  await prisma.tenant.update({
+    where: { id: req.params.id as string },
+    data: { businessName, contactName, email },
+  });
+  res.redirect(`/api/admin/tenants/${req.params.id}`);
+});
