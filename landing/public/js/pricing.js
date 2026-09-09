@@ -12,17 +12,19 @@
     'Tier 2': {
       positioning: 'Recommended for a small shop running 2-4 printers.',
       features: [
-        'Everything in Tier 1',
-        'Built for a growing print queue',
-        'Priority in future support responses',
+        'Unlimited customers, quotes and invoices',
+        'Full costing engine (filament, time, machine wear, labour)',
+        'PDF quotes/invoices with real email sending',
+        'Printer, filament and consumables tracking',
       ],
     },
     'Tier 3': {
       positioning: 'Recommended for a multi-printer farm or a shop with a real staff.',
       features: [
-        'Everything in Tier 1 and 2',
-        'Built for higher job volume',
-        'First in line for new features',
+        'Unlimited customers, quotes and invoices',
+        'Full costing engine (filament, time, machine wear, labour)',
+        'PDF quotes/invoices with real email sending',
+        'Printer, filament and consumables tracking',
       ],
     },
   };
