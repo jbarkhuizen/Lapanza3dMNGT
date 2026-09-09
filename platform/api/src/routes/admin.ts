@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../db/client.js';
 import { hashPassword, verifyPassword } from '../auth/password.js';
@@ -6,15 +6,27 @@ import { createSession, destroySession } from '../auth/session.js';
 import { env } from '../env.js';
 import { requirePlatformAdminAuth } from '../middleware/requirePlatformAdminAuth.js';
 import { adminPage, escapeHtml } from '../lib/adminHtml.js';
+import { providers } from './billing.js';
 
 export const adminRouter = Router();
 
 // Highest-value login target in the whole app — a compromised admin
 // account reaches every tenant's data. Same shape as auth.ts's own
 // loginLimiter.
+//
+// Unlike auth.ts's loginLimiter, this one is NOT built inside a
+// per-buildApp() factory — adminRouter is a module-level singleton, so
+// this limiter instance (and its hit counter) persists for the entire
+// process, not just one app instance. admin.test.ts calls buildApp()
+// once for the whole file and re-authenticates as admin in most of its
+// tests (each beforeEach wipes the sessions table), which legitimately
+// exceeds 10 logins well before the file finishes. Widening the budget
+// under NODE_ENV=test only — production and development keep the real
+// 10/hour — avoids that cross-test bleed without weakening the actual
+// brute-force protection anywhere it matters.
 const adminLoginLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 10,
+  limit: env.nodeEnv === 'test' ? 1000 : 10,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -134,8 +146,48 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
       </form>
     </div>`;
 
+  const sub = tenant.subscription;
+  let subscriptionSection: string;
+  if (!sub || sub.status === 'canceled' || sub.status === 'lapsed') {
+    const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
+    const planOptions = plans.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (R${p.monthlyPrice.toFixed(2)})</option>`).join('');
+    subscriptionSection = `
+      <div class="card">
+        <h2>Subscription</h2>
+        <p>${sub ? `Currently ${escapeHtml(sub.status)}.` : 'No subscription.'}</p>
+        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/grant">
+          <label>Grant plan<br />
+            <select name="planId" required>${planOptions}</select>
+          </label>
+          <button type="submit">Grant subscription</button>
+        </form>
+      </div>`;
+  } else {
+    const statusOptions = ['trialing', 'active', 'past_due', 'lapsed', 'canceled']
+      .map((s) => `<option value="${s}" ${s === sub.status ? 'selected' : ''}>${s}</option>`)
+      .join('');
+    subscriptionSection = `
+      <div class="card">
+        <h2>Subscription</h2>
+        <p>${escapeHtml(sub.plan.name)} &mdash; status <strong>${escapeHtml(sub.status)}</strong>,
+        trial ends ${sub.trialEndsAt.toISOString().slice(0, 10)},
+        period ends ${sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString().slice(0, 10) : '&mdash;'}</p>
+        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/adjust">
+          <label>Status<br />
+            <select name="status">${statusOptions}</select>
+          </label>
+          <label>Extend period end to<br /><input type="date" name="currentPeriodEnd" /></label>
+          <button type="submit">Save</button>
+        </form>
+        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/cancel" style="margin-top:12px">
+          <button type="submit">Cancel subscription</button>
+        </form>
+      </div>`;
+  }
+
   res.type('html').send(adminPage(tenant.businessName, `
     ${editForm}
+    ${subscriptionSection}
     <p><a href="/api/admin/tenants/${tenant.id}/quotes">View quotes</a> &middot; <a href="/api/admin/tenants/${tenant.id}/invoices">View invoices</a></p>
   `));
 });
@@ -151,3 +203,94 @@ adminRouter.post('/tenants/:id/edit', requirePlatformAdminAuth, async (req, res)
   });
   res.redirect(`/api/admin/tenants/${req.params.id}`);
 });
+
+adminRouter.post(
+  '/tenants/:id/subscription/grant',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenantId = req.params.id;
+    const { planId } = (req.body ?? {}) as Record<string, unknown>;
+    if (typeof planId !== 'string') {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    const existing = await prisma.subscription.findUnique({ where: { tenantId } });
+    if (existing) {
+      await prisma.subscription.delete({ where: { tenantId } });
+    }
+
+    const now = new Date();
+    await prisma.subscription.create({
+      data: {
+        tenantId,
+        planId,
+        status: 'active',
+        paymentProvider: 'manual',
+        providerSubscriptionId: null,
+        trialEndsAt: now,
+        currentPeriodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+    res.redirect(`/api/admin/tenants/${tenantId}`);
+  },
+);
+
+const VALID_SUBSCRIPTION_STATUSES = ['trialing', 'active', 'past_due', 'lapsed', 'canceled'];
+
+adminRouter.post(
+  '/tenants/:id/subscription/adjust',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenantId = req.params.id;
+    const { status, currentPeriodEnd } = (req.body ?? {}) as Record<string, unknown>;
+    if (typeof status !== 'string' || !VALID_SUBSCRIPTION_STATUSES.includes(status)) {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    const data: { status: string; currentPeriodEnd?: Date } = { status };
+    if (typeof currentPeriodEnd === 'string' && currentPeriodEnd.trim() !== '') {
+      const parsed = new Date(currentPeriodEnd);
+      if (!Number.isNaN(parsed.getTime())) {
+        data.currentPeriodEnd = parsed;
+      }
+    }
+
+    await prisma.subscription.update({ where: { tenantId }, data });
+    res.redirect(`/api/admin/tenants/${tenantId}`);
+  },
+);
+
+adminRouter.post(
+  '/tenants/:id/subscription/cancel',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenantId = req.params.id;
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId } });
+    if (!subscription) {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    if (!subscription.providerSubscriptionId) {
+      await prisma.subscription.update({ where: { tenantId }, data: { status: 'canceled' } });
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    const provider = providers[subscription.paymentProvider];
+    if (!provider) {
+      // Should be unreachable: an admin-granted subscription never sets
+      // providerSubscriptionId, so any row that reaches here with one set
+      // has a real paymentProvider ('payfast'/'paypal') from a genuine
+      // signup. Fail loudly rather than silently cancel-and-move-on if
+      // that invariant is ever violated.
+      return res.status(500).type('html').send(adminPage('Error', '<p class="error">Unrecognized payment provider on this subscription &mdash; refusing to cancel. Check the database directly.</p>'));
+    }
+
+    // No try/catch, deliberately — same fail-closed contract as
+    // POST /api/billing/cancel: a provider-cancel failure must not let
+    // local status flip to canceled while the real subscription keeps
+    // charging. A throw here propagates to Express's error handler.
+    await provider.cancelSubscription(subscription.providerSubscriptionId);
+    await prisma.subscription.update({ where: { tenantId }, data: { status: 'canceled' } });
+    res.redirect(`/api/admin/tenants/${tenantId}`);
+  },
+);

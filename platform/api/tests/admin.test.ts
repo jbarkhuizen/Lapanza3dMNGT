@@ -134,3 +134,100 @@ test('admin tenant routes require a platform-admin session', async () => {
   const res2 = await request(app).post('/api/admin/tenants/some-id/edit').send({ businessName: 'x' });
   assert.equal(res2.status, 302);
 });
+
+async function makeTenantAndPlan() {
+  const passwordHash = await hashPassword('irrelevant password value');
+  const tenant = await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane', email: 'jane@acmeprints.co.za', passwordHash },
+  });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  return { tenant, plan };
+}
+
+test('granting a subscription creates one with paymentProvider "manual" and no providerSubscriptionId', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+  assert.equal(res.status, 302);
+
+  const subscription = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(subscription.status, 'active');
+  assert.equal(subscription.paymentProvider, 'manual');
+  assert.equal(subscription.providerSubscriptionId, null);
+  assert.equal(subscription.planId, plan.id);
+});
+
+test('a granted subscription can be cancelled through the real tenant-facing cancel route with no error', async () => {
+  // This is the direct regression test for this task's core safety claim:
+  // an admin-granted row (paymentProvider: 'manual', providerSubscriptionId: null)
+  // must never reach billing.ts's unguarded providers[paymentProvider] lookup.
+  const { tenant, plan } = await makeTenantAndPlan();
+  const adminAgent = await loggedInAdminAgent();
+  await adminAgent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  const tenantAgent = request.agent(app);
+  await tenantAgent.post('/api/auth/register').send({
+    businessName: tenant.businessName, contactName: 'Jane', email: tenant.email, password: 'correct horse battery staple',
+  }).catch(() => {}); // tenant already exists from makeTenantAndPlan — register will 409, that's fine, we just need a logged-in agent
+  const dbTenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.id } });
+  await prisma.tenant.update({ where: { id: tenant.id }, data: { emailVerifiedAt: new Date() } });
+  await tenantAgent.post('/api/auth/login').send({ email: dbTenant.email, password: 'irrelevant password value' });
+
+  const res = await tenantAgent.post('/api/billing/cancel');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+
+  const cancelled = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(cancelled.status, 'canceled');
+});
+
+test('re-granting replaces an existing canceled subscription rather than erroring', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+  const first = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+  assert.equal(res.status, 302);
+
+  const second = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.notEqual(second.id, first.id);
+});
+
+test('adjust changes only the requested status, leaves other fields untouched', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+  const before = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'past_due' });
+  assert.equal(res.status, 302);
+
+  const after = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(after.status, 'past_due');
+  assert.equal(after.planId, before.planId);
+  assert.equal(after.paymentProvider, before.paymentProvider);
+});
+
+test('adjust with an invalid status value is rejected, no change made', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'not-a-real-status' });
+
+  const unchanged = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(unchanged.status, 'active');
+});
+
+test('cancel on a subscription with no providerSubscriptionId cancels locally with no provider call', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/cancel`);
+  assert.equal(res.status, 302);
+
+  const cancelled = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(cancelled.status, 'canceled');
+});
