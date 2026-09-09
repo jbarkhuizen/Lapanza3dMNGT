@@ -36,7 +36,7 @@ test('createSubscriptionCheckout gets an access token, creates a plan and a subs
   };
 
   const provider = createPaypalProvider(config, fakeFetch as unknown as typeof fetch);
-  const { redirectUrl } = await provider.createSubscriptionCheckout({
+  const { redirectUrl, providerSubscriptionId } = await provider.createSubscriptionCheckout({
     tenantId: 't1',
     plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
     trialDays: 14,
@@ -45,10 +45,90 @@ test('createSubscriptionCheckout gets an access token, creates a plan and a subs
   });
 
   assert.equal(redirectUrl, 'https://www.sandbox.paypal.com/approve/SUB-1');
+  assert.equal(providerSubscriptionId, 'SUB-1');
   assert.equal(calls.length, 4);
   const subscriptionCall = calls[3];
   const body = JSON.parse(subscriptionCall.init.body as string);
   assert.equal(body.plan_id, 'PLAN-1');
+});
+
+test('createSubscriptionCheckout throws when any of the token/product/plan/subscription calls fail', async () => {
+  const makeFetch = (failOn: string) => async (url: string) => {
+    if (url.endsWith('/v1/oauth2/token')) {
+      if (failOn === 'token') return { ok: false, status: 401, text: async () => 'bad creds' } as Response;
+      return { ok: true, json: async () => ({ access_token: 'fake-token' }) } as Response;
+    }
+    if (url.endsWith('/v1/catalogs/products')) {
+      if (failOn === 'product') return { ok: false, status: 500, text: async () => 'boom' } as Response;
+      return { ok: true, json: async () => ({ id: 'PROD-1' }) } as Response;
+    }
+    if (url.endsWith('/v1/billing/plans')) {
+      if (failOn === 'plan') return { ok: false, status: 500, text: async () => 'boom' } as Response;
+      return { ok: true, json: async () => ({ id: 'PLAN-1' }) } as Response;
+    }
+    if (url.endsWith('/v1/billing/subscriptions')) {
+      if (failOn === 'subscription') return { ok: false, status: 500, text: async () => 'boom' } as Response;
+      return {
+        ok: true,
+        json: async () => ({
+          id: 'SUB-1',
+          links: [{ rel: 'approve', href: 'https://www.sandbox.paypal.com/approve/SUB-1' }],
+        }),
+      } as Response;
+    }
+    throw new Error(`Unexpected URL in test: ${url}`);
+  };
+
+  for (const failOn of ['token', 'product', 'plan', 'subscription']) {
+    const provider = createPaypalProvider(config, makeFetch(failOn) as unknown as typeof fetch);
+    await assert.rejects(
+      () =>
+        provider.createSubscriptionCheckout({
+          tenantId: 't1',
+          plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
+          trialDays: 14,
+          returnUrl: 'https://barkie.co.za/app/billing/complete',
+          webhookUrl: 'https://barkie.co.za/api/webhooks/paypal',
+        }),
+      `expected a rejection when ${failOn} fails`,
+    );
+  }
+});
+
+test('cancelSubscription POSTs to the subscriptions cancel endpoint with a bearer token', async () => {
+  const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
+  const fakeFetch = async (url: string, init: Record<string, unknown> = {}) => {
+    calls.push({ url, init });
+    if (url.endsWith('/v1/oauth2/token')) {
+      return { ok: true, json: async () => ({ access_token: 'fake-token' }) } as Response;
+    }
+    if (url.endsWith('/v1/billing/subscriptions/SUB-1/cancel')) {
+      return { ok: true, status: 204, text: async () => '' } as Response;
+    }
+    throw new Error(`Unexpected URL in test: ${url}`);
+  };
+  const provider = createPaypalProvider(config, fakeFetch as unknown as typeof fetch);
+
+  await provider.cancelSubscription('SUB-1');
+
+  const cancelCall = calls.find((c) => c.url.endsWith('/v1/billing/subscriptions/SUB-1/cancel'));
+  assert.ok(cancelCall, 'expected a call to the cancel endpoint');
+  assert.equal(cancelCall!.init.method, 'POST');
+  const headers = cancelCall!.init.headers as Record<string, string>;
+  assert.equal(headers.Authorization, 'Bearer fake-token');
+  const body = JSON.parse(cancelCall!.init.body as string);
+  assert.equal(body.reason, 'Canceled by tenant');
+});
+
+test('cancelSubscription throws when PayPal responds with a non-ok, non-204 status', async () => {
+  const fakeFetch = async (url: string) => {
+    if (url.endsWith('/v1/oauth2/token')) {
+      return { ok: true, json: async () => ({ access_token: 'fake-token' }) } as Response;
+    }
+    return { ok: false, status: 404, text: async () => 'not found' } as Response;
+  };
+  const provider = createPaypalProvider(config, fakeFetch as unknown as typeof fetch);
+  await assert.rejects(() => provider.cancelSubscription('SUB-DOES-NOT-EXIST'));
 });
 
 test('verifyWebhookSignature calls the verify-webhook-signature endpoint and returns true on SUCCESS', async () => {

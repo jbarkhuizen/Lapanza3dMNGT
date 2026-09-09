@@ -425,6 +425,13 @@ model Subscription {
   providerSubscriptionId String?
   trialEndsAt            DateTime  @db.Timestamptz(3)
   currentPeriodEnd       DateTime? @db.Timestamptz(3)
+  // Set only on the active/trialing -> past_due transition, cleared on
+  // recovery to active. The 7-day grace window in
+  // requireActiveSubscription.ts anchors on THIS, not updatedAt, because
+  // updatedAt gets bumped on every provider retry of a still-failing
+  // charge — anchoring the grace window there would let it reset
+  // indefinitely and a permanently-dead card would never actually lapse.
+  pastDueSince           DateTime? @db.Timestamptz(3)
   createdAt              DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @db.Timestamptz(3)
 

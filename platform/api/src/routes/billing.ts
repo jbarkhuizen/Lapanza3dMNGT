@@ -78,25 +78,35 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
 
   const scoped = tenantScope(req.tenantId!);
   const existing = await scoped.subscription.get();
-  if (existing) {
+  if (existing && existing.status !== 'canceled' && existing.status !== 'lapsed') {
     return res.status(400).json({ ok: false, error: 'You already have a subscription.' });
   }
 
-  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-  await scoped.subscription.create({
-    planId: plan.id,
-    status: 'trialing',
-    paymentProvider: providerName,
-    trialEndsAt,
-  });
-
+  // Call the provider FIRST, before writing anything — if this throws
+  // (bad credentials, network issue, provider outage), no orphan
+  // subscription row is left behind blocking every future checkout
+  // attempt via the "already have a subscription" check above.
   const provider = providers[providerName];
-  const { redirectUrl } = await provider.createSubscriptionCheckout({
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const { redirectUrl, providerSubscriptionId } = await provider.createSubscriptionCheckout({
     tenantId: req.tenantId!,
     plan: { id: plan.id, name: plan.name, monthlyPrice: plan.monthlyPrice.toFixed(2) },
     trialDays: TRIAL_DAYS,
     returnUrl: `${env.frontendOrigin}${env.frontendBasePath}/billing/complete`,
     webhookUrl: `${env.frontendOrigin}/api/webhooks/${providerName}`,
+  });
+
+  if (existing) {
+    // A previously canceled/lapsed subscription is a dead row — this is
+    // a genuinely new subscription attempt, not an update to the old one.
+    await scoped.subscription.delete();
+  }
+  await scoped.subscription.create({
+    planId: plan.id,
+    status: 'trialing',
+    paymentProvider: providerName,
+    trialEndsAt,
+    providerSubscriptionId,
   });
 
   res.json({ ok: true, redirectUrl });
@@ -108,6 +118,15 @@ billingRouter.post('/api/billing/cancel', async (req, res) => {
   if (!subscription) {
     return res.status(400).json({ ok: false, error: 'No subscription to cancel.' });
   }
+  if (!subscription.providerSubscriptionId) {
+    // No provider-side subscription was ever confirmed (e.g. a PayFast
+    // trial where the first ITN hasn't landed yet) — nothing to cancel
+    // there, just cancel locally.
+    await scoped.subscription.updateStatus('canceled');
+    return res.json({ ok: true });
+  }
+  const provider = providers[subscription.paymentProvider];
+  await provider.cancelSubscription(subscription.providerSubscriptionId);
   await scoped.subscription.updateStatus('canceled');
   res.json({ ok: true });
 });

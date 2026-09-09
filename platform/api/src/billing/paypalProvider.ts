@@ -24,6 +24,9 @@ export function createPaypalProvider(
       },
       body: 'grant_type=client_credentials',
     });
+    if (!res.ok) {
+      throw new Error(`PayPal getAccessToken failed: ${res.status} ${await res.text()}`);
+    }
     const data = await res.json();
     return data.access_token;
   }
@@ -45,6 +48,9 @@ export function createPaypalProvider(
           category: 'SOFTWARE',
         }),
       });
+      if (!productRes.ok) {
+        throw new Error(`PayPal create product failed: ${productRes.status} ${await productRes.text()}`);
+      }
       const product = await productRes.json();
 
       const planRes = await fetchImpl(`${baseUrl}/v1/billing/plans`, {
@@ -72,6 +78,9 @@ export function createPaypalProvider(
           payment_preferences: { auto_bill_outstanding: true },
         }),
       });
+      if (!planRes.ok) {
+        throw new Error(`PayPal create plan failed: ${planRes.status} ${await planRes.text()}`);
+      }
       const paypalPlan = await planRes.json();
 
       const subscriptionRes = await fetchImpl(`${baseUrl}/v1/billing/subscriptions`, {
@@ -86,10 +95,16 @@ export function createPaypalProvider(
           },
         }),
       });
+      if (!subscriptionRes.ok) {
+        throw new Error(`PayPal create subscription failed: ${subscriptionRes.status} ${await subscriptionRes.text()}`);
+      }
       const subscription = await subscriptionRes.json();
       const approveLink = subscription.links.find((link: { rel: string; href: string }) => link.rel === 'approve');
+      if (!approveLink) {
+        throw new Error('PayPal subscription response had no approve link');
+      }
 
-      return { redirectUrl: approveLink.href };
+      return { redirectUrl: approveLink.href, providerSubscriptionId: subscription.id };
     },
 
     async verifyWebhookSignature(req: Request): Promise<boolean> {
@@ -134,6 +149,21 @@ export function createPaypalProvider(
           return { providerSubscriptionId, type: 'canceled' };
         default:
           return null;
+      }
+    },
+
+    async cancelSubscription(providerSubscriptionId: string): Promise<void> {
+      const accessToken = await getAccessToken();
+      const res = await fetchImpl(`${baseUrl}/v1/billing/subscriptions/${providerSubscriptionId}/cancel`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: 'Canceled by tenant' }),
+      });
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`PayPal cancelSubscription failed: ${res.status} ${await res.text()}`);
       }
     },
   };

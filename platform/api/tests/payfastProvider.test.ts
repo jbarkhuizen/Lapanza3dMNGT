@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import type { Request } from 'express';
@@ -89,7 +89,7 @@ test('parseWebhookEvent normalizes a COMPLETE payment_status to "payment_succeed
     body: { m_payment_id: 'sub_t1', payment_status: 'COMPLETE', token: 'pf-sub-abc123' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', type: 'payment_succeeded' });
+  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', tenantId: 't1', type: 'payment_succeeded' });
 });
 
 test('parseWebhookEvent normalizes a FAILED payment_status to "payment_failed"', () => {
@@ -98,7 +98,7 @@ test('parseWebhookEvent normalizes a FAILED payment_status to "payment_failed"',
     body: { m_payment_id: 'sub_t1', payment_status: 'FAILED', token: 'pf-sub-abc123' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', type: 'payment_failed' });
+  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', tenantId: 't1', type: 'payment_failed' });
 });
 
 test('parseWebhookEvent returns null instead of throwing on a missing body', () => {
@@ -109,4 +109,59 @@ test('parseWebhookEvent returns null instead of throwing on a missing body', () 
 
   const nullBodyReq = { body: null } as unknown as Request;
   assert.equal(provider.parseWebhookEvent(nullBodyReq), null);
+});
+
+test('parseWebhookEvent extracts tenantId from a sub_-prefixed m_payment_id', () => {
+  const provider = createPayfastProvider(config);
+  const req = {
+    body: { m_payment_id: 'sub_abc123', payment_status: 'COMPLETE', token: 'pf-sub-1' },
+  } as unknown as Request;
+  const event = provider.parseWebhookEvent(req);
+  assert.equal(event?.tenantId, 'abc123');
+});
+
+test('parseWebhookEvent leaves tenantId undefined when m_payment_id does not start with sub_', () => {
+  const provider = createPayfastProvider(config);
+  const req = {
+    body: { m_payment_id: 'something-else', payment_status: 'COMPLETE', token: 'pf-sub-1' },
+  } as unknown as Request;
+  const event = provider.parseWebhookEvent(req);
+  assert.equal(event?.tenantId, undefined);
+});
+
+test('cancelSubscription PUTs to the PayFast subscriptions API with a signed header set', async () => {
+  const provider = createPayfastProvider(config);
+  const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
+  mock.method(globalThis, 'fetch', async (url: string, init: Record<string, unknown>) => {
+    calls.push({ url, init });
+    return { ok: true, text: async () => '' } as Response;
+  });
+
+  try {
+    await provider.cancelSubscription('pf-sub-1');
+
+    assert.equal(calls.length, 1);
+    const { url, init } = calls[0];
+    assert.ok(url.startsWith('https://api.payfast.co.za/subscriptions/pf-sub-1/cancel'));
+    assert.ok(url.includes('testing=true'), 'sandbox mode should include the testing=true query param');
+    assert.equal(init.method, 'PUT');
+    const headers = init.headers as Record<string, string>;
+    assert.equal(headers['merchant-id'], config.merchantId);
+    assert.equal(headers.version, 'v1');
+    assert.ok(headers.timestamp);
+    assert.ok(headers.signature);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('cancelSubscription throws when the PayFast API responds with a non-ok status', async () => {
+  const provider = createPayfastProvider(config);
+  mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 500, text: async () => 'boom' }) as Response);
+
+  try {
+    await assert.rejects(() => provider.cancelSubscription('pf-sub-1'));
+  } finally {
+    mock.restoreAll();
+  }
 });

@@ -261,6 +261,7 @@ export interface CreateSubscriptionInput {
 export interface UpdateSubscriptionExtra {
   providerSubscriptionId?: string;
   currentPeriodEnd?: Date;
+  pastDueSince?: Date | null;
 }
 
 const companyProfileSelect = {
@@ -575,6 +576,8 @@ export function tenantScope(tenantId: string) {
 
       updateStatus: (status: string, extra?: UpdateSubscriptionExtra) =>
         prisma.subscription.updateMany({ where: { tenantId }, data: { status, ...extra } }),
+
+      delete: () => prisma.subscription.deleteMany({ where: { tenantId } }),
     },
   };
 }

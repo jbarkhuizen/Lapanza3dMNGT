@@ -46,7 +46,13 @@ export const env = {
   // Payment provider credentials — optional, same pattern as SMTP_*:
   // unset in dev/test/CI, set only in the VPS production .env, collected
   // directly from the user immediately before that deploy step.
-  paymentsLive: process.env.NODE_ENV === 'production',
+  // Deliberately NOT derived from NODE_ENV — the deploy step's own
+  // sandbox-first smoke test (see this plan's "After all tasks" section)
+  // needs to run against sandbox PayFast/PayPal endpoints from the
+  // production-deployed service (NODE_ENV=production there), which would
+  // be impossible if this were tied to NODE_ENV. Flip explicitly once the
+  // sandbox pass is confirmed working.
+  paymentsLive: process.env.PAYMENTS_LIVE === 'true',
   payfastMerchantId: process.env.PAYFAST_MERCHANT_ID,
   payfastMerchantKey: process.env.PAYFAST_MERCHANT_KEY,
   payfastPassphrase: process.env.PAYFAST_PASSPHRASE,
