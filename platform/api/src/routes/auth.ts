@@ -201,6 +201,11 @@ export function createAuthRouter() {
         email: tenant.email,
         emailVerified: tenant.emailVerifiedAt !== null,
         hasSubscription: subscription !== null,
+        // Alongside hasSubscription (kept as-is — it gates RequireAuth's
+        // /plans redirect) also expose the raw status, so callers can
+        // distinguish "no subscription at all" from "has one, but it's
+        // dead" (canceled/lapsed) without a second round trip.
+        subscriptionStatus: subscription?.status ?? null,
       },
     });
   });

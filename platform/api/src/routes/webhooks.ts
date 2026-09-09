@@ -23,6 +23,27 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
     : await prisma.subscription.findFirst({ where: { providerSubscriptionId: event.providerSubscriptionId } });
   if (!subscription) return;
 
+  // Guard against a stale/delayed event mutating the wrong subscription
+  // after a tenant has resubscribed (old row deleted, new row created).
+  // PayFast ITNs ALWAYS carry tenantId (not just on first contact), so
+  // every PayFast event for this tenant resolves to whatever row
+  // currently exists — including a brand-new one that has nothing to do
+  // with the event's own (dead) provider subscription. If the row is
+  // already bound to a providerSubscriptionId and this event names a
+  // different one, it belongs to a subscription that no longer exists
+  // locally — ignore it rather than corrupting the current one.
+  if (subscription.providerSubscriptionId && subscription.providerSubscriptionId !== event.providerSubscriptionId) {
+    return;
+  }
+  // First contact (no providerSubscriptionId bound yet) should only ever
+  // bind onto a row that's still alive — a canceled/lapsed row receiving
+  // its first-ever providerSubscriptionId binding means a stale ITN
+  // (e.g. that dead subscription's own final COMPLETE/CANCELLED
+  // notification) is trying to resurrect it after the tenant moved on.
+  if (!subscription.providerSubscriptionId && subscription.status !== 'trialing' && subscription.status !== 'active') {
+    return;
+  }
+
   // First contact for a PayFast subscription — persist the real token
   // now that we have it, so subsequent lookups (and a future cancel
   // call) can use providerSubscriptionId like PayPal's always could.
@@ -47,8 +68,16 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
         // automatic retries of a still-failing charge send another
         // payment_failed event days later, and re-stamping this on every
         // retry would reset the grace-period clock indefinitely (the
-        // exact bug the final whole-branch review flagged).
-        pastDueSince: subscription.status === 'past_due' ? subscription.pastDueSince : new Date(),
+        // exact bug the final whole-branch review flagged). Anchor on the
+        // field itself, not on status === 'past_due': once the grace
+        // window lapses, requireActiveSubscription self-heals status to
+        // 'lapsed' (not 'past_due'), and a status-based check would see
+        // that as "first failure" and re-stamp pastDueSince on every
+        // subsequent dunning retry, resetting the grace window forever.
+        // ?? only re-stamps when pastDueSince is genuinely null — first
+        // failure ever, or after a clean recovery (the 'active' branch
+        // above explicitly clears it back to null).
+        pastDueSince: subscription.pastDueSince ?? new Date(),
         ...providerIdPatch,
       },
     });

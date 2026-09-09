@@ -99,6 +99,23 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
   if (existing) {
     // A previously canceled/lapsed subscription is a dead row — this is
     // a genuinely new subscription attempt, not an update to the old one.
+    // A 'lapsed' row was self-healed locally by requireActiveSubscription,
+    // which only ever updates local status and never calls the provider —
+    // so it may still have a live providerSubscriptionId. Deleting the row
+    // without telling the provider to stop would lose the only record of
+    // that id, leaving the tenant paying for two subscriptions forever.
+    // Best-effort: for an already-canceled row this call is likely
+    // redundant, but harmless, and a failure (e.g. 404 because it's
+    // already dead provider-side) must not block the resubscribe.
+    if (existing.providerSubscriptionId) {
+      const oldProvider = providers[existing.paymentProvider];
+      await oldProvider.cancelSubscription(existing.providerSubscriptionId).catch((error) => {
+        console.error(
+          `Failed to cancel previous ${existing.paymentProvider} subscription ${existing.providerSubscriptionId} during resubscribe:`,
+          error,
+        );
+      });
+    }
     await scoped.subscription.delete();
   }
   await scoped.subscription.create({

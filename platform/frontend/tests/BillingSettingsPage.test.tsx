@@ -16,6 +16,18 @@ const activeSubscription = {
   plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00', sortOrder: 1 },
 };
 
+const canceledSubscription = {
+  ...activeSubscription,
+  id: 's2',
+  status: 'canceled',
+};
+
+const lapsedSubscription = {
+  ...activeSubscription,
+  id: 's3',
+  status: 'lapsed',
+};
+
 function renderPage() {
   const queryClient = createTestQueryClient();
   return render(
@@ -42,5 +54,24 @@ describe('BillingSettingsPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /cancel subscription/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /cancel subscription/i }));
     await waitFor(() => expect(postSpy).toHaveBeenCalledWith('/api/billing/cancel'));
+  });
+
+  it('renders a link to /plans instead of the cancel button when the subscription is canceled', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, subscription: canceledSubscription });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/canceled/i)).toBeInTheDocument());
+    const link = screen.getByRole('link', { name: /choose a plan/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/plans');
+    expect(screen.queryByRole('button', { name: /cancel subscription/i })).not.toBeInTheDocument();
+  });
+
+  it('renders a link to /plans when the subscription is lapsed', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, subscription: lapsedSubscription });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/lapsed/i)).toBeInTheDocument());
+    const link = screen.getByRole('link', { name: /choose a plan/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/plans');
   });
 });

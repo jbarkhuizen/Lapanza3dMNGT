@@ -212,6 +212,123 @@ test('full end-to-end resubscribe: checkout -> cancel -> checkout again, all thr
   }
 });
 
+test('resubscribing after lapsed with a providerSubscriptionId set calls provider.cancelSubscription before creating the new row', async () => {
+  const app = buildApp();
+  const email = 'lapsed-resub@acmeprints.co.za';
+  const agent = await loggedInAgent(app, email);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email } });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  // A 'lapsed' row is self-healed LOCALLY by requireActiveSubscription,
+  // which never calls the provider — so it can still carry a live
+  // providerSubscriptionId the provider doesn't know is dead yet.
+  const oldSubscription = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'lapsed',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'pf-sub-lapsed',
+      trialEndsAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const cancelCalls: string[] = [];
+  mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
+    cancelCalls.push(providerSubscriptionId);
+  });
+  mock.method(payfastProvider, 'createSubscriptionCheckout', async () => ({
+    redirectUrl: 'https://sandbox.payfast.co.za/eng/process?resub=1',
+  }));
+
+  try {
+    const res = await agent.post('/api/billing/checkout').send({ planId: plan.id, provider: 'payfast' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      cancelCalls,
+      ['pf-sub-lapsed'],
+      'the old live provider subscription must be canceled before the row is deleted, or the tenant ends up paying for two',
+    );
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'trialing');
+    assert.notEqual(subscription?.id, oldSubscription.id, 'the old lapsed row should have been replaced, not updated');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('resubscribing after lapsed still succeeds even if provider.cancelSubscription rejects (best-effort, must not block resubscribe)', async () => {
+  const app = buildApp();
+  const email = 'lapsed-resub-failcancel@acmeprints.co.za';
+  const agent = await loggedInAgent(app, email);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email } });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'lapsed',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'pf-sub-already-dead',
+      trialEndsAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  mock.method(payfastProvider, 'cancelSubscription', async () => {
+    throw new Error('404 — already canceled provider-side');
+  });
+  mock.method(payfastProvider, 'createSubscriptionCheckout', async () => ({
+    redirectUrl: 'https://sandbox.payfast.co.za/eng/process?resub=1',
+  }));
+
+  try {
+    const res = await agent.post('/api/billing/checkout').send({ planId: plan.id, provider: 'payfast' });
+    assert.equal(res.status, 200, 'a provider cancel failure during resubscribe must not block the new checkout');
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'trialing');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('POST /api/billing/cancel is fail-closed: if provider.cancelSubscription rejects, the response is a 5xx and local status stays unchanged', async () => {
+  const app = buildApp();
+  const email = 'cancel-provider-fails@acmeprints.co.za';
+  const agent = await loggedInAgent(app, email);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email } });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'pf-sub-fail-cancel',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  mock.method(payfastProvider, 'cancelSubscription', async () => {
+    throw new Error('provider is down');
+  });
+
+  try {
+    const res = await agent.post('/api/billing/cancel').send({});
+    assert.ok(res.status >= 500 && res.status < 600, `expected a 5xx response, got ${res.status}`);
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.notEqual(
+      subscription?.status,
+      'canceled',
+      'local status must not flip to canceled when the provider call failed — that would silently strand a still-live provider subscription',
+    );
+    assert.equal(subscription?.status, 'active');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a canceled tenant CAN call checkout again and succeed (the old row does not block a resubscribe)', async () => {
   const app = buildApp();
   const email = 'resub@acmeprints.co.za';
@@ -232,6 +349,10 @@ test('a canceled tenant CAN call checkout again and succeed (the old row does no
   mock.method(payfastProvider, 'createSubscriptionCheckout', async () => ({
     redirectUrl: 'https://sandbox.payfast.co.za/eng/process?resub=1',
   }));
+  // The old row still has a providerSubscriptionId, so Fix 2's best-effort
+  // cancel-before-delete now calls out to the provider here too — mock it
+  // so this test doesn't make a live network call to PayFast's API.
+  mock.method(payfastProvider, 'cancelSubscription', async () => {});
 
   try {
     const res = await agent.post('/api/billing/checkout').send({ planId: plan.id, provider: 'payfast' });

@@ -8,6 +8,7 @@ export interface Tenant {
   email: string;
   emailVerified: boolean;
   hasSubscription: boolean;
+  subscriptionStatus?: string | null;
 }
 
 interface AuthContextValue {

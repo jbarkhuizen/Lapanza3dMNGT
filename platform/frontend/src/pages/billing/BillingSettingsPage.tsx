@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useSubscription, useCancelSubscription } from '../../api/billing.js';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -35,6 +36,14 @@ export function BillingSettingsPage() {
         >
           Cancel subscription
         </button>
+      )}
+      {(subscription.status === 'canceled' || subscription.status === 'lapsed') && (
+        <Link
+          to="/plans"
+          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
+        >
+          Choose a plan
+        </Link>
       )}
     </div>
   );

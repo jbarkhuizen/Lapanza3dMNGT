@@ -199,6 +199,75 @@ test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (tenan
   }
 });
 
+test('a stale event carrying a DIFFERENT providerSubscriptionId than the one already persisted is ignored (does not mutate the row)', async () => {
+  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  // Simulate the tenant having already resubscribed: the row currently
+  // bound to this tenant carries a NEW providerSubscriptionId.
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'active', providerSubscriptionId: 'pf-sub-current' },
+  });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  // A stale/delayed ITN for the OLD (dead) subscription — same tenantId
+  // (PayFast ITNs always carry it), but a providerSubscriptionId that no
+  // longer matches what's persisted on this tenant's row.
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-old-dead',
+    tenantId: tenant.id,
+    type: 'canceled' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-old-dead', payment_status: 'CANCELLED', m_payment_id: `sub_${tenant.id}` });
+    assert.equal(res.status, 200);
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'active', 'a stale event for a dead subscription id must not change status');
+    assert.equal(
+      subscription?.providerSubscriptionId,
+      'pf-sub-current',
+      'a stale event must not overwrite the currently-bound providerSubscriptionId',
+    );
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a first-contact event for an already canceled row is ignored (a stale ITN cannot resurrect a dead subscription)', async () => {
+  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  // The tenant canceled — no providerSubscriptionId was ever persisted
+  // for this row (matches the fixture's default), and status is now dead.
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'canceled' },
+  });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-stale',
+    tenantId: tenant.id,
+    type: 'payment_succeeded' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-stale', payment_status: 'COMPLETE', m_payment_id: `sub_${tenant.id}` });
+    assert.equal(res.status, 200);
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'canceled', 'a stale first-contact event must not resurrect a canceled row');
+    assert.equal(subscription?.providerSubscriptionId, null);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a second payment_failed event for an already past_due subscription does NOT reset pastDueSince', async () => {
   const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
   const originalPastDueSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
@@ -225,6 +294,38 @@ test('a second payment_failed event for an already past_due subscription does NO
     // final whole-branch review flagged (I2): repeated retries would
     // otherwise keep pushing pastDueSince forward and a permanently-dead
     // card would never actually reach the lapsed state.
+    assert.equal(subscription?.pastDueSince?.getTime(), originalPastDueSince.getTime());
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a payment_failed event for a subscription already self-healed to lapsed does NOT reset pastDueSince', async () => {
+  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const originalPastDueSince = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+  // requireActiveSubscription self-heals status to 'lapsed' (not
+  // 'past_due') once the grace window expires — a dunning retry landing
+  // after that point must still see the original pastDueSince, not
+  // status === 'past_due', or the grace-period clock resets forever
+  // (the I2 bug, one state removed).
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'lapsed', providerSubscriptionId: 'pf-sub-1', pastDueSince: originalPastDueSince },
+  });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-1',
+    type: 'payment_failed',
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-1', payment_status: 'FAILED' });
+    assert.equal(res.status, 200);
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'past_due');
     assert.equal(subscription?.pastDueSince?.getTime(), originalPastDueSince.getTime());
   } finally {
     mock.restoreAll();
