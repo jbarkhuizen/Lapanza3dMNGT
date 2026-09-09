@@ -257,3 +257,28 @@ test('adjust manages pastDueSince like the webhook flow: stamps on first past_du
   assert.equal(recovered.status, 'active');
   assert.equal(recovered.pastDueSince, null);
 });
+
+test('adjust clears pastDueSince on recovery to active even when the row went through lapsed (self-heal) first, not directly from past_due', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'past_due' });
+  const pastDue = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(pastDue.status, 'past_due');
+  assert.ok(pastDue.pastDueSince);
+  const stampedAt = pastDue.pastDueSince;
+
+  // Simulate requireActiveSubscription's self-heal, which flips
+  // past_due -> lapsed without touching pastDueSince (scoped.ts's
+  // updateStatus only sets status).
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'lapsed' });
+  const lapsed = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(lapsed.status, 'lapsed');
+  assert.deepEqual(lapsed.pastDueSince, stampedAt);
+
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'active' });
+  const recovered = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(recovered.status, 'active');
+  assert.equal(recovered.pastDueSince, null);
+});

@@ -262,16 +262,21 @@ adminRouter.post(
 
     // Mirror webhooks.ts's applyEvent semantics for pastDueSince so an
     // admin's manual status change doesn't diverge from the real
-    // webhook-driven flow (see webhooks.ts lines ~84-97 for the full
+    // webhook-driven flow (see webhooks.ts lines 69-78 for the full
     // reasoning): stamp it on first entry into 'past_due' (never
     // re-stamp — that would reset the 7-day grace clock), and clear it
-    // back to null when recovering out of 'past_due'. Anchored on the
-    // field itself and on existing.status, not on a status-vs-status
-    // diff, so 'trialing' -> 'active' (never past_due on either side)
-    // leaves pastDueSince untouched.
+    // unconditionally whenever the NEW status becomes 'active' —
+    // regardless of what the row's prior status was. This matters
+    // because requireActiveSubscription's self-heal (scoped.ts's
+    // updateStatus, ~line 582) can flip a 'past_due' row to 'lapsed'
+    // without touching pastDueSince, so keying the clear branch on
+    // existing.status (the pre-update value) would miss that case and
+    // leave a stale timestamp behind. Any transition whose NEW status
+    // is neither 'past_due' nor 'active' (e.g. 'active' -> 'trialing',
+    // 'active' -> 'canceled') leaves pastDueSince untouched.
     if (status === 'past_due') {
       data.pastDueSince = existing.pastDueSince ?? new Date();
-    } else if (existing.status === 'past_due') {
+    } else if (status === 'active') {
       data.pastDueSince = null;
     }
 
