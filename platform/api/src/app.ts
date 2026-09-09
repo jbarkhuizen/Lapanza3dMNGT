@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { env } from './env.js';
 import { healthRouter } from './routes/health.js';
+import { publicRouter } from './routes/public.js';
 import { createAuthRouter } from './routes/auth.js';
 import { customersRouter } from './routes/customers.js';
 import { printersRouter } from './routes/printers.js';
@@ -38,6 +39,7 @@ export function buildApp() {
   app.use(express.urlencoded({ extended: false }));
   app.use(cookieParser());
   app.use(healthRouter);
+  app.use(publicRouter);
   app.use(createAuthRouter());
   // Mounted here (before the auth-protected routers below) because every one
   // of those routers applies `requireTenantAuth` via an unpathed `router.use`,
