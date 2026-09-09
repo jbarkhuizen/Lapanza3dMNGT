@@ -354,3 +354,49 @@ test('adjust clears pastDueSince on recovery to active even when the row went th
   assert.equal(recovered.status, 'active');
   assert.equal(recovered.pastDueSince, null);
 });
+
+test('GET /api/admin/plans lists the seeded plans', async () => {
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/plans');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Tier 1/);
+  assert.match(res.text, /25\.00/);
+});
+
+test('POST /api/admin/plans creates a new plan', async () => {
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post('/api/admin/plans').send({ name: 'Tier 4', monthlyPrice: '95.00', sortOrder: '4' });
+  assert.equal(res.status, 302);
+
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 4' } });
+  assert.equal(plan.monthlyPrice.toFixed(2), '95.00');
+  assert.equal(plan.sortOrder, 4);
+  assert.equal(plan.active, true);
+});
+
+test('POST /api/admin/plans/:id/edit updates price, name, sortOrder, and active', async () => {
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/plans/${plan.id}/edit`).send({
+    name: 'Tier 1 (renamed)', monthlyPrice: '30.00', sortOrder: '1',
+    // no 'active' key at all — matches an unchecked HTML checkbox, which
+    // submits nothing for that field
+  });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.plan.findUniqueOrThrow({ where: { id: plan.id } });
+  assert.equal(updated.name, 'Tier 1 (renamed)');
+  assert.equal(updated.monthlyPrice.toFixed(2), '30.00');
+  assert.equal(updated.active, false, 'an unchecked checkbox must deactivate the plan');
+});
+
+test('POST /api/admin/plans/:id/edit with active="on" keeps the plan active', async () => {
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 2' } });
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/plans/${plan.id}/edit`).send({
+    name: 'Tier 2', monthlyPrice: '45.00', sortOrder: '2', active: 'on',
+  });
+
+  const updated = await prisma.plan.findUniqueOrThrow({ where: { id: plan.id } });
+  assert.equal(updated.active, true);
+});

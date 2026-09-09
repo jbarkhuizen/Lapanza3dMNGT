@@ -386,3 +386,61 @@ adminRouter.get(
     `));
   },
 );
+
+// Plan is a platform-wide catalog table, never tenant-scoped — queried
+// directly via prisma.plan, same as the plan lookups already used above
+// for the tenant subscription-grant dropdown. No tenantScope() involved.
+adminRouter.get('/plans', requirePlatformAdminAuth, async (_req, res) => {
+  const plans = await prisma.plan.findMany({ orderBy: { sortOrder: 'asc' } });
+  const rows = plans.map((p) => `
+    <tr>
+      <td>
+        <form method="post" action="/api/admin/plans/${p.id}/edit" class="inline">
+          <input name="name" value="${escapeHtml(p.name)}" style="width:120px" required />
+          <input name="monthlyPrice" value="${p.monthlyPrice.toFixed(2)}" style="width:80px" required />
+          <input name="sortOrder" type="number" value="${p.sortOrder}" style="width:60px" required />
+          <label><input type="checkbox" name="active" ${p.active ? 'checked' : ''} /> Active</label>
+          <button type="submit">Save</button>
+        </form>
+      </td>
+    </tr>`).join('');
+  res.type('html').send(adminPage('Plans', `
+    <table><tbody>${rows}</tbody></table>
+    <div class="card">
+      <h2>New plan</h2>
+      <form method="post" action="/api/admin/plans">
+        <label>Name<br /><input name="name" required /></label><br /><br />
+        <label>Monthly price (R)<br /><input name="monthlyPrice" required /></label><br /><br />
+        <label>Sort order<br /><input name="sortOrder" type="number" required /></label><br /><br />
+        <button type="submit">Create plan</button>
+      </form>
+    </div>
+  `));
+});
+
+adminRouter.post('/plans', requirePlatformAdminAuth, async (req, res) => {
+  const { name, monthlyPrice, sortOrder } = (req.body ?? {}) as Record<string, unknown>;
+  if (typeof name !== 'string' || typeof monthlyPrice !== 'string' || typeof sortOrder !== 'string') {
+    return res.redirect('/api/admin/plans');
+  }
+  await prisma.plan.create({
+    data: { name, monthlyPrice, sortOrder: Number(sortOrder) },
+  });
+  res.redirect('/api/admin/plans');
+});
+
+adminRouter.post(
+  '/plans/:id/edit',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const { name, monthlyPrice, sortOrder, active } = (req.body ?? {}) as Record<string, unknown>;
+    if (typeof name !== 'string' || typeof monthlyPrice !== 'string' || typeof sortOrder !== 'string') {
+      return res.redirect('/api/admin/plans');
+    }
+    await prisma.plan.update({
+      where: { id: req.params.id },
+      data: { name, monthlyPrice, sortOrder: Number(sortOrder), active: active === 'on' },
+    });
+    res.redirect('/api/admin/plans');
+  },
+);
