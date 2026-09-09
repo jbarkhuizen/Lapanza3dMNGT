@@ -11,9 +11,14 @@ const PLANS = [
 async function main() {
   for (const plan of PLANS) {
     const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
-    if (existing) {
-      await prisma.plan.update({ where: { id: existing.id }, data: plan });
-    } else {
+    if (!existing) {
+      // Create-only: a manual price edit in the DB (the intended way to
+      // change pricing until the admin center exists — see the design
+      // spec) must survive a re-run of this seed script. Only sortOrder
+      // and active-flag drift would ever need re-syncing here, and
+      // neither of those exists yet, so a bare create-if-missing is
+      // correct — revisit if this script ever needs to reconcile more
+      // than existence.
       await prisma.plan.create({ data: plan });
     }
   }

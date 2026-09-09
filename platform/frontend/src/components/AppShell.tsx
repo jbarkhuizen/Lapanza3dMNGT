@@ -68,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {subscription.status === 'lapsed'
               ? 'Your subscription has lapsed — you can view your data but not make changes. '
               : 'Your last payment failed — please check your payment method. '}
-            <a href="/app/billing" className="underline">Manage billing</a>
+            <Link to="/billing" className="underline">Manage billing</Link>
           </div>
         )}
         <main className="flex-1 p-6">{children}</main>

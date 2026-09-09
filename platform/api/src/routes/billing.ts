@@ -7,7 +7,7 @@ import { prisma } from '../db/client.js';
 import { env } from '../env.js';
 import { payfastProvider } from '../billing/payfastProvider.js';
 import { paypalProvider } from '../billing/paypalProvider.js';
-import type { PaymentProvider } from '../billing/payfastProvider.js';
+import type { PaymentProvider } from '../billing/types.js';
 
 export const billingRouter = Router();
 billingRouter.use(requireTenantAuth);

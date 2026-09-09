@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { PaymentProvider, NormalizedSubscriptionEvent } from './payfastProvider.js';
+import type { PaymentProvider, NormalizedSubscriptionEvent } from './types.js';
 import { env } from '../env.js';
 
 interface PaypalConfig {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../db/client.js';
 import { payfastProvider } from '../billing/payfastProvider.js';
 import { paypalProvider } from '../billing/paypalProvider.js';
-import type { PaymentProvider, NormalizedSubscriptionEvent } from '../billing/payfastProvider.js';
+import type { PaymentProvider, NormalizedSubscriptionEvent } from '../billing/types.js';
 
 export const webhooksRouter = Router();
 
