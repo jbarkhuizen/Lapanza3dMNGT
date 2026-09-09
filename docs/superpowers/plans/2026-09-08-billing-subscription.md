@@ -2397,3 +2397,1016 @@ self-filtering pattern, since it's a genuinely different middleware
 pattern from `requireTenantAuth` and worth flagging for anyone adding a
 new resource router later — they need to remember both middlewares, not
 just `requireTenantAuth`.
+
+---
+
+## Addendum: Tasks 8-10 — final whole-branch review findings (2026-09-09)
+
+The whole-branch review after Task 7 found three Critical, financial-
+correctness gaps that no single task's scope could see (each is an
+interaction between tasks, not a bug in any one task): webhooks can
+never actually update a subscription's status because
+`providerSubscriptionId` is never persisted anywhere; cancellation never
+reaches the payment provider, so a canceled tenant keeps being charged
+while Barkie has already revoked their access; and an abandoned checkout
+grants permanent free access, since `trialEndsAt` is never enforced.
+Tasks 8-10 close these and the related Important/Minor findings from
+that review. Same rhythm as Tasks 1-7: brief → implement → review →
+fix loop → next task.
+
+**Do not merge before Task 8 is done — Tasks 8's three fixes are the
+actual point of this addendum.** Tasks 9-10 are important but
+non-blocking relative to Task 8's financial correctness gaps.
+
+### Task 8: Persist provider subscription IDs, real cancellation, trial expiry enforcement
+
+**Files:**
+- Modify: `platform/api/prisma/schema.prisma`
+- Modify: `platform/api/src/db/scoped.ts`
+- Modify: `platform/api/src/env.ts`
+- Modify: `platform/api/src/billing/payfastProvider.ts`
+- Modify: `platform/api/src/billing/paypalProvider.ts`
+- Modify: `platform/api/src/routes/billing.ts`
+- Modify: `platform/api/src/routes/webhooks.ts`
+- Modify: `platform/api/src/middleware/requireActiveSubscription.ts`
+- Modify: `platform/api/tests/helpers/testApp.ts`
+- Modify: `platform/api/tests/payfastProvider.test.ts`
+- Modify: `platform/api/tests/paypalProvider.test.ts`
+- Modify: `platform/api/tests/billing.test.ts`
+- Modify: `platform/api/tests/webhooks.test.ts`
+- Modify: `platform/api/tests/requireActiveSubscription.test.ts`
+
+**Interfaces:**
+- `PaymentProvider.createSubscriptionCheckout(...)` now returns
+  `{ redirectUrl: string; providerSubscriptionId?: string }` (PayPal
+  always sets it — the subscription is created synchronously via their
+  API; PayFast never does — no synchronous "create" call exists for it,
+  only a signed redirect URL).
+- `PaymentProvider` gains `cancelSubscription(providerSubscriptionId:
+  string): Promise<void>`.
+- `NormalizedSubscriptionEvent` gains `tenantId?: string` (PayFast
+  populates it, parsed from `m_payment_id`; PayPal leaves it undefined
+  and relies on `providerSubscriptionId` being persisted at checkout).
+- `UpdateSubscriptionExtra` (scoped.ts) gains `pastDueSince?: Date |
+  null`.
+
+- [ ] **Step 1: Add `pastDueSince` to the schema and migrate**
+
+In `platform/api/prisma/schema.prisma`, change the `Subscription`
+model's `currentPeriodEnd` line:
+
+```prisma
+  currentPeriodEnd       DateTime? @db.Timestamptz(3)
+```
+
+to:
+
+```prisma
+  currentPeriodEnd       DateTime? @db.Timestamptz(3)
+  // Set only on the active/trialing -> past_due transition, cleared on
+  // recovery to active. The 7-day grace window in
+  // requireActiveSubscription.ts anchors on THIS, not updatedAt, because
+  // updatedAt gets bumped on every provider retry of a still-failing
+  // charge — anchoring the grace window there would let it reset
+  // indefinitely and a permanently-dead card would never actually lapse.
+  pastDueSince           DateTime? @db.Timestamptz(3)
+```
+
+Run:
+```bash
+cd platform/api
+npx prisma migrate dev --name add_subscription_past_due_since
+node --env-file=.env.test node_modules/prisma/build/index.js migrate deploy
+```
+
+- [ ] **Step 2: Add `pastDueSince` to `scoped.ts`**
+
+In `platform/api/src/db/scoped.ts`, change:
+
+```typescript
+export interface UpdateSubscriptionExtra {
+  providerSubscriptionId?: string;
+  currentPeriodEnd?: Date;
+}
+```
+
+to:
+
+```typescript
+export interface UpdateSubscriptionExtra {
+  providerSubscriptionId?: string;
+  currentPeriodEnd?: Date;
+  pastDueSince?: Date | null;
+}
+```
+
+Add a `delete` method to the `subscription` group (needed by Task 8's
+Step 8 resubscribe-after-cancel fix) — after the existing
+`updateStatus` method, before the group's closing `},`:
+
+```typescript
+      delete: () => prisma.subscription.deleteMany({ where: { tenantId } }),
+```
+
+- [ ] **Step 3: Make `paymentsLive` its own env var, not derived from `NODE_ENV`**
+
+In `platform/api/src/env.ts`, change:
+
+```typescript
+  paymentsLive: process.env.NODE_ENV === 'production',
+```
+
+to:
+
+```typescript
+  // Deliberately NOT derived from NODE_ENV — the deploy step's own
+  // sandbox-first smoke test (see this plan's "After all tasks" section)
+  // needs to run against sandbox PayFast/PayPal endpoints from the
+  // production-deployed service (NODE_ENV=production there), which would
+  // be impossible if this were tied to NODE_ENV. Flip explicitly once the
+  // sandbox pass is confirmed working.
+  paymentsLive: process.env.PAYMENTS_LIVE === 'true',
+```
+
+- [ ] **Step 4: Widen the `PaymentProvider` interface**
+
+In `platform/api/src/billing/payfastProvider.ts`, change:
+
+```typescript
+export interface PaymentProvider {
+  createSubscriptionCheckout(params: {
+    tenantId: string;
+    plan: { id: string; name: string; monthlyPrice: string };
+    trialDays: number;
+    returnUrl: string;
+    webhookUrl: string;
+  }): Promise<{ redirectUrl: string }>;
+  verifyWebhookSignature(req: Request): boolean | Promise<boolean>;
+  parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null;
+}
+
+export interface NormalizedSubscriptionEvent {
+  providerSubscriptionId: string;
+  type: 'activated' | 'payment_succeeded' | 'payment_failed' | 'canceled';
+}
+```
+
+to:
+
+```typescript
+export interface PaymentProvider {
+  createSubscriptionCheckout(params: {
+    tenantId: string;
+    plan: { id: string; name: string; monthlyPrice: string };
+    trialDays: number;
+    returnUrl: string;
+    webhookUrl: string;
+  }): Promise<{ redirectUrl: string; providerSubscriptionId?: string }>;
+  verifyWebhookSignature(req: Request): boolean | Promise<boolean>;
+  parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null;
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+}
+
+export interface NormalizedSubscriptionEvent {
+  providerSubscriptionId: string;
+  // Only PayFast sets this (parsed from m_payment_id, which it always
+  // echoes back) — PayFast has no synchronous "create" API call, so no
+  // providerSubscriptionId is known until the first webhook arrives, and
+  // resolving the tenant by ID alone doesn't work for that first event.
+  // PayPal's checkout DOES return a real subscription id synchronously
+  // (captured at checkout time, Step 6 below), so its events resolve via
+  // providerSubscriptionId alone and this stays undefined.
+  tenantId?: string;
+  type: 'activated' | 'payment_succeeded' | 'payment_failed' | 'canceled';
+}
+```
+
+- [ ] **Step 5: Update the PayFast adapter — `tenantId` parsing, `cancelSubscription`**
+
+In `platform/api/src/billing/payfastProvider.ts`, change `parseWebhookEvent`
+from:
+
+```typescript
+    parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
+      if (!req.body || typeof req.body !== 'object') return null;
+      const body = req.body as Record<string, string>;
+      const providerSubscriptionId = body.token;
+      if (!providerSubscriptionId) return null;
+      if (body.payment_status === 'COMPLETE') {
+        return { providerSubscriptionId, type: 'payment_succeeded' };
+      }
+      if (body.payment_status === 'FAILED') {
+        return { providerSubscriptionId, type: 'payment_failed' };
+      }
+      if (body.payment_status === 'CANCELLED') {
+        return { providerSubscriptionId, type: 'canceled' };
+      }
+      return null;
+    },
+  };
+}
+```
+
+to:
+
+```typescript
+    parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
+      if (!req.body || typeof req.body !== 'object') return null;
+      const body = req.body as Record<string, string>;
+      const providerSubscriptionId = body.token;
+      if (!providerSubscriptionId) return null;
+      const tenantId = body.m_payment_id?.startsWith('sub_') ? body.m_payment_id.slice(4) : undefined;
+      const base = { providerSubscriptionId, tenantId };
+      if (body.payment_status === 'COMPLETE') {
+        return { ...base, type: 'payment_succeeded' };
+      }
+      if (body.payment_status === 'FAILED') {
+        return { ...base, type: 'payment_failed' };
+      }
+      if (body.payment_status === 'CANCELLED') {
+        return { ...base, type: 'canceled' };
+      }
+      return null;
+    },
+
+    async cancelSubscription(providerSubscriptionId: string): Promise<void> {
+      // PayFast's subscription-cancel API — distinct from the checkout
+      // signature scheme above (this one signs merchant-id + timestamp,
+      // not the request body), and it's a single host (api.payfast.co.za)
+      // for both sandbox and live — sandbox mode is selected via the
+      // ?testing=true query param, not a different host the way the
+      // checkout redirect and ITN-validate endpoints are. Header names
+      // and the exact signed-field set are per PayFast's published API
+      // docs as of this plan's writing; like the ITN field names in
+      // Task 2, this needs one live sandbox call to confirm before real
+      // money is involved (see this plan's "After all tasks" section).
+      const timestamp = new Date().toISOString().slice(0, 19);
+      const signature = buildSignature({ 'merchant-id': config.merchantId, timestamp }, config.passphrase);
+      const testingParam = config.live ? '' : '?testing=true';
+      const res = await fetch(`https://api.payfast.co.za/subscriptions/${providerSubscriptionId}/cancel${testingParam}`, {
+        method: 'PUT',
+        headers: {
+          'merchant-id': config.merchantId,
+          version: 'v1',
+          timestamp,
+          signature,
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`PayFast cancelSubscription failed: ${res.status} ${await res.text()}`);
+      }
+    },
+  };
+}
+```
+
+- [ ] **Step 6: Update the PayPal adapter — capture the subscription id, `res.ok` checks, `cancelSubscription`**
+
+In `platform/api/src/billing/paypalProvider.ts`, change `getAccessToken`
+from:
+
+```typescript
+  async function getAccessToken(): Promise<string> {
+    const res = await fetchImpl(`${baseUrl}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const data = await res.json();
+    return data.access_token;
+  }
+```
+
+to:
+
+```typescript
+  async function getAccessToken(): Promise<string> {
+    const res = await fetchImpl(`${baseUrl}/v1/oauth2/token`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+    });
+    if (!res.ok) {
+      throw new Error(`PayPal getAccessToken failed: ${res.status} ${await res.text()}`);
+    }
+    const data = await res.json();
+    return data.access_token;
+  }
+```
+
+Change the `createSubscriptionCheckout` body from (only the parts that
+change — the product/plan creation calls in the middle are unchanged,
+just add the same `if (!res.ok) throw ...` pattern after each, following
+the `getAccessToken` example above, to `productRes`, `planRes`, and
+`subscriptionRes`):
+
+```typescript
+      const subscription = await subscriptionRes.json();
+      const approveLink = subscription.links.find((link: { rel: string; href: string }) => link.rel === 'approve');
+
+      return { redirectUrl: approveLink.href };
+    },
+```
+
+to:
+
+```typescript
+      const subscription = await subscriptionRes.json();
+      const approveLink = subscription.links.find((link: { rel: string; href: string }) => link.rel === 'approve');
+      if (!approveLink) {
+        throw new Error('PayPal subscription response had no approve link');
+      }
+
+      return { redirectUrl: approveLink.href, providerSubscriptionId: subscription.id };
+    },
+```
+
+Add `cancelSubscription` as a new method in the returned object, after
+`parseWebhookEvent`:
+
+```typescript
+    async cancelSubscription(providerSubscriptionId: string): Promise<void> {
+      const accessToken = await getAccessToken();
+      const res = await fetchImpl(`${baseUrl}/v1/billing/subscriptions/${providerSubscriptionId}/cancel`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: 'Canceled by tenant' }),
+      });
+      if (!res.ok && res.status !== 204) {
+        throw new Error(`PayPal cancelSubscription failed: ${res.status} ${await res.text()}`);
+      }
+    },
+```
+
+Also add `if (!res.ok) throw ...` (matching `getAccessToken`'s pattern,
+substituting the right variable name and a descriptive message) right
+after each of the `productRes`, `planRes`, and `subscriptionRes` fetch
+calls earlier in `createSubscriptionCheckout`, before their `.json()`
+call — four total `res.ok` checks added across this file (token,
+product, plan, subscription), matching Important finding I5 from the
+review.
+
+- [ ] **Step 7: Rework `POST /api/billing/checkout` — call the provider first, allow resubscribe after cancel/lapse**
+
+In `platform/api/src/routes/billing.ts`, change:
+
+```typescript
+  const scoped = tenantScope(req.tenantId!);
+  const existing = await scoped.subscription.get();
+  if (existing) {
+    return res.status(400).json({ ok: false, error: 'You already have a subscription.' });
+  }
+
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  await scoped.subscription.create({
+    planId: plan.id,
+    status: 'trialing',
+    paymentProvider: providerName,
+    trialEndsAt,
+  });
+
+  const provider = providers[providerName];
+  const { redirectUrl } = await provider.createSubscriptionCheckout({
+    tenantId: req.tenantId!,
+    plan: { id: plan.id, name: plan.name, monthlyPrice: plan.monthlyPrice.toFixed(2) },
+    trialDays: TRIAL_DAYS,
+    returnUrl: `${env.frontendOrigin}${env.frontendBasePath}/billing/complete`,
+    webhookUrl: `${env.frontendOrigin}/api/webhooks/${providerName}`,
+  });
+
+  res.json({ ok: true, redirectUrl });
+});
+```
+
+to:
+
+```typescript
+  const scoped = tenantScope(req.tenantId!);
+  const existing = await scoped.subscription.get();
+  if (existing && existing.status !== 'canceled' && existing.status !== 'lapsed') {
+    return res.status(400).json({ ok: false, error: 'You already have a subscription.' });
+  }
+
+  // Call the provider FIRST, before writing anything — if this throws
+  // (bad credentials, network issue, provider outage), no orphan
+  // subscription row is left behind blocking every future checkout
+  // attempt via the "already have a subscription" check above.
+  const provider = providers[providerName];
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const { redirectUrl, providerSubscriptionId } = await provider.createSubscriptionCheckout({
+    tenantId: req.tenantId!,
+    plan: { id: plan.id, name: plan.name, monthlyPrice: plan.monthlyPrice.toFixed(2) },
+    trialDays: TRIAL_DAYS,
+    returnUrl: `${env.frontendOrigin}${env.frontendBasePath}/billing/complete`,
+    webhookUrl: `${env.frontendOrigin}/api/webhooks/${providerName}`,
+  });
+
+  if (existing) {
+    // A previously canceled/lapsed subscription is a dead row — this is
+    // a genuinely new subscription attempt, not an update to the old one.
+    await scoped.subscription.delete();
+  }
+  await scoped.subscription.create({
+    planId: plan.id,
+    status: 'trialing',
+    paymentProvider: providerName,
+    trialEndsAt,
+    providerSubscriptionId,
+  });
+
+  res.json({ ok: true, redirectUrl });
+});
+```
+
+- [ ] **Step 8: Make `POST /api/billing/cancel` call the provider**
+
+In `platform/api/src/routes/billing.ts`, change:
+
+```typescript
+billingRouter.post('/api/billing/cancel', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const subscription = await scoped.subscription.get();
+  if (!subscription) {
+    return res.status(400).json({ ok: false, error: 'No subscription to cancel.' });
+  }
+  await scoped.subscription.updateStatus('canceled');
+  res.json({ ok: true });
+});
+```
+
+to:
+
+```typescript
+billingRouter.post('/api/billing/cancel', async (req, res) => {
+  const scoped = tenantScope(req.tenantId!);
+  const subscription = await scoped.subscription.get();
+  if (!subscription) {
+    return res.status(400).json({ ok: false, error: 'No subscription to cancel.' });
+  }
+  if (!subscription.providerSubscriptionId) {
+    // No provider-side subscription was ever confirmed (e.g. a PayFast
+    // trial where the first ITN hasn't landed yet) — nothing to cancel
+    // there, just cancel locally.
+    await scoped.subscription.updateStatus('canceled');
+    return res.json({ ok: true });
+  }
+  const provider = providers[subscription.paymentProvider];
+  await provider.cancelSubscription(subscription.providerSubscriptionId);
+  await scoped.subscription.updateStatus('canceled');
+  res.json({ ok: true });
+});
+```
+
+- [ ] **Step 9: Rework `applyEvent` in `webhooks.ts` to resolve by `tenantId` OR `providerSubscriptionId`, and persist the id on first contact**
+
+In `platform/api/src/routes/webhooks.ts`, change:
+
+```typescript
+async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
+  if (!event.providerSubscriptionId) return;
+
+  const subscription = await prisma.subscription.findFirst({
+    where: { providerSubscriptionId: event.providerSubscriptionId },
+  });
+  if (!subscription) return;
+
+  if (event.type === 'activated' || event.type === 'payment_succeeded') {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'active', currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
+    });
+  } else if (event.type === 'payment_failed') {
+    await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'past_due' } });
+  } else if (event.type === 'canceled') {
+    await prisma.subscription.update({ where: { id: subscription.id }, data: { status: 'canceled' } });
+  }
+}
+```
+
+to:
+
+```typescript
+async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
+  if (!event.providerSubscriptionId) return;
+
+  // PayFast's first-ever event for a subscription can't be found by
+  // providerSubscriptionId (nothing was persisted at checkout time,
+  // since PayFast has no synchronous "create" call) — resolve by the
+  // tenantId the adapter parsed from the payload instead. PayPal always
+  // has providerSubscriptionId persisted already (captured synchronously
+  // at checkout), so event.tenantId stays undefined for it and this
+  // branch is skipped.
+  const subscription = event.tenantId
+    ? await prisma.subscription.findUnique({ where: { tenantId: event.tenantId } })
+    : await prisma.subscription.findFirst({ where: { providerSubscriptionId: event.providerSubscriptionId } });
+  if (!subscription) return;
+
+  // First contact for a PayFast subscription — persist the real token
+  // now that we have it, so subsequent lookups (and a future cancel
+  // call) can use providerSubscriptionId like PayPal's always could.
+  const providerIdPatch = subscription.providerSubscriptionId ? {} : { providerSubscriptionId: event.providerSubscriptionId };
+
+  if (event.type === 'activated' || event.type === 'payment_succeeded') {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: 'active',
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        pastDueSince: null,
+        ...providerIdPatch,
+      },
+    });
+  } else if (event.type === 'payment_failed') {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: 'past_due',
+        // Only stamp pastDueSince on the FIRST failure — a provider's own
+        // automatic retries of a still-failing charge send another
+        // payment_failed event days later, and re-stamping this on every
+        // retry would reset the grace-period clock indefinitely (the
+        // exact bug the final whole-branch review flagged).
+        pastDueSince: subscription.status === 'past_due' ? subscription.pastDueSince : new Date(),
+        ...providerIdPatch,
+      },
+    });
+  } else if (event.type === 'canceled') {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'canceled', ...providerIdPatch },
+    });
+  }
+}
+```
+
+- [ ] **Step 10: Enforce trial expiry and use `pastDueSince` for the grace window, in `requireActiveSubscription`**
+
+In `platform/api/src/middleware/requireActiveSubscription.ts`, change
+the whole file from:
+
+```typescript
+import type { Request, Response, NextFunction } from 'express';
+import { tenantScope } from '../db/scoped.js';
+
+const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+
+export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction) {
+  if (req.method === 'GET') {
+    return next();
+  }
+
+  const scoped = tenantScope(req.tenantId!);
+  const subscription = await scoped.subscription.get();
+
+  if (!subscription) {
+    return res.status(402).json({ ok: false, error: 'Start a subscription to continue.' });
+  }
+
+  if (subscription.status === 'trialing' || subscription.status === 'active') {
+    return next();
+  }
+
+  if (subscription.status === 'past_due') {
+    const withinGrace = Date.now() - subscription.updatedAt.getTime() < GRACE_PERIOD_MS;
+    if (withinGrace) {
+      return next();
+    }
+  }
+
+  return res.status(402).json({ ok: false, error: 'Your subscription has lapsed. Update your payment method to continue.' });
+}
+```
+
+to:
+
+```typescript
+import type { Request, Response, NextFunction } from 'express';
+import { tenantScope } from '../db/scoped.js';
+
+const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
+// A little slack past the exact trialEndsAt instant so a webhook that's
+// running slightly behind (network latency, provider processing delay)
+// doesn't lock out a tenant whose card was actually charged successfully
+// moments before this check runs.
+const TRIAL_EXPIRY_SLACK_MS = 24 * 60 * 60 * 1000;
+
+export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction) {
+  if (req.method === 'GET') {
+    return next();
+  }
+
+  const scoped = tenantScope(req.tenantId!);
+  const subscription = await scoped.subscription.get();
+
+  if (!subscription) {
+    return res.status(402).json({ ok: false, error: 'Start a subscription to continue.' });
+  }
+
+  if (subscription.status === 'active') {
+    return next();
+  }
+
+  if (subscription.status === 'trialing') {
+    const trialExpired = Date.now() - subscription.trialEndsAt.getTime() > TRIAL_EXPIRY_SLACK_MS;
+    if (!trialExpired) {
+      return next();
+    }
+    // The trial ran out with no successful charge ever recorded (no
+    // webhook moved this to 'active') — self-heal the status the same
+    // way expired sessions self-prune elsewhere in this codebase, so a
+    // second request against this tenant doesn't re-derive the same
+    // conclusion from scratch.
+    await scoped.subscription.updateStatus('lapsed').catch(() => {});
+    return res.status(402).json({ ok: false, error: 'Your free trial has ended. Complete payment setup to continue.' });
+  }
+
+  if (subscription.status === 'past_due') {
+    const withinGrace = subscription.pastDueSince
+      ? Date.now() - subscription.pastDueSince.getTime() < GRACE_PERIOD_MS
+      : true; // no pastDueSince recorded yet (shouldn't normally happen) — err permissive, not punitive
+    if (withinGrace) {
+      return next();
+    }
+    await scoped.subscription.updateStatus('lapsed').catch(() => {});
+  }
+
+  return res.status(402).json({ ok: false, error: 'Your subscription has lapsed. Update your payment method to continue.' });
+}
+```
+
+- [ ] **Step 11: Seed the 3 plans inside `resetTestDatabase`, so the test suite is self-sufficient**
+
+In `platform/api/tests/helpers/testApp.ts`, change:
+
+```typescript
+import { prisma } from '../../src/db/client.js';
+
+export async function resetTestDatabase() {
+  await prisma.costingLabourLine.deleteMany();
+  await prisma.costingConsumableLine.deleteMany();
+  await prisma.costingTemplate.deleteMany();
+  await prisma.printerMaintenanceLog.deleteMany();
+  await prisma.printerPreset.deleteMany();
+  await prisma.printer.deleteMany();
+  await prisma.filament.deleteMany();
+  await prisma.labourStep.deleteMany();
+  await prisma.consumable.deleteMany();
+  await prisma.invoiceLineItem.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.quoteLineItem.deleteMany();
+  await prisma.quote.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.tenantSequence.deleteMany();
+  await prisma.subscription.deleteMany();
+  await prisma.tenant.deleteMany();
+  await prisma.platformAdmin.deleteMany();
+}
+```
+
+to:
+
+```typescript
+import { prisma } from '../../src/db/client.js';
+
+const SEED_PLANS = [
+  { name: 'Tier 1', monthlyPrice: '25.00', sortOrder: 1 },
+  { name: 'Tier 2', monthlyPrice: '45.00', sortOrder: 2 },
+  { name: 'Tier 3', monthlyPrice: '70.00', sortOrder: 3 },
+];
+
+export async function resetTestDatabase() {
+  await prisma.costingLabourLine.deleteMany();
+  await prisma.costingConsumableLine.deleteMany();
+  await prisma.costingTemplate.deleteMany();
+  await prisma.printerMaintenanceLog.deleteMany();
+  await prisma.printerPreset.deleteMany();
+  await prisma.printer.deleteMany();
+  await prisma.filament.deleteMany();
+  await prisma.labourStep.deleteMany();
+  await prisma.consumable.deleteMany();
+  await prisma.invoiceLineItem.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.quoteLineItem.deleteMany();
+  await prisma.quote.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.tenantSequence.deleteMany();
+  await prisma.subscription.deleteMany();
+  await prisma.tenant.deleteMany();
+  await prisma.platformAdmin.deleteMany();
+
+  // Ensure the 3 billing plans always exist for tests, without depending
+  // on `prisma db seed` having been run manually against the test DB —
+  // every backend test that touches billing (directly or via a router's
+  // login helper creating a subscription) needs these rows to exist.
+  for (const plan of SEED_PLANS) {
+    const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
+    if (!existing) {
+      await prisma.plan.create({ data: plan });
+    }
+  }
+}
+```
+
+- [ ] **Step 12: Update existing tests for the new interfaces**
+
+The `PaymentProvider` interface now requires `cancelSubscription`, and
+`createSubscriptionCheckout`'s return type gained an optional field —
+every place a test builds a fake/mock provider or asserts on
+`applyEvent`'s behavior needs updating:
+
+In `platform/api/tests/payfastProvider.test.ts` and
+`platform/api/tests/paypalProvider.test.ts`: add a test for
+`cancelSubscription` to each, mocking the relevant HTTP call(s) the same
+way the existing tests in each file already mock `fetch`/`fetchImpl`,
+and asserting the right endpoint/method/headers are used. For PayFast,
+also add a test confirming `parseWebhookEvent` extracts `tenantId`
+correctly from an `m_payment_id` like `sub_abc123` (expect `tenantId:
+'abc123'`), and that it stays `undefined` when `m_payment_id` doesn't
+start with `sub_`.
+
+In `platform/api/tests/webhooks.test.ts`: update the existing
+`makeTrialingTenant` helper's created subscription to NOT set
+`providerSubscriptionId` initially for the PayFast case (since Step 9's
+fix means it's only persisted on first webhook contact) — add a new
+test proving the FIRST webhook for a fresh PayFast subscription (created
+via checkout with no `providerSubscriptionId` yet) resolves via the
+mocked event's `tenantId` field and persists `providerSubscriptionId`
+onto the row. Add a test proving a SECOND `payment_failed` event (the
+subscription already `past_due`) does NOT change `pastDueSince` from
+its first-recorded value (construct this by manually setting
+`pastDueSince` to some earlier date via `prisma.subscription.update`
+before sending the second event, then asserting it's unchanged after).
+
+In `platform/api/tests/requireActiveSubscription.test.ts`: add a test
+for a `trialing` subscription whose `trialEndsAt` is in the past beyond
+the slack window — asserts `402` AND that the subscription's status was
+updated to `'lapsed'` in the DB afterward (self-healing). Update the
+existing `past_due`-grace-window tests to set `pastDueSince` (not just
+rely on `updatedAt`) when constructing their fixtures, since the
+middleware now reads that field.
+
+In `platform/api/tests/billing.test.ts`: add tests for the checkout
+route's new provider-first ordering (mock the provider's
+`createSubscriptionCheckout` to reject, assert NO subscription row was
+created — this is the regression test for the orphan-row bug); add a
+test for cancel calling `provider.cancelSubscription` (mock it, assert
+it was called with the right `providerSubscriptionId`, assert local
+status becomes `canceled`); add a test proving a `canceled` tenant CAN
+call checkout again successfully (the old row's data doesn't linger and
+block it).
+
+- [ ] **Step 13: Run the full suite and typecheck**
+
+Run: `cd platform/api && npm test && npm run typecheck`
+Expected: PASS, including every new test from Step 12.
+
+- [ ] **Step 14: Commit**
+
+```bash
+cd platform/api
+git add prisma/schema.prisma prisma/migrations src/db/scoped.ts src/env.ts src/billing/payfastProvider.ts src/billing/paypalProvider.ts src/routes/billing.ts src/routes/webhooks.ts src/middleware/requireActiveSubscription.ts tests/helpers/testApp.ts tests/payfastProvider.test.ts tests/paypalProvider.test.ts tests/billing.test.ts tests/webhooks.test.ts tests/requireActiveSubscription.test.ts
+git commit -m "Persist provider subscription IDs, call the provider on cancel, enforce trial expiry, fix the grace-period reset bug (closes final-review Critical findings C1-C3, Important I1/I2/I4/I5/I7)"
+```
+
+---
+
+### Task 9: PayFast server-to-server ITN postback validation
+
+**Files:**
+- Modify: `platform/api/src/billing/payfastProvider.ts`
+- Modify: `platform/api/tests/payfastProvider.test.ts`
+
+**Interfaces:**
+- `verifyWebhookSignature` gains a second validation layer — local
+  signature check (unchanged) THEN a server-to-server call back to
+  PayFast confirming the ITN is genuine, per the approved design spec
+  (`docs/superpowers/specs/2026-09-08-billing-subscription-design.md`'s
+  PayFast section) — both must pass.
+
+- [ ] **Step 1: Add the postback validation call**
+
+In `platform/api/src/billing/payfastProvider.ts`, change
+`verifyWebhookSignature` from:
+
+```typescript
+    verifyWebhookSignature(req: Request): boolean {
+      if (!req.body || typeof req.body !== 'object') return false;
+      const body = req.body as Record<string, string>;
+      const { signature, ...rest } = body;
+      if (!signature) return false;
+      return safeCompare(buildSignature(rest, config.passphrase), signature);
+    },
+```
+
+to:
+
+```typescript
+    async verifyWebhookSignature(req: Request): Promise<boolean> {
+      if (!req.body || typeof req.body !== 'object') return false;
+      const body = req.body as Record<string, string>;
+      const { signature, ...rest } = body;
+      if (!signature) return false;
+      if (!safeCompare(buildSignature(rest, config.passphrase), signature)) return false;
+
+      // Defense-in-depth beyond the local signature check: confirm the
+      // ITN is genuine by posting the exact received body back to
+      // PayFast's own validation endpoint. This is required by the
+      // approved design spec — the local signature alone shares its only
+      // secret (the passphrase) with every outbound checkout URL this
+      // adapter builds, so a leaked passphrase would otherwise be
+      // sufficient to forge an activation on its own.
+      const validateUrl = config.live
+        ? 'https://www.payfast.co.za/eng/query/validate'
+        : 'https://sandbox.payfast.co.za/eng/query/validate';
+      const params = new URLSearchParams(body as Record<string, string>).toString();
+      const res = await fetch(validateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+      const text = await res.text();
+      return text.trim() === 'VALID';
+    },
+```
+
+(This changes `verifyWebhookSignature` from synchronous to `async` —
+the shared `PaymentProvider` interface already allows `boolean |
+Promise<boolean>`, and `webhooks.ts`'s `makeWebhookHandler` already
+`await Promise.resolve(...)`s the result, so no caller needs to change.)
+
+- [ ] **Step 2: Update tests for the async signature + postback call**
+
+In `platform/api/tests/payfastProvider.test.ts`, the existing
+`verifyWebhookSignature` tests construct a real signature and call the
+function directly — since it now makes a real `fetch` call to PayFast's
+validate endpoint, these tests need `fetch` mocked (globally, via
+`mock.method(globalThis, 'fetch', ...)`) to return a `VALID`/non-`VALID`
+text response, matching the mocking style already used for `fetchImpl`
+injection in `paypalProvider.test.ts`. Update the existing "accepts a
+correctly-signed payload" test to mock a `VALID` response and confirm
+`true`; add a new test where the local signature is correct but the
+mocked postback response is NOT `VALID` (e.g. `'INVALID'`), confirming
+the function returns `false` — proving the postback layer is genuinely
+consulted, not just present in the code.
+
+- [ ] **Step 3: Run the tests and typecheck**
+
+Run: `cd platform/api && npm test && npm run typecheck`
+Expected: PASS
+
+- [ ] **Step 4: Commit**
+
+```bash
+cd platform/api
+git add src/billing/payfastProvider.ts tests/payfastProvider.test.ts
+git commit -m "Add PayFast server-to-server ITN postback validation (closes final-review Important I6)"
+```
+
+---
+
+### Task 10: Minor hygiene from the final review
+
+**Files:**
+- Modify: `platform/frontend/src/components/AppShell.tsx`
+- Modify: `platform/api/src/billing/paypalProvider.ts`
+- Create: `platform/api/src/billing/types.ts`
+- Modify: `platform/api/src/billing/payfastProvider.ts`
+- Modify: `platform/api/prisma/seed.ts`
+- Modify: `platform/api/tests/paypalProvider.test.ts`
+
+- [ ] **Step 1: Use a real `<Link>` for the "Manage billing" banner link**
+
+In `platform/frontend/src/components/AppShell.tsx`, find the
+past_due/lapsed banner's `<a href="/app/billing">Manage billing</a>` and
+replace it with React Router's `<Link to="/billing">Manage billing</Link>`
+(the `Link` import already exists in this file for the nav items) — the
+hardcoded `/app/` prefix 404s outside production, and a real `<Link>`
+avoids a full page reload.
+
+- [ ] **Step 2: Move the shared provider types out of `payfastProvider.ts`**
+
+Create `platform/api/src/billing/types.ts`:
+
+```typescript
+import type { Request } from 'express';
+
+export interface PaymentProvider {
+  createSubscriptionCheckout(params: {
+    tenantId: string;
+    plan: { id: string; name: string; monthlyPrice: string };
+    trialDays: number;
+    returnUrl: string;
+    webhookUrl: string;
+  }): Promise<{ redirectUrl: string; providerSubscriptionId?: string }>;
+  verifyWebhookSignature(req: Request): boolean | Promise<boolean>;
+  parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null;
+  cancelSubscription(providerSubscriptionId: string): Promise<void>;
+}
+
+export interface NormalizedSubscriptionEvent {
+  providerSubscriptionId: string;
+  tenantId?: string;
+  type: 'activated' | 'payment_succeeded' | 'payment_failed' | 'canceled';
+}
+```
+
+In `platform/api/src/billing/payfastProvider.ts`, remove the
+`PaymentProvider`/`NormalizedSubscriptionEvent` interface declarations
+(now living in `types.ts`) and add `import type { PaymentProvider,
+NormalizedSubscriptionEvent } from './types.js';` near the top.
+
+Update every file that currently imports these two types from
+`./payfastProvider.js` (`paypalProvider.ts`, `routes/billing.ts`,
+`routes/webhooks.ts`, and any test file that imports them) to import
+from `./types.js`/`../billing/types.js` instead.
+
+- [ ] **Step 3: Only set a plan's price on create, not on every seed re-run**
+
+In `platform/api/prisma/seed.ts`, change:
+
+```typescript
+async function main() {
+  for (const plan of PLANS) {
+    const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
+    if (existing) {
+      await prisma.plan.update({ where: { id: existing.id }, data: plan });
+    } else {
+      await prisma.plan.create({ data: plan });
+    }
+  }
+}
+```
+
+to:
+
+```typescript
+async function main() {
+  for (const plan of PLANS) {
+    const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
+    if (!existing) {
+      // Create-only: a manual price edit in the DB (the intended way to
+      // change pricing until the admin center exists — see the design
+      // spec) must survive a re-run of this seed script. Only sortOrder
+      // and active-flag drift would ever need re-syncing here, and
+      // neither of those exists yet, so a bare create-if-missing is
+      // correct — revisit if this script ever needs to reconcile more
+      // than existence.
+      await prisma.plan.create({ data: plan });
+    }
+  }
+}
+```
+
+- [ ] **Step 4: Remove the unused `mock` import**
+
+In `platform/api/tests/paypalProvider.test.ts`, remove `mock` from the
+`import { test, mock } from 'node:test';` line if it's genuinely unused
+(check first — Task 9's changes to `payfastProvider.test.ts` don't
+touch this file, but Task 8's Step 12 additions to THIS file might have
+introduced a real use of `mock` by the time this step runs; only remove
+it if it's still unused after Task 8's changes land).
+
+- [ ] **Step 5: Run the full suite (both packages) and typecheck/build**
+
+Run:
+```bash
+cd platform/api && npm test && npm run typecheck
+cd ../frontend && npm test && npm run build
+```
+Expected: PASS on both.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add platform/frontend/src/components/AppShell.tsx platform/api/src/billing/types.ts platform/api/src/billing/payfastProvider.ts platform/api/src/billing/paypalProvider.ts platform/api/src/routes/billing.ts platform/api/src/routes/webhooks.ts platform/api/prisma/seed.ts platform/api/tests/paypalProvider.test.ts
+git commit -m "Minor hygiene from final review: real Link for billing banner, shared provider types file, create-only seed pricing (closes M1, M4, M8)"
+```
+
+---
+
+## After Tasks 8-10
+
+Same deploy/smoke-test steps as originally planned in "After all tasks"
+above, with one addition to the sandbox smoke test given C1-C3: after
+confirming a sandbox checkout redirects correctly, actually complete
+the provider's sandbox test-buyer flow and confirm (a) the webhook
+lands and `Subscription.status` becomes `active` with
+`providerSubscriptionId` populated, (b) canceling from Barkie's billing
+settings page results in the sandbox provider showing the subscription
+as canceled on ITS side too (not just locally), and (c) a subscription
+manually set to `trialing` with a `trialEndsAt` in the past gets a 402
+on the next mutating request and flips to `lapsed` in the database.
+These three checks are the direct regression tests for C1, C2, and C3
+against real (sandbox) provider behavior, which nothing in the
+automated test suite can fully substitute for.
