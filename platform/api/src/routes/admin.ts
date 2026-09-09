@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../db/client.js';
-import { hashPassword, verifyPassword } from '../auth/password.js';
+import { verifyPassword } from '../auth/password.js';
 import { createSession, destroySession } from '../auth/session.js';
 import { env } from '../env.js';
 import { requirePlatformAdminAuth } from '../middleware/requirePlatformAdminAuth.js';
@@ -147,43 +147,55 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
     </div>`;
 
   const sub = tenant.subscription;
-  let subscriptionSection: string;
-  if (!sub || sub.status === 'canceled' || sub.status === 'lapsed') {
+  // The grant and adjust/cancel forms are independent, non-exclusive
+  // conditions per the design spec — NOT an if/else. A 'canceled' or
+  // 'lapsed' row still exists (has a real row, possibly still a live
+  // providerSubscriptionId at the real payment provider), so it must show
+  // BOTH: adjust/cancel (to recover or clean up the existing row) and grant
+  // (to hand the tenant a fresh comped subscription instead). Only a
+  // genuinely absent subscription shows grant alone.
+  const showGrantForm = !sub || sub.status === 'canceled' || sub.status === 'lapsed';
+  const showAdjustForm = Boolean(sub);
+
+  let subscriptionSection = '<div class="card"><h2>Subscription</h2>';
+  if (sub) {
+    subscriptionSection += `
+      <p>${escapeHtml(sub.plan.name)} &mdash; status <strong>${escapeHtml(sub.status)}</strong>,
+      trial ends ${sub.trialEndsAt.toISOString().slice(0, 10)},
+      period ends ${sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString().slice(0, 10) : '&mdash;'}</p>`;
+  } else {
+    subscriptionSection += '<p>No subscription.</p>';
+  }
+
+  if (showGrantForm) {
     const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
     const planOptions = plans.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (R${p.monthlyPrice.toFixed(2)})</option>`).join('');
-    subscriptionSection = `
-      <div class="card">
-        <h2>Subscription</h2>
-        <p>${sub ? `Currently ${escapeHtml(sub.status)}.` : 'No subscription.'}</p>
-        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/grant">
-          <label>Grant plan<br />
-            <select name="planId" required>${planOptions}</select>
-          </label>
-          <button type="submit">Grant subscription</button>
-        </form>
-      </div>`;
-  } else {
+    subscriptionSection += `
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/grant">
+        <label>Grant plan<br />
+          <select name="planId" required>${planOptions}</select>
+        </label>
+        <button type="submit">Grant subscription</button>
+      </form>`;
+  }
+
+  if (showAdjustForm && sub) {
     const statusOptions = ['trialing', 'active', 'past_due', 'lapsed', 'canceled']
       .map((s) => `<option value="${s}" ${s === sub.status ? 'selected' : ''}>${s}</option>`)
       .join('');
-    subscriptionSection = `
-      <div class="card">
-        <h2>Subscription</h2>
-        <p>${escapeHtml(sub.plan.name)} &mdash; status <strong>${escapeHtml(sub.status)}</strong>,
-        trial ends ${sub.trialEndsAt.toISOString().slice(0, 10)},
-        period ends ${sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString().slice(0, 10) : '&mdash;'}</p>
-        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/adjust">
-          <label>Status<br />
-            <select name="status">${statusOptions}</select>
-          </label>
-          <label>Extend period end to<br /><input type="date" name="currentPeriodEnd" /></label>
-          <button type="submit">Save</button>
-        </form>
-        <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/cancel" style="margin-top:12px">
-          <button type="submit">Cancel subscription</button>
-        </form>
-      </div>`;
+    subscriptionSection += `
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/adjust" style="margin-top:12px">
+        <label>Status<br />
+          <select name="status">${statusOptions}</select>
+        </label>
+        <label>Extend period end to<br /><input type="date" name="currentPeriodEnd" /></label>
+        <button type="submit">Save</button>
+      </form>
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/cancel" style="margin-top:12px">
+        <button type="submit">Cancel subscription</button>
+      </form>`;
   }
+  subscriptionSection += '</div>';
 
   res.type('html').send(adminPage(tenant.businessName, `
     ${editForm}
@@ -215,22 +227,52 @@ adminRouter.post(
     }
 
     const existing = await prisma.subscription.findUnique({ where: { tenantId } });
-    if (existing) {
-      await prisma.subscription.delete({ where: { tenantId } });
-    }
-
     const now = new Date();
-    await prisma.subscription.create({
-      data: {
-        tenantId,
-        planId,
-        status: 'active',
-        paymentProvider: 'manual',
-        providerSubscriptionId: null,
-        trialEndsAt: now,
-        currentPeriodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-      },
-    });
+    const newSubscriptionData = {
+      tenantId,
+      planId,
+      status: 'active',
+      paymentProvider: 'manual',
+      providerSubscriptionId: null,
+      trialEndsAt: now,
+      currentPeriodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+    };
+
+    if (existing) {
+      // Mirrors billing.ts's resubscribe-over-an-existing-row logic
+      // (POST /api/billing/checkout, lines ~115-155) exactly. A 'lapsed'
+      // row can still carry a real providerSubscriptionId — self-heal in
+      // requireActiveSubscription.ts only ever updates local status, never
+      // calls the provider — so deleting it here without telling the
+      // provider to stop would leave the tenant being billed by the real
+      // provider forever, with no way back into the app to cancel it (both
+      // POST /api/billing/cancel and the admin cancel route work by
+      // looking up the row this would have just deleted). Best-effort: a
+      // failure here (e.g. already canceled provider-side) must not block
+      // the admin's grant.
+      if (existing.providerSubscriptionId) {
+        const oldProvider = providers[existing.paymentProvider];
+        await oldProvider.cancelSubscription(existing.providerSubscriptionId).catch((error) => {
+          console.error(
+            `Failed to cancel previous ${existing.paymentProvider} subscription ${existing.providerSubscriptionId} during admin grant:`,
+            error,
+          );
+        });
+      }
+      // The best-effort provider cancel above is an external network call
+      // and stays outside this transaction — its .catch() swallow must not
+      // change. But the delete-then-create pair that replaces the local
+      // row IS purely local DB work, so it's wrapped in a single
+      // transaction: a failure between the two (e.g. the create violating
+      // a constraint on a bad planId) must not leave the tenant with zero
+      // subscription rows and no way back in.
+      await prisma.$transaction([
+        prisma.subscription.deleteMany({ where: { tenantId } }),
+        prisma.subscription.create({ data: newSubscriptionData }),
+      ]);
+    } else {
+      await prisma.subscription.create({ data: newSubscriptionData });
+    }
     res.redirect(`/api/admin/tenants/${tenantId}`);
   },
 );
@@ -253,11 +295,27 @@ adminRouter.post(
     }
 
     const data: { status: string; currentPeriodEnd?: Date; pastDueSince?: Date | null } = { status };
+    let explicitPeriodEnd = false;
     if (typeof currentPeriodEnd === 'string' && currentPeriodEnd.trim() !== '') {
       const parsed = new Date(currentPeriodEnd);
       if (!Number.isNaN(parsed.getTime())) {
         data.currentPeriodEnd = parsed;
+        explicitPeriodEnd = true;
       }
+    }
+
+    // Nothing on the page marks currentPeriodEnd as required, so an admin
+    // recovering a tenant to 'active' can easily leave it untouched. If the
+    // row's currentPeriodEnd is stale (e.g. weeks old from a past_due ->
+    // lapsed history), requireActiveSubscription's self-heal (lines 23-38:
+    // status === 'active' AND currentPeriodEnd more than GRACE_PERIOD_MS in
+    // the past) would flip it straight back to 'lapsed' on the very next
+    // tenant write, silently undoing this fix. Default it forward the same
+    // way the grant route does (now + 30 days) whenever the admin is
+    // setting status to 'active' and did NOT supply an explicit date —
+    // but never override an intentionally-supplied one.
+    if (status === 'active' && !explicitPeriodEnd) {
+      data.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     }
 
     // Mirror webhooks.ts's applyEvent semantics for pastDueSince so an

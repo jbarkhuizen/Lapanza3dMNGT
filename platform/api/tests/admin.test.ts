@@ -1,10 +1,11 @@
-import { test, beforeEach } from 'node:test';
+import { test, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { buildApp } from '../src/app.js';
 import { prisma } from '../src/db/client.js';
 import { hashPassword } from '../src/auth/password.js';
 import { resetTestDatabase } from './helpers/testApp.js';
+import { payfastProvider } from '../src/billing/payfastProvider.js';
 
 const app = buildApp();
 
@@ -230,6 +231,50 @@ test('cancel on a subscription with no providerSubscriptionId cancels locally wi
 
   const cancelled = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
   assert.equal(cancelled.status, 'canceled');
+});
+
+test('cancel on a subscription with a real providerSubscriptionId calls the real provider before marking canceled locally', async () => {
+  // Every other cancel test in this file goes through an admin-granted
+  // subscription, which always has paymentProvider: 'manual' and
+  // providerSubscriptionId: null — so the fail-closed real-provider branch
+  // of POST /tenants/:id/subscription/cancel (the one that calls
+  // provider.cancelSubscription before updating status) has never actually
+  // been exercised. Create a row directly via Prisma with a real provider
+  // and a non-null providerSubscriptionId to exercise it, mocking
+  // payfastProvider.cancelSubscription the same way billing.test.ts mocks
+  // the equivalent tenant-facing cancel route (POST /api/billing/cancel).
+  const { tenant, plan } = await makeTenantAndPlan();
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'sub_test_123',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const cancelCalls: string[] = [];
+  let statusAtCallTime: string | undefined;
+  mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
+    cancelCalls.push(providerSubscriptionId);
+    const current = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    statusAtCallTime = current.status;
+  });
+
+  try {
+    const agent = await loggedInAdminAgent();
+    const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/cancel`);
+    assert.equal(res.status, 302);
+    assert.deepEqual(cancelCalls, ['sub_test_123']);
+    assert.equal(statusAtCallTime, 'active', 'the provider must be called BEFORE the local status flips to canceled');
+
+    const cancelled = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    assert.equal(cancelled.status, 'canceled');
+  } finally {
+    mock.restoreAll();
+  }
 });
 
 test('adjust manages pastDueSince like the webhook flow: stamps on first past_due, does not re-stamp on a second, clears on recovery', async () => {
