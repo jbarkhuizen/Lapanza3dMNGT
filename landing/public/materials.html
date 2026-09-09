@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Materials Guide — Barkie</title>
+  <meta name="description" content="Pick the right 3D printing material for your printer and your part — an interactive selector, a browsable material library, and head-to-head comparisons." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__inner">
+      <span class="wordmark">Barkie</span>
+      <nav aria-label="Primary">
+        <ul class="site-nav">
+          <li><a href="/">Home</a></li>
+          <li><a href="/pricing.html">Pricing</a></li>
+          <li><a href="/materials.html" aria-current="page">Materials Guide</a></li>
+        </ul>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost" href="/app/login">Log in</a>
+        <a class="btn btn--primary" href="/app/register">Start free trial</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-header wrap">
+      <h1>3D printing material selector</h1>
+      <p>Set what the part needs to do and what your printer can handle, and you'll only see materials that will actually work. Prices are South African.</p>
+    </section>
+
+    <div class="view-tabs wrap" role="tablist" aria-label="Materials Guide views">
+      <button class="view-tab" role="tab" id="tab-selector" aria-controls="view-selector" aria-selected="true" type="button">Selector</button>
+      <button class="view-tab" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" type="button">All materials</button>
+      <button class="view-tab" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" type="button">Head to head</button>
+    </div>
+
+    <div class="view-panel wrap" id="view-selector" role="tabpanel" aria-labelledby="tab-selector">
+      <!-- Task 6 renders the Selector view here -->
+    </div>
+
+    <div class="view-panel wrap" id="view-grid" role="tabpanel" aria-labelledby="tab-grid" hidden>
+      <div class="tag-filters" id="tag-filters"></div>
+      <input class="material-search" id="material-search" type="search" placeholder="Search materials…" aria-label="Search materials" />
+      <div class="material-grid" id="material-grid"></div>
+    </div>
+
+    <div class="view-panel wrap" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+      <!-- Task 7 renders the Head to head view here -->
+    </div>
+
+    <p class="materials-disclaimer wrap">
+      Print settings above are typical starting points from manufacturer datasheets and vary by brand and printer — always check your own spool's label. Prices were checked against South African retailers and cover mainstream local stock, not premium import brands, which often run roughly double; anything marked "Estimated" is our best available figure. Prices move with the rand. Whether a printed part is genuinely food-safe depends on the filament brand's additives, the nozzle material, and how the part was post-processed — check with the filament manufacturer before relying on it for food contact.
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>&copy; <span id="year"></span> Barkie</span>
+      <a href="mailto:hello@barkie.co.za">hello@barkie.co.za</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/materials.html">Materials Guide</a>
+    </div>
+  </footer>
+
+  <script type="module" src="/js/materials.js"></script>
+  <script src="/js/shared.js"></script>
+</body>
+</html>

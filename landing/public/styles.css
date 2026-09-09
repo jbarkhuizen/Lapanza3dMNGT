@@ -516,3 +516,173 @@ body {
   padding: 0 24px 24px;
   color: var(--ink-muted);
 }
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 24px 32px;
+  flex-wrap: wrap;
+}
+
+.view-tab {
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 6px;
+  padding: 10px 18px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.view-tab[aria-selected="true"] {
+  background: var(--color-terracotta);
+  color: var(--color-cream);
+}
+
+.view-panel[hidden] {
+  display: none;
+}
+
+.tag-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 24px 8px;
+}
+
+.tag-filter {
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tag-filter[aria-pressed="true"] {
+  background: var(--color-terracotta);
+  color: var(--color-cream);
+}
+
+.material-search {
+  margin: 0 24px 24px;
+  max-width: 320px;
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  padding: 12px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  padding: 0 24px 24px;
+}
+
+.material-card {
+  background: var(--surface-soft);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 6px 6px 0 0 var(--ink);
+}
+
+.material-card h3,
+.material-card h4 {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  margin: 0 0 2px;
+}
+
+.material-card__chemistry {
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin: 0 0 12px;
+}
+
+.material-card__best-for {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.req-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0 0 12px;
+  padding: 0;
+  font-size: 13px;
+}
+
+.req-list li::before {
+  content: '✓ ';
+  color: var(--color-olive);
+}
+
+.req-list li[data-req-state="hard"]::before {
+  content: '✗ ';
+  color: var(--color-terracotta);
+}
+
+.req-list li[data-req-state="soft"]::before {
+  content: '⚠ ';
+  color: var(--color-espresso);
+}
+
+.material-card__meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+
+.material-card__meta dt {
+  color: var(--ink-muted);
+}
+
+.material-card__meta dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.material-card__why,
+.material-card__avoid {
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
+.material-card__why strong {
+  color: var(--color-olive);
+}
+
+.material-card__avoid strong {
+  color: var(--color-terracotta);
+}
+
+.eyebrow-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  margin: 0 0 4px;
+}
+
+.materials-disclaimer {
+  padding: 24px;
+  margin: 0 24px 64px;
+  border-top: 2px solid var(--ink);
+  font-size: 12px;
+  color: var(--ink-muted);
+  max-width: 900px;
+}
