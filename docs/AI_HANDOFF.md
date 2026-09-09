@@ -51,7 +51,7 @@ statuses/priorities deliberately match it: `Bug`/`Feature`/`Enhancement`/
 | **Domain modules** | `Customer`, `Printer` (+ `PrinterPreset`, `PrinterMaintenanceLog`), `Filament`, `LabourStep`, `Consumable`, `CostingTemplate` (+ `CostingLabourLine`, `CostingConsumableLine`), `Quote` (+ `QuoteLineItem`), `Invoice` (+ `InvoiceLineItem`), `TenantSequence` (numbering) all exist and are tenant-isolated. SRS §8.3's non-negotiable core is now fully built, **with PDF/email — the entire Phase 1 platform (per the original phased design spec) is now live end to end.** |
 | **PDF generation** | `platform/api/src/documents/generateDocumentPdf.ts` (pdfkit). No logo embedding (deliberate — `logoUrl` is an external tenant-supplied URL with no upload pipeline behind it; fetching it server-side would be an SSRF surface for no real benefit). No tenant email in the header either (deliberate — `companyProfile.email` is actually `Tenant.email`, the login identifier; printing it on customer-facing documents would leak half a credential pair). VAT is always the hardcoded label `"VAT (15%)"`, never a stored rate. This file went through **4 review cycles** on pagination alone (wrapped line-item descriptions, the totals-block "Balance Due" label wrapping in too narrow a column, and a regression where fixing the totals column narrowed the Qty column enough to reopen the same bug) — if you touch the column-width constants (`LEFT`/`RIGHT`/`COL_QTY`/`COL_UNIT_PRICE`/`COL_TOTAL`) or the manual `doc.y` reassignment in `drawTableRow`/`drawTotalsLine`, re-read that history in `docs/superpowers/plans/2026-09-08-pdf-email.md` first — it's a genuinely easy bug class to reintroduce. Known residual gaps (non-blocking, filed to backlog #55): the Total/line-total column doesn't measure its own wrap risk for the Decimal(12,2) ceiling value; `computeRowContentHeight` only measures the description cell, not all four. |
 | **Real SMTP email sending** | **Live in production as of 2026-09-08.** `platform/api/src/lib/mailer.ts` wraps `nodemailer`'s Gmail transport behind a small, testable `{ isConfigured(), sendMail() }` interface — exported as a plain object (not raw functions) specifically so tests can `mock.method()` its properties, since ESM named function exports are live bindings and can't be monkey-patched. `sendVerificationEmail()` (`src/auth/email.ts`) and `sendDocumentEmail()` (`src/documents/sendDocumentEmail.ts`) both gate purely on whether `SMTP_USER`/`SMTP_APP_PASSWORD` are set (`mailer.isConfigured()`) — **never** an `NODE_ENV` check. Unset in local dev/`.env.test`/CI always (so nothing there ever risks a real send); set only in the VPS's `/opt/barkie/api/.env` (never committed): `SMTP_USER=lapanzaonline@gmail.com`, `SMTP_APP_PASSWORD=<app password>`, `SMTP_FROM_NAME=Barkie`. Sending account is a Gmail App Password (same Google account used elsewhere by this owner), not a dedicated transactional provider — fine at current volume, revisit if that changes. `POST /api/quotes|invoices/:id/send`'s `devMode` response field now reflects reality (`!mailer.isConfigured()`) instead of a hardcoded `true`; **the frontend reads it** (`QuoteDetailPage.tsx`/`InvoiceDetailPage.tsx`) to show the real "Emailed to X." message instead of dev-mode wording once SMTP is configured — if you ever see dev-mode wording in production, check the VPS `.env` first. Document emails set `Reply-To` to the tenant's own account email and include the tenant's business name in the subject/body, so a customer's reply reaches the print shop, not the platform's Gmail. `POST /api/auth/register` wraps its verification-email send in try/catch (tenant row is already committed by that point) — a transient SMTP failure logs server-side and still returns `201`, rather than 500ing and stranding an unverifiable account. **`POST /api/auth/resend-verification` now exists** (backlog item #001, closed 2026-09-08) — mints a fresh token + fresh 24h expiry (invalidating the old one), 404 for an unknown email, 400 if already verified. `LoginPage` shows a "Resend verification email" button when login fails with the existing 403 "not verified" error. Smoke-tested live 2026-09-08: a real quote (with PDF attachment) sent successfully to a real inbox, confirmed received; separately, a tenant's token was deliberately back-dated to simulate a real expired link, confirmed rejected, resent, and the fresh token verified successfully — the actual backlog scenario, proven end to end. |
-| **Billing/subscription** | Phase 2, **code complete, reviewed, merged, and deployed live** as of 2026-09-09 — see "Billing/subscription" section below. **Not yet usable end to end**: PayFast/PayPal credentials are not configured on the VPS, so checkout will error until they're added. `requireActiveSubscription` IS live in production now, gating every write (POST/PATCH/DELETE) on every resource router behind an active subscription — GETs are unaffected. The one existing prod tenant (`lapanzaonline@gmail.com`) has no subscription row and is therefore currently **read-only** in production (deliberate — the owner chose to check out for real once credentials are configured, rather than get a manually-granted subscription). |
+| **Billing/subscription** | Phase 2, **code complete, reviewed, merged, deployed live, and credentials configured** as of 2026-09-09 — see "Billing/subscription" section below. **PayFast is smoke-tested end to end** (checkout → webhook → active, cancel → provider-side cancel, trial-expiry self-heal — all 3 checks passed, one real Critical bug found and fixed live in the process, see below). **PayPal has credentials configured but has NOT been smoke-tested** — do that before trusting it. `requireActiveSubscription` is live in production, gating every write (POST/PATCH/DELETE) on every resource router behind an active subscription — GETs are unaffected. The one existing prod tenant (`lapanzaonline@gmail.com`) has no subscription row and is therefore currently **read-only** in production (deliberate — the owner chose to check out for real rather than get a manually-granted subscription). |
 
 ## Billing/subscription (Phase 2 — deployed 2026-09-09, credentials not yet configured)
 
@@ -110,19 +110,53 @@ guessed.
   `https://barkie.co.za/api/webhooks/paypal` — and copy the ID it assigns)
   before the credential set is complete.
 
-**Sandbox smoke test to run once credentials are configured** (nothing in
-the automated test suite can substitute for this — it's the only way to
-regression-test the webhook-correlation/cancel/trial-expiry fixes against
-a real provider):
+**Sandbox smoke test — run 2026-09-09, PayFast side, all 3 checks passed**
+(nothing in the automated test suite can substitute for this — it's the
+only way to regression-test the webhook-correlation/cancel/trial-expiry
+fixes against a real provider). PayFast sandbox credentials and PayPal
+sandbox credentials (client ID/secret + `PAYPAL_WEBHOOK_ID`) are all
+configured in `/opt/barkie/api/.env` now. The three checks:
 1. Complete a real sandbox checkout end to end and confirm the webhook
    lands — `Subscription.status` becomes `active` and
-   `providerSubscriptionId` gets populated in the DB.
-2. Cancel from Barkie's billing settings page and confirm the sandbox
-   provider shows the subscription as canceled on ITS side too, not just
-   locally in Barkie's DB.
+   `providerSubscriptionId` gets populated in the DB. **Passed for PayFast.**
+   Real finding: PayFast's R0 initial-payment ITN is a genuine `COMPLETE`
+   event, so status jumps straight from nothing to `active` — it never
+   passes through `trialing` for PayFast. (PayPal's checkout was NOT yet
+   smoke-tested — do this before trusting the PayPal path.)
+2. Cancel from Barkie and confirm the sandbox provider shows the
+   subscription as canceled on ITS side too, not just locally.
+   **Found a real Critical bug on the first attempt**: `cancelSubscription`
+   got a genuine `401 Merchant authorization failed` from PayFast's
+   sandbox — the code was signing PayFast's subscription-management API
+   (cancel/pause/update/fetch) with the CHECKOUT signature rule (skip
+   blanks, append passphrase last, no `version` field signed, no
+   timezone offset on the timestamp), which is the wrong rule for that
+   API family. Fixed against PayFast's official `payfast-php-sdk` source
+   (`lib/Auth.php`'s `generateApiSignature`, `lib/Request.php`) — the
+   management API sorts ALL fields alphabetically including the
+   passphrase, signs `merchant-id` + `version` + `timestamp` together,
+   and needs an offset-bearing timestamp (`+0200` for SAST, PHP's
+   `date("Y-m-d\TH:i:sO")`). Fixed, independently reviewed, redeployed,
+   re-tested — cancel now succeeds. **This is exactly the kind of bug this
+   3-check smoke test exists to catch — no amount of code review or unit
+   testing against a mocked `fetch` would have surfaced it**, since the
+   mock never validates the request against PayFast's real backend.
 3. Manually back-date a `trialing` subscription's `trialEndsAt` into the
    past, confirm the next mutating request 402s and the row flips to
-   `lapsed` in the database.
+   `lapsed` in the database. **Passed** (simulated directly in the DB,
+   since a real PayFast checkout never produces a `trialing` row per the
+   finding in check 1 — this check exercises Barkie's own middleware
+   logic, not provider behavior, so DB simulation is the correct test).
+
+**Still to do**: the same 3-check smoke test against PayPal specifically
+(never run) — PayPal's checkout/activation/cancel code paths are
+independently reviewed and unit-tested but have NOT been proven against a
+real PayPal sandbox call the way PayFast's now has, and PayFast's own
+cancel bug shows that class of gap is real. Do this before trusting
+PayPal in production. Also worth deciding: given PayFast's ITN skips
+`trialing` entirely and goes straight to `active`, is the frontend's
+trial-countdown banner ever actually shown to a PayFast tenant, and does
+that matter (see backlog #061's related note)?
 
 **Known non-blocking gaps** (filed to the backlog board as items #060-064):
 PayPal doesn't validate `subscription.id` exists in the checkout response
@@ -161,10 +195,11 @@ re-serialized body instead of raw bytes, `payfastEncode`'s test missing
 usable** — the blocking dependency is real PayFast/PayPal credentials from
 the owner. What remains:
 
-1. **Get PayFast + PayPal credentials from the owner, configure them on the
-   VPS, and run the sandbox smoke test** (see the "Billing/subscription"
-   section above) — this is the one thing standing between "deployed" and
-   "actually onboarding a paying tenant."
+1. **Run the PayPal half of the sandbox smoke test** (see the
+   "Billing/subscription" section above) — PayFast's is done and passed
+   (after fixing a real cancel-signature bug found live); PayPal's
+   checkout/webhook/cancel path has real credentials configured but has
+   never actually been exercised against PayPal's sandbox.
 2. Decide what to do about the one existing prod tenant
    (`lapanzaonline@gmail.com`), which is currently read-only (no
    subscription row) — either have it check out for real once credentials
@@ -189,7 +224,7 @@ the owner. What remains:
 
 **Production infrastructure on the VPS** (`deploy@41.222.36.147`, key `~/.ssh/lapanza_vps_deploy`, passwordless sudo):
 - **PostgreSQL 16** (`dnf install postgresql-server postgresql-contrib`, AlmaLinux 10) — installed fresh 2026-09-07, wasn't there before. `barkie_prod` database, `barkie` role. `listen_addresses` explicitly includes `127.0.0.1` (the VPS's `/etc/hosts` maps `127.0.0.1` to a custom hostname, not `localhost` — plain `listen_addresses = 'localhost'` alone silently only bound the IPv6 loopback `::1`, not `127.0.0.1`, which is why `DATABASE_URL` and this note both use `127.0.0.1` explicitly, not `localhost`). `pg_hba.conf`'s `host` lines for `127.0.0.1/32`/`::1/128` were changed from the AlmaLinux default `ident` to `scram-sha-256` so password auth works over TCP (a backup of the original is at `/var/lib/pgsql/data/pg_hba.conf.bak-<timestamp>`).
-- **`barkie-api.service`** (systemd, mirrors `barkie-landing.service`'s pattern) — `WorkingDirectory=/opt/barkie/api`, `ExecStart=/usr/bin/npx tsx src/server.ts`, port 4200, `.env` on the VPS only (never committed) with `DATABASE_URL` pointing at `barkie_prod`, `FRONTEND_ORIGIN=https://barkie.co.za`, `FRONTEND_BASE_PATH=/app`, `TRUST_PROXY=true`. Port 4200 is NOT directly internet-reachable (confirmed by curling it externally) — only reachable via nginx, same posture as the landing page's 4100. **Billing env vars not yet set** (as of 2026-09-09): `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID`, `PAYMENTS_LIVE` (defaults to sandbox/`false` when unset — set to the literal string `true` only once you're ready to go live with real charges).
+- **`barkie-api.service`** (systemd, mirrors `barkie-landing.service`'s pattern) — `WorkingDirectory=/opt/barkie/api`, `ExecStart=/usr/bin/npx tsx src/server.ts`, port 4200, `.env` on the VPS only (never committed) with `DATABASE_URL` pointing at `barkie_prod`, `FRONTEND_ORIGIN=https://barkie.co.za`, `FRONTEND_BASE_PATH=/app`, `TRUST_PROXY=true`. Port 4200 is NOT directly internet-reachable (confirmed by curling it externally) — only reachable via nginx, same posture as the landing page's 4100. **Billing env vars set as of 2026-09-09** (sandbox credentials): `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` are all populated. `PAYMENTS_LIVE` is still unset (sandbox/`false`) — set it to the literal string `true` only once real (non-sandbox) PayFast/PayPal credentials replace the sandbox ones AND both providers have been smoke-tested.
 - **`/opt/barkie/frontend/`** — the frontend's static `dist/` build, no process of its own; nginx serves it directly.
 - **nginx** (`/etc/nginx/conf.d/barkie.conf`, one server block, shared cert) — `location /` (unchanged, → landing on 4100), `location /api/` (→ `proxy_pass http://127.0.0.1:4200;`, no trailing path on purpose — the API's routes already include the `/api/...` prefix themselves, so the full incoming URI must pass through unchanged), `location /app/` (→ `alias /opt/barkie/frontend/; try_files $uri $uri/ /app/index.html;` for SPA fallback).
 
