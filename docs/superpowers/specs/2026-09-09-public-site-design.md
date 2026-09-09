@@ -1,8 +1,12 @@
 # Public Site (Home / Pricing / Materials Guide) — Design Spec
 
-**Status:** Approved 2026-09-09. Replaces the temporary coming-soon page
-at barkie.co.za with the real public marketing site. Admin center
-(backlog #26) is explicitly a separate, later phase — not in this spec.
+**Status:** Approved 2026-09-09. Materials Guide section revised same day
+— expanded from a static content page to a full interactive selector
+tool after reviewing a competitor's actual materials page, at the user's
+explicit choice, accepting the added risk to the "testable by end of next
+week" deadline. Replaces the temporary coming-soon page at barkie.co.za
+with the real public marketing site. Admin center (backlog #26) is
+explicitly a separate, later phase — not in this spec.
 
 ## Goal
 
@@ -117,23 +121,148 @@ Sections, top to bottom:
 
 ## Page 3: Materials Guide
 
-Public, no login required. Real technical content, covering the common
-FDM/resin materials a 3D-print shop would actually quote:
+**Revised scope** (2026-09-09, after reviewing a competitor's actual
+materials tool — a genuine interactive selector, not a static content
+page). This is now the single biggest piece of this week's build. Public,
+no login required, three views sharing one underlying dataset.
 
-- **PLA** — properties, typical use cases, strengths/limitations.
-- **PETG** — same.
-- **ABS** — same.
-- **ASA** — same.
-- **TPU (flexible)** — same.
-- **Nylon** — same.
-- **Resin (standard/tough/flexible)** — same.
-- A **comparison table** — strength, flexibility, heat resistance, ease
-  of printing, typical cost tier, at a glance across all materials.
+### Data model
 
-Content authored directly in this phase (not sourced from any external
-site) — accuracy matters since real print-shop owners will read it.
-Written as static content on the page (no CMS/DB backing needed for a
-one-time content page).
+A static, hand-curated dataset — `landing/public/materials.json` (or a
+`.ts` module if `landing/` gains a build step; decide at plan time) — not
+DB-backed, matching the original "one-time content, no CMS" decision.
+~24-28 FDM filaments + resin variants. Per material:
+
+```typescript
+interface Material {
+  id: string;                    // "pla", "pla-cf", "petg", ...
+  name: string;                  // "PLA-CF"
+  chemistry: string;             // "Polylactic acid, carbon-filled"
+  bestFor: string;               // "Stiff, matte parts that must hold their shape"
+  printerRequirements: {
+    nozzleTempC: number;
+    bedTempC: number;
+    requiresEnclosure: boolean;
+    requiresHardenedNozzle: boolean;
+    requiresDirectDrive: boolean;
+    recommendsDryFilament: boolean;   // soft requirement — shown as a caution, not a blocker
+    recommendsVentilation: boolean;   // soft requirement
+  };
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  moisture: 'Low' | 'Medium' | 'High';   // hygroscopicity
+  abrasive: boolean;                     // wears brass nozzles — drives the hardened-nozzle requirement
+  priceZarPerKg: { low: number; high: number; estimated: boolean };
+  whyChooseIt: string;
+  avoidWhenText: string;
+  tags: Array<'beginner-friendly' | 'flexible' | 'outdoor-safe' | 'food-safe' | 'engineering'>;
+  capabilities: {                // what the material can actually DO — drives the Selector's requirement matching
+    outdoorUV: boolean;
+    flexibility: boolean;
+    chemicalResistance: boolean;
+    foodContact: boolean;        // see food-safety caveat below
+    easyToPrint: boolean;        // = difficulty === 'Beginner'
+    lowCost: boolean;
+    smoothAppearance: boolean;
+    highDimensionalAccuracy: boolean;
+  };
+}
+```
+
+This one dataset drives all three views below — author it once, correctly,
+rather than duplicating numbers across views.
+
+### View 1: Selector (default view)
+
+1. **Your printer** — a profile picker: printer type (Open-Frame /
+   Enclosed / Industrial, radio), max nozzle temp (240/260/300/350/450°C,
+   radio), max bed temp (60/80/100/110/160°C, radio), 4 toggles: enclosed
+   printer, hardened nozzle, filament dryer, direct-drive extruder.
+   Defaults to the most common hobbyist setup (Open-Frame, 260°C nozzle,
+   100°C bed, all toggles off) so the panel is never empty.
+2. **What does the part need to do?** — 8 tickable capability tiles
+   (outdoor/UV, flexibility, chemical resistance, food contact, easy to
+   print, low cost, smooth appearance, high dimensional accuracy),
+   matching the `capabilities` fields above 1:1. Explicitly "pass or fail,
+   not a preference" — a ticked capability the material lacks drops it,
+   it doesn't just lower its ranking.
+3. **Filtering logic**: a material survives if (a) its
+   `printerRequirements` are all met by the printer profile
+   (`nozzleTempC`/`bedTempC` ≤ the profile's max, and every
+   `requiresX: true` flag has a matching `true` toggle — the two soft
+   `recommendsX` flags never disqualify, they only ever show as a caution
+   on the result card) AND (b) every ticked capability tile is `true` in
+   that material's `capabilities`.
+4. **Ranking among survivors**: prefer lower `difficulty`, then lower
+   `priceZarPerKg.low` — simple, stated in the UI's own copy so it's not
+   a black box, matching this spec's "honest, not vanity" principle.
+   Top result → **Best match** card (full printer-requirement checklist
+   shown as pass/fail against the user's actual profile, `whyChooseIt`,
+   price, a "Find shops printing X" CTA — links to nothing yet, label it
+   **Coming soon**, since Barkie has no shop-directory feature; do NOT
+   copy the competitor's "map of shops" framing, that's their product,
+   not Barkie's). Next 2-3 survivors → **Alternative** cards (name,
+   1-line "how it differs from the best match", printer requirements).
+5. **Not recommended (N)** — collapsed by default, expands to show every
+   dropped material with the specific reason it was dropped (which
+   printer requirement or which ticked capability it failed) — this is
+   what makes the tool trustworthy rather than a black box.
+
+### View 2: All materials (browsable grid)
+
+Every material as a card: name, chemistry, `bestFor`, printer
+requirements (plain values, not matched against any printer — nozzle/bed
+temp shown neutrally; `requiresEnclosure`/`requiresHardenedNozzle`
+shown with a warning mark since most hobbyist printers lack them;
+`recommendsDryFilament`/`recommendsVentilation` shown with a caution
+mark), difficulty, moisture, abrasive, price, `whyChooseIt`,
+`avoidWhenText`. Filter chips derived from `tags` (All materials /
+Beginner-friendly / Flexible / Outdoor-safe / Food-safe / Engineering) +
+a free-text search box (matches name/chemistry/bestFor). Pure
+client-side filtering over the static dataset — no backend query needed.
+
+### View 3: Head to head
+
+Two searchable dropdowns (material name, filtered as you type). Once both
+are picked, render a row-by-row comparison (printer requirements,
+difficulty, moisture, abrasive, price) with a called winner per row where
+one is objectively better, and a one-line closing recommendation. No
+"STL scaler" or shop-directory features — those are the competitor's own
+separate tools, not something Barkie has or was asked to build; don't
+port them in just because they appeared in the reference screenshots.
+
+### Content-accuracy approach (read before authoring the dataset)
+
+This page will be read by real print-shop owners making real purchasing
+and printer-setting decisions — the same "get it right, don't guess"
+discipline this project applied to PayFast's API contracts applies here,
+scaled to content instead of code:
+- Printer-setting fields (nozzle/bed temp, enclosure/hardened-nozzle/
+  ventilation/dry-filament needs) are well-established, stable material
+  science — author these directly from general knowledge, they don't
+  need per-item web verification.
+- `priceZarPerKg` is the one field genuinely likely to be wrong if
+  guessed — South African filament pricing is retailer- and
+  rand-exchange-rate-dependent. Mark every price range's `estimated`
+  flag honestly; for commodity materials (PLA/PETG/ABS/TPU/Nylon) a
+  couple of real South African retailer prices should be spot-checked
+  before publishing, the same way this project now spot-checks
+  financially-consequential external facts rather than assuming them.
+  For exotic/rare materials (PEEK, PPS-CF) an honest "Estimated" label
+  is fine — a competitor's own page does the same for anything it
+  couldn't find listed locally.
+- **Food-safety claims need an explicit caveat, not a flat "yes"** —
+  whether a printed part is genuinely food-safe depends on the filament
+  brand's additives, the nozzle material (brass leaches lead unless it's
+  food-safe-rated), and post-processing (a printed surface is porous and
+  can harbor bacteria regardless of the raw material's rating). The
+  `foodContact` capability flag and any food-safe tag/copy must carry a
+  visible disclaimer to that effect — the reference site's own footer
+  text is a reasonable model for how directly to state this.
+- Add a footer disclaimer paragraph (Barkie's own wording, not copied):
+  print settings are typical starting points and vary by brand/printer,
+  so check the spool's own label; prices move with the rand and were
+  checked at build time, not live; food-safety depends on brand/nozzle/
+  post-processing, always confirm with the filament manufacturer.
 
 ## API additions (`platform/api`)
 
