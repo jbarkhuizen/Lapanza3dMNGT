@@ -50,22 +50,33 @@ test('createSubscriptionCheckout builds a redirect URL with a correctly-signed q
   const pairs: string[] = [];
   for (const [key, value] of params.entries()) {
     if (key === 'signature' || value === '') continue;
-    pairs.push(`${key}=${encodeURIComponent(value).replace(/%20/g, '+')}`);
+    pairs.push(`${key}=${phpUrlencode(value)}`);
   }
   const expected = crypto
     .createHash('md5')
-    .update(`${pairs.join('&')}&passphrase=${encodeURIComponent(config.passphrase).replace(/%20/g, '+')}`)
+    .update(`${pairs.join('&')}&passphrase=${phpUrlencode(config.passphrase)}`)
     .digest('hex');
   assert.equal(params.get('signature'), expected);
 });
 
+// Reference encoder matching PHP's urlencode() — what PayFast's own
+// signing/verification side actually runs values through. It differs from
+// plain encodeURIComponent in two ways: spaces become "+" (not "%20"), and
+// `! ~ * ' ( )` are percent-encoded (encodeURIComponent leaves those six
+// unescaped). Using plain encodeURIComponent here would make this reference
+// implementation share the same bug as the code under test, so it wouldn't
+// discriminate a real mismatch.
+function phpUrlencode(value: string): string {
+  return encodeURIComponent(value)
+    .replace(/%20/g, '+')
+    .replace(/[!'()*~]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
 function signPayload(payload: Record<string, string>): string {
-  const pairs = Object.entries(payload).map(
-    ([key, value]) => `${key}=${encodeURIComponent(value).replace(/%20/g, '+')}`,
-  );
+  const pairs = Object.entries(payload).map(([key, value]) => `${key}=${phpUrlencode(value)}`);
   return crypto
     .createHash('md5')
-    .update(`${pairs.join('&')}&passphrase=${encodeURIComponent(config.passphrase).replace(/%20/g, '+')}`)
+    .update(`${pairs.join('&')}&passphrase=${phpUrlencode(config.passphrase)}`)
     .digest('hex');
 }
 
@@ -118,6 +129,36 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload that carries
   // Recompute the signature per PayFast's real ITN rule: every field
   // except "signature", IN THE ORDER RECEIVED, with blank values INCLUDED
   // (not skipped) — i.e. exactly what signPayload() below already does.
+  const signature = signPayload(payload);
+
+  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'VALID' }) as Response);
+
+  try {
+    const req = { body: { ...payload, signature } } as unknown as Request;
+    assert.equal(await provider.verifyWebhookSignature(req), true);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('verifyWebhookSignature accepts an ITN payload whose fields contain characters PHP\'s urlencode() escapes but encodeURIComponent does not (! ~ * \' ( ))', async () => {
+  const provider = createPayfastProvider(config);
+  // name_first/name_last and item_name/item_description are free text
+  // PayFast passes straight through from what the payer or merchant
+  // entered — an apostrophe in a surname, or parentheses/asterisks in a
+  // description, are entirely realistic. PHP's urlencode() percent-encodes
+  // all of "! ~ * ' ( )", but plain encodeURIComponent leaves them as-is;
+  // if payfastEncode ever regresses to plain encodeURIComponent, this
+  // payload's hash diverges from PayFast's real one and this assertion
+  // fails.
+  const payload: Record<string, string> = {
+    m_payment_id: 'sub_t1',
+    pf_payment_id: '12345',
+    payment_status: 'COMPLETE',
+    amount_gross: '25.00',
+    name_first: "O'Brien",
+    item_name: 'Barkie subscription (Pro)*',
+  };
   const signature = signPayload(payload);
 
   mock.method(globalThis, 'fetch', async () => ({ text: async () => 'VALID' }) as Response);

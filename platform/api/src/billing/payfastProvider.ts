@@ -10,11 +10,22 @@ interface PayfastConfig {
   live: boolean;
 }
 
-// PayFast requires values URL-encoded with spaces as "+" (application/x-www-form-urlencoded
-// style), not "%20" — encodeURIComponent alone produces "%20", so this
-// normalizes it the way PayFast's own signature examples do.
+// PayFast's signing/verification side is PHP, and it builds the
+// string-to-hash with PHP's urlencode() (see PayFast's own signature
+// examples and the payfast-php-sdk's Auth::generateSignature /
+// Notification::dataToString, both of which run every value through
+// urlencode()). encodeURIComponent is NOT equivalent to PHP's urlencode:
+// both encode spaces differently (%20 vs "+", handled by the .replace
+// below), but encodeURIComponent additionally leaves `! ~ * ' ( )`
+// unescaped while urlencode percent-encodes all six. Any field containing
+// one of those characters — an item description with "()", a payer's name
+// like "O'Brien" — would otherwise hash to a different string on our side
+// than on PayFast's, silently breaking both outbound checkout signing and
+// inbound ITN verification.
 function payfastEncode(value: string): string {
-  return encodeURIComponent(value).replace(/%20/g, '+');
+  return encodeURIComponent(value)
+    .replace(/%20/g, '+')
+    .replace(/[!'()*~]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 }
 
 function buildSignature(fields: Record<string, string>, passphrase: string): string {
