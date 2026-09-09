@@ -1,4 +1,5 @@
 import { MATERIALS } from './materials-data.js';
+import { filterAndRank } from './materials-selector.js';
 
 window.__MATERIALS__ = MATERIALS;
 
@@ -180,3 +181,272 @@ document.getElementById('material-search').addEventListener('input', (event) => 
 
 renderTagFilters();
 renderGrid();
+
+// ---- Selector view state ----
+const CAPABILITY_TILES = [
+  { key: 'outdoorUV', label: 'Outdoor / UV exposure', desc: 'Lives in the sun, rain or wind.' },
+  { key: 'flexibility', label: 'Flexibility', desc: 'Must bend, stretch, grip or seal.' },
+  { key: 'chemicalResistance', label: 'Chemical resistance', desc: 'Contact with fuels, solvents or cleaning agents.' },
+  { key: 'foodContact', label: 'Food contact', desc: 'Touches food or drink (read the caveat below).' },
+  { key: 'easyToPrint', label: 'Easy to print', desc: 'Want it to print first-time without tuning.' },
+  { key: 'lowCost', label: 'Low cost', desc: 'Price per kilogram matters to the job.' },
+  { key: 'smoothAppearance', label: 'Smooth appearance', desc: 'The part is seen, not hidden inside something.' },
+  { key: 'highDimensionalAccuracy', label: 'High dimensional accuracy', desc: 'Press fits, threads, mating parts.' },
+];
+
+const printerProfile = {
+  maxNozzleTempC: 260,
+  maxBedTempC: 100,
+  hasEnclosure: false,
+  hasHardenedNozzle: false,
+  hasDirectDrive: true,
+};
+const requiredCapabilities = {};
+
+function renderLabeledStrong(container, text) {
+  const p = document.createElement('p');
+  const strong = document.createElement('strong');
+  strong.textContent = text;
+  p.appendChild(strong);
+  container.appendChild(p);
+  return p;
+}
+
+function renderPrinterPanel() {
+  const panel = document.getElementById('selector-printer-panel');
+  panel.textContent = '';
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'Your printer';
+  panel.appendChild(heading);
+
+  const intro = document.createElement('p');
+  intro.textContent = 'Start here — this rules more materials out than the requirements do.';
+  panel.appendChild(intro);
+
+  renderLabeledStrong(panel, 'Maximum nozzle temperature');
+  const nozzleRow = document.createElement('div');
+  nozzleRow.className = 'chip-row';
+  for (const temp of [240, 260, 300, 350, 450]) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = `${temp} °C`;
+    chip.setAttribute('aria-pressed', String(printerProfile.maxNozzleTempC === temp));
+    chip.addEventListener('click', () => {
+      printerProfile.maxNozzleTempC = temp;
+      renderPrinterPanel();
+      renderSelectorResults();
+    });
+    nozzleRow.appendChild(chip);
+  }
+  panel.appendChild(nozzleRow);
+
+  renderLabeledStrong(panel, 'Maximum bed temperature');
+  const bedRow = document.createElement('div');
+  bedRow.className = 'chip-row';
+  for (const temp of [60, 80, 100, 110, 160]) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = `${temp} °C`;
+    chip.setAttribute('aria-pressed', String(printerProfile.maxBedTempC === temp));
+    chip.addEventListener('click', () => {
+      printerProfile.maxBedTempC = temp;
+      renderPrinterPanel();
+      renderSelectorResults();
+    });
+    bedRow.appendChild(chip);
+  }
+  panel.appendChild(bedRow);
+
+  const toggles = [
+    { key: 'hasEnclosure', label: 'Enclosed printer', desc: 'A closed chamber that holds heat in.' },
+    { key: 'hasHardenedNozzle', label: 'Hardened nozzle', desc: 'Steel or ruby. Needed for anything filled.' },
+    { key: 'hasDirectDrive', label: 'Direct-drive extruder', desc: 'Motor on the hotend rather than a bowden tube.' },
+  ];
+  for (const toggle of toggles) {
+    const row = document.createElement('label');
+    row.className = 'toggle-row';
+
+    const textWrap = document.createElement('span');
+    textWrap.className = 'toggle-row__text';
+    const labelStrong = document.createElement('strong');
+    labelStrong.textContent = toggle.label;
+    const descSpan = document.createElement('span');
+    descSpan.className = 'toggle-row__desc';
+    descSpan.textContent = toggle.desc;
+    textWrap.appendChild(labelStrong);
+    textWrap.appendChild(descSpan);
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = printerProfile[toggle.key];
+    input.addEventListener('change', () => {
+      printerProfile[toggle.key] = input.checked;
+      renderSelectorResults();
+    });
+
+    row.appendChild(textWrap);
+    row.appendChild(input);
+    panel.appendChild(row);
+  }
+}
+
+function renderCapabilityPanel() {
+  const panel = document.getElementById('selector-capability-panel');
+  panel.textContent = '';
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'What does the part need to do?';
+  panel.appendChild(heading);
+
+  const intro = document.createElement('p');
+  intro.textContent = 'Tick everything that applies. Each one is pass or fail, not a preference — anything that can’t meet it gets dropped rather than shown further down the list.';
+  panel.appendChild(intro);
+
+  const grid = document.createElement('div');
+  grid.className = 'capability-grid';
+  for (const tile of CAPABILITY_TILES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'capability-tile';
+    btn.setAttribute('aria-pressed', String(!!requiredCapabilities[tile.key]));
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'capability-tile__label';
+    labelSpan.textContent = tile.label;
+    const descSpan = document.createElement('span');
+    descSpan.className = 'capability-tile__desc';
+    descSpan.textContent = tile.desc;
+    btn.appendChild(labelSpan);
+    btn.appendChild(descSpan);
+
+    btn.addEventListener('click', () => {
+      requiredCapabilities[tile.key] = !requiredCapabilities[tile.key];
+      renderCapabilityPanel();
+      renderSelectorResults();
+    });
+    grid.appendChild(btn);
+  }
+  panel.appendChild(grid);
+}
+
+function renderSelectorResults() {
+  const resultsEl = document.getElementById('selector-results');
+  resultsEl.textContent = '';
+
+  const { matches, dropped } = filterAndRank(window.__MATERIALS__, printerProfile, requiredCapabilities);
+
+  if (matches.length === 0) {
+    const empty = document.createElement('p');
+    empty.textContent = 'Nothing matches this combination — loosen a printer requirement or untick a capability.';
+    resultsEl.appendChild(empty);
+  } else {
+    const best = matches[0];
+    const bestCard = document.createElement('div');
+    bestCard.className = 'best-match-card';
+
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'eyebrow-label';
+    eyebrow.textContent = 'Best match';
+    bestCard.appendChild(eyebrow);
+
+    const nameHeading = document.createElement('h3');
+    nameHeading.className = 'best-match-card__name';
+    nameHeading.textContent = best.name;
+    bestCard.appendChild(nameHeading);
+
+    const whyPara = document.createElement('p');
+    whyPara.className = 'best-match-card__why';
+    whyPara.textContent = best.whyChooseIt;
+    bestCard.appendChild(whyPara);
+
+    const pricePara = document.createElement('p');
+    pricePara.className = 'best-match-card__price';
+    pricePara.textContent = `R${best.priceZarPerKg.low}–R${best.priceZarPerKg.high}/kg${best.priceZarPerKg.estimated ? ' (est.)' : ''}`;
+    bestCard.appendChild(pricePara);
+
+    bestCard.appendChild(renderReqList(best));
+
+    const findShopsBtn = document.createElement('button');
+    findShopsBtn.type = 'button';
+    findShopsBtn.className = 'btn btn--ghost';
+    findShopsBtn.disabled = true;
+    findShopsBtn.textContent = 'Find shops printing this — Coming soon';
+    bestCard.appendChild(findShopsBtn);
+
+    resultsEl.appendChild(bestCard);
+
+    if (matches.length > 1) {
+      const altGrid = document.createElement('div');
+      altGrid.className = 'alternatives-grid';
+      for (const alt of matches.slice(1, 4)) {
+        const altCard = document.createElement('div');
+        altCard.className = 'material-card';
+
+        const altEyebrow = document.createElement('p');
+        altEyebrow.className = 'eyebrow-label';
+        altEyebrow.textContent = 'Alternative';
+        altCard.appendChild(altEyebrow);
+
+        const altName = document.createElement('h4');
+        altName.className = 'alternative-name';
+        altName.textContent = alt.name;
+        altCard.appendChild(altName);
+
+        altCard.appendChild(renderReqList(alt));
+        altGrid.appendChild(altCard);
+      }
+      resultsEl.appendChild(altGrid);
+    }
+  }
+
+  const notRecommended = document.createElement('details');
+  notRecommended.className = 'not-recommended';
+  const summary = document.createElement('summary');
+  summary.textContent = `Not recommended (${dropped.length})`;
+  notRecommended.appendChild(summary);
+
+  const list = document.createElement('ul');
+  for (const { material, reason } of dropped) {
+    const li = document.createElement('li');
+    const nameStrong = document.createElement('strong');
+    nameStrong.textContent = material.name;
+    li.appendChild(nameStrong);
+    li.appendChild(document.createTextNode(` — ${reason}`));
+    list.appendChild(li);
+  }
+  notRecommended.appendChild(list);
+  resultsEl.appendChild(notRecommended);
+}
+
+function initSelectorView() {
+  const container = document.getElementById('view-selector');
+  container.textContent = '';
+
+  const grid = document.createElement('div');
+  grid.className = 'selector-grid';
+
+  const printerPanel = document.createElement('div');
+  printerPanel.className = 'selector-panel';
+  printerPanel.id = 'selector-printer-panel';
+  grid.appendChild(printerPanel);
+
+  const capabilityPanel = document.createElement('div');
+  capabilityPanel.className = 'selector-panel';
+  capabilityPanel.id = 'selector-capability-panel';
+  grid.appendChild(capabilityPanel);
+
+  container.appendChild(grid);
+
+  const results = document.createElement('div');
+  results.id = 'selector-results';
+  container.appendChild(results);
+
+  renderPrinterPanel();
+  renderCapabilityPanel();
+  renderSelectorResults();
+}
+
+initSelectorView();

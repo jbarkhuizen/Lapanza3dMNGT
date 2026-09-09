@@ -6,7 +6,8 @@
   "description": "Temporary holding page for barkie.co.za",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "node --test tests/**/*.test.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
