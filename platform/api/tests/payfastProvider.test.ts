@@ -54,7 +54,17 @@ test('createSubscriptionCheckout builds a redirect URL with a correctly-signed q
   assert.equal(params.get('signature'), expected);
 });
 
-test('verifyWebhookSignature accepts a correctly-signed ITN payload and rejects a tampered one', () => {
+function signPayload(payload: Record<string, string>): string {
+  const pairs = Object.entries(payload).map(
+    ([key, value]) => `${key}=${encodeURIComponent(value).replace(/%20/g, '+')}`,
+  );
+  return crypto
+    .createHash('md5')
+    .update(`${pairs.join('&')}&passphrase=${encodeURIComponent(config.passphrase).replace(/%20/g, '+')}`)
+    .digest('hex');
+}
+
+test('verifyWebhookSignature accepts a correctly-signed ITN payload confirmed VALID by PayFast, and rejects a tampered one', async () => {
   const provider = createPayfastProvider(config);
   const payload: Record<string, string> = {
     m_payment_id: 'sub_t1',
@@ -62,32 +72,61 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload and rejects 
     payment_status: 'COMPLETE',
     amount_gross: '25.00',
   };
-  const pairs = Object.entries(payload).map(
-    ([key, value]) => `${key}=${encodeURIComponent(value).replace(/%20/g, '+')}`,
-  );
-  const signature = crypto
-    .createHash('md5')
-    .update(`${pairs.join('&')}&passphrase=${encodeURIComponent(config.passphrase).replace(/%20/g, '+')}`)
-    .digest('hex');
+  const signature = signPayload(payload);
 
-  const goodReq = { body: { ...payload, signature } } as unknown as Request;
-  assert.equal(provider.verifyWebhookSignature(goodReq), true);
+  const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
+  mock.method(globalThis, 'fetch', async (url: string, init: Record<string, unknown>) => {
+    calls.push({ url, init });
+    return { text: async () => 'VALID' } as Response;
+  });
 
-  const tamperedReq = { body: { ...payload, amount_gross: '999.00', signature } } as unknown as Request;
-  assert.equal(provider.verifyWebhookSignature(tamperedReq), false);
+  try {
+    const goodReq = { body: { ...payload, signature } } as unknown as Request;
+    assert.equal(await provider.verifyWebhookSignature(goodReq), true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://sandbox.payfast.co.za/eng/query/validate');
+
+    const tamperedReq = { body: { ...payload, amount_gross: '999.00', signature } } as unknown as Request;
+    assert.equal(await provider.verifyWebhookSignature(tamperedReq), false);
+    // A tampered signature fails the local check and must never reach the
+    // postback endpoint — still just the one call from the good request.
+    assert.equal(calls.length, 1);
+  } finally {
+    mock.restoreAll();
+  }
 });
 
-test('verifyWebhookSignature returns false instead of throwing on a missing or malformed body', () => {
+test('verifyWebhookSignature returns false when the local signature is correct but PayFast\'s postback validation does not confirm VALID', async () => {
+  const provider = createPayfastProvider(config);
+  const payload: Record<string, string> = {
+    m_payment_id: 'sub_t1',
+    pf_payment_id: '12345',
+    payment_status: 'COMPLETE',
+    amount_gross: '25.00',
+  };
+  const signature = signPayload(payload);
+
+  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'INVALID' }) as Response);
+
+  try {
+    const req = { body: { ...payload, signature } } as unknown as Request;
+    assert.equal(await provider.verifyWebhookSignature(req), false);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('verifyWebhookSignature returns false instead of throwing on a missing or malformed body', async () => {
   const provider = createPayfastProvider(config);
 
   const missingBodyReq = { body: undefined } as unknown as Request;
-  assert.equal(provider.verifyWebhookSignature(missingBodyReq), false);
+  assert.equal(await provider.verifyWebhookSignature(missingBodyReq), false);
 
   const nullBodyReq = { body: null } as unknown as Request;
-  assert.equal(provider.verifyWebhookSignature(nullBodyReq), false);
+  assert.equal(await provider.verifyWebhookSignature(nullBodyReq), false);
 
   const stringBodyReq = { body: 'not-an-object' } as unknown as Request;
-  assert.equal(provider.verifyWebhookSignature(stringBodyReq), false);
+  assert.equal(await provider.verifyWebhookSignature(stringBodyReq), false);
 });
 
 test('parseWebhookEvent normalizes a COMPLETE payment_status to "payment_succeeded"', () => {

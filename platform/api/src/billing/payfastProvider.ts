@@ -96,12 +96,31 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
       return { redirectUrl: `${baseUrl}/eng/process?${query}` };
     },
 
-    verifyWebhookSignature(req: Request): boolean {
+    async verifyWebhookSignature(req: Request): Promise<boolean> {
       if (!req.body || typeof req.body !== 'object') return false;
       const body = req.body as Record<string, string>;
       const { signature, ...rest } = body;
       if (!signature) return false;
-      return safeCompare(buildSignature(rest, config.passphrase), signature);
+      if (!safeCompare(buildSignature(rest, config.passphrase), signature)) return false;
+
+      // Defense-in-depth beyond the local signature check: confirm the
+      // ITN is genuine by posting the exact received body back to
+      // PayFast's own validation endpoint. This is required by the
+      // approved design spec — the local signature alone shares its only
+      // secret (the passphrase) with every outbound checkout URL this
+      // adapter builds, so a leaked passphrase would otherwise be
+      // sufficient to forge an activation on its own.
+      const validateUrl = config.live
+        ? 'https://www.payfast.co.za/eng/query/validate'
+        : 'https://sandbox.payfast.co.za/eng/query/validate';
+      const params = new URLSearchParams(body as Record<string, string>).toString();
+      const res = await fetch(validateUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+      const text = await res.text();
+      return text.trim() === 'VALID';
     },
 
     parseWebhookEvent(req: Request): NormalizedSubscriptionEvent | null {
