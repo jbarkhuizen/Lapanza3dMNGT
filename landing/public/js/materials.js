@@ -455,8 +455,12 @@ initSelectorView();
 const compareState = { first: null, second: null };
 
 const COMPARE_ROWS = [
-  { label: 'Nozzle temperature', get: (m) => m.printerRequirements.nozzleTempC, unit: '°C', lowerIsBetter: false },
-  { label: 'Bed temperature', get: (m) => m.printerRequirements.bedTempC, unit: '°C', lowerIsBetter: false },
+  // A higher required nozzle/bed temperature isn't an objective "win" — it's
+  // a hardware-capability fact, same category as abrasiveness below. Both
+  // stay informational-only (no winner highlighted) rather than misleadingly
+  // rewarding whichever material happens to need more heat.
+  { label: 'Nozzle temperature', get: (m) => m.printerRequirements.nozzleTempC, unit: '°C', lowerIsBetter: null },
+  { label: 'Bed temperature', get: (m) => m.printerRequirements.bedTempC, unit: '°C', lowerIsBetter: null },
   { label: 'Difficulty', get: (m) => m.difficulty, rank: () => ({ Beginner: 0, Intermediate: 1, Advanced: 2 }), lowerIsBetter: true },
   { label: 'Moisture sensitivity', get: (m) => m.moisture, rank: () => ({ Low: 0, Medium: 1, High: 2 }), lowerIsBetter: true },
   { label: 'Abrasive to nozzles', get: (m) => (m.abrasive ? 'Yes' : 'No'), lowerIsBetter: null },
