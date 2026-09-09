@@ -475,7 +475,7 @@ export const MATERIALS = [
     tags: [],
     capabilities: {
       outdoorUV: false, flexibility: false, chemicalResistance: false, foodContact: false,
-      easyToPrint: true, lowCost: true, smoothAppearance: true, highDimensionalAccuracy: false,
+      easyToPrint: false, lowCost: true, smoothAppearance: true, highDimensionalAccuracy: false,
     },
   },
   {
@@ -496,7 +496,7 @@ export const MATERIALS = [
     avoidWhenText: 'Your bed adhesion setup can’t handle it — PP detaches from nearly every standard bed surface without PP-specific adhesive or an enclosure.',
     tags: ['engineering'],
     capabilities: {
-      outdoorUV: false, flexibility: true, chemicalResistance: true, foodContact: false,
+      outdoorUV: false, flexibility: false, chemicalResistance: true, foodContact: false,
       easyToPrint: false, lowCost: false, smoothAppearance: false, highDimensionalAccuracy: false,
     },
   },
