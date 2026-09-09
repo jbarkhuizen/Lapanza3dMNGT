@@ -120,4 +120,15 @@ test('an unticked capability never filters anything out', () => {
   const peekDrop = result.dropped.find((d) => d.material.id === 'peek-like');
   assert.ok(peekDrop);
   assert.match(peekDrop.reason, /nozzle|enclosure|hardened/i);
+
+  // The actual point of this test: PLA_LIKE and OUTDOOR_ADVANCED both have
+  // capabilities.outdoorUV/flexibility explicitly set to false — an
+  // implementation bug that treated an explicit `false` tick the same as
+  // "required" would wrongly drop them here, even though neither
+  // capability was actually ticked (both requested values are false).
+  assert.equal(result.matches.length, 2);
+  assert.deepEqual(
+    result.matches.map((m) => m.id).sort(),
+    ['outdoor-advanced', 'pla-like'],
+  );
 });
