@@ -26,15 +26,17 @@ export async function resetTestDatabase() {
   await prisma.subscription.deleteMany();
   await prisma.tenant.deleteMany();
   await prisma.platformAdmin.deleteMany();
+  // Plan used to be find-if-missing rather than deleted and recreated
+  // like every other table above — meaning any test anywhere in the
+  // suite that creates its own ad-hoc plan (for a Subscription fixture)
+  // leaves it sitting there for the rest of the run, since nothing ever
+  // wipes it. Two independent exact-plan-count assertions (in
+  // billing.test.ts and public.test.ts) intermittently failed against
+  // that accumulation depending on file execution order before this was
+  // fixed to actually reset like the rest of this function's name promises.
+  await prisma.plan.deleteMany();
 
-  // Ensure the 3 billing plans always exist for tests, without depending
-  // on `prisma db seed` having been run manually against the test DB —
-  // every backend test that touches billing (directly or via a router's
-  // login helper creating a subscription) needs these rows to exist.
   for (const plan of SEED_PLANS) {
-    const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
-    if (!existing) {
-      await prisma.plan.create({ data: plan });
-    }
+    await prisma.plan.create({ data: plan });
   }
 }

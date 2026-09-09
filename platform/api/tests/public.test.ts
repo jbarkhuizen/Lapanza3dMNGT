@@ -9,6 +9,15 @@ const app = buildApp();
 
 beforeEach(resetTestDatabase);
 
+// resetTestDatabase() seeds Tier 1/Tier 2/Tier 3 by find-if-missing, not
+// delete-and-recreate — Plan is never wiped between tests anywhere in this
+// suite, so any test that creates its own ad-hoc plan leaves it sitting
+// there for every other test that runs afterward, in whatever order the
+// suite happens to execute in. Tests below reuse the already-seeded Tier 1
+// plan for a Subscription's required planId rather than creating a new
+// one, and the one test that genuinely needs a throwaway plan cleans it up
+// itself.
+
 test('GET /api/public/stats returns real counts with no auth', async () => {
   const tenant1 = await prisma.tenant.create({
     data: {
@@ -29,9 +38,7 @@ test('GET /api/public/stats returns real counts with no auth', async () => {
     },
   });
 
-  const plan = await prisma.plan.create({
-    data: { name: 'Basic', monthlyPrice: '25.00', sortOrder: 1 },
-  });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
 
   await prisma.subscription.create({
     data: {
@@ -62,9 +69,7 @@ test('GET /api/public/stats does not count lapsed/canceled subscriptions as acti
       emailVerifiedAt: new Date(),
     },
   });
-  const plan = await prisma.plan.create({
-    data: { name: 'Basic', monthlyPrice: '25.00', sortOrder: 1 },
-  });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
   await prisma.subscription.create({
     data: {
       tenantId: tenant.id,
@@ -82,18 +87,39 @@ test('GET /api/public/stats does not count lapsed/canceled subscriptions as acti
 });
 
 test('GET /api/public/plans returns active plans sorted, with no auth', async () => {
-  await prisma.plan.create({ data: { name: 'Tier 2', monthlyPrice: '45.00', sortOrder: 2 } });
-  await prisma.plan.create({ data: { name: 'Basic', monthlyPrice: '25.00', sortOrder: 1 } });
-  await prisma.plan.create({ data: { name: 'Retired', monthlyPrice: '10.00', sortOrder: 3, active: false } });
+  const retired = await prisma.plan.create({
+    data: { name: 'Retired', monthlyPrice: '10.00', sortOrder: 0, active: false },
+  });
 
-  const res = await request(app).get('/api/public/plans');
+  try {
+    const res = await request(app).get('/api/public/plans');
 
-  assert.equal(res.status, 200);
-  assert.equal(res.body.ok, true);
-  assert.equal(res.body.plans.length, 2);
-  assert.equal(res.body.plans[0].name, 'Tier 1');
-  assert.equal(res.body.plans[0].monthlyPrice, '25.00');
-  assert.equal(res.body.plans[1].name, 'Tier 2');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    type PublicPlan = { name: string; monthlyPrice: string; sortOrder: number };
+    const plans = res.body.plans as PublicPlan[];
+
+    assert.ok(!plans.some((p) => p.name === 'Retired'), 'inactive plans must be excluded');
+
+    const tier1 = plans.find((p) => p.name === 'Tier 1');
+    const tier2 = plans.find((p) => p.name === 'Tier 2');
+    const tier3 = plans.find((p) => p.name === 'Tier 3');
+    assert.ok(tier1 && tier2 && tier3, 'all 3 seeded plans should be present');
+    assert.equal(tier1!.monthlyPrice, '25.00');
+    assert.equal(tier2!.monthlyPrice, '45.00');
+    assert.equal(tier3!.monthlyPrice, '70.00');
+
+    const tier1Index = plans.findIndex((p) => p.name === 'Tier 1');
+    const tier2Index = plans.findIndex((p) => p.name === 'Tier 2');
+    const tier3Index = plans.findIndex((p) => p.name === 'Tier 3');
+    assert.ok(tier1Index < tier2Index && tier2Index < tier3Index, 'plans must be sorted by sortOrder');
+  } finally {
+    // Plan is never wiped between tests (see the note at the top of this
+    // file) — clean up the throwaway row so it doesn't leak into whatever
+    // test runs next.
+    await prisma.plan.delete({ where: { id: retired.id } });
+  }
 });
 
 test('public routes are reachable with no session cookie at all (no 401)', async () => {
