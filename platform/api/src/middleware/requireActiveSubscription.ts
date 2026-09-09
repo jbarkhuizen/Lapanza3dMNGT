@@ -21,7 +21,26 @@ export async function requireActiveSubscription(req: Request, res: Response, nex
   }
 
   if (subscription.status === 'active') {
-    return next();
+    // Backstop against a missed/lost cancellation or expiry webhook (this
+    // protects BOTH providers, not just one) — e.g. PayPal's
+    // BILLING.SUBSCRIPTION.ACTIVATED fires at trial-approval time, before
+    // any real charge, and maps straight to 'active'; if the eventual
+    // cancel webhook never arrives, nothing would otherwise re-check
+    // whether this subscription is still actually current. Only self-heals
+    // once currentPeriodEnd is BOTH set and well past the grace window — a
+    // freshly-activated row with no currentPeriodEnd yet, or one still
+    // within its current period, passes through untouched, same as before.
+    const periodExpired = subscription.currentPeriodEnd
+      ? Date.now() - subscription.currentPeriodEnd.getTime() > GRACE_PERIOD_MS
+      : false;
+    if (!periodExpired) {
+      return next();
+    }
+    // No webhook has confirmed this subscription is still current for well
+    // over the grace window — self-heal the same way the trialing/past_due
+    // branches below do, so a second request doesn't re-derive the same
+    // conclusion from scratch.
+    await scoped.subscription.updateStatus('lapsed').catch(() => {});
   }
 
   if (subscription.status === 'trialing') {

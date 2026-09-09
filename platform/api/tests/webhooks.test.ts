@@ -203,6 +203,48 @@ test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (subsc
   }
 });
 
+test('a webhook posted to the PayFast endpoint whose resolved row actually belongs to paypal is dropped (does not mutate it)', async () => {
+  // Contrived cross-provider mismatch — e.g. an id collision, or an event
+  // simply misrouted to the wrong endpoint. The resolved row belongs to
+  // paypal, but this event arrived on the payfast endpoint.
+  const tenant = await prisma.tenant.create({
+    data: { businessName: 'Acme Prints', contactName: 'Jane Doe', email: 'provider-mismatch@acmeprints.co.za', passwordHash: 'x' },
+  });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const subscription = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'trialing',
+      paymentProvider: 'paypal',
+      providerSubscriptionId: 'PP-SUB-MISMATCH',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'PP-SUB-MISMATCH',
+    type: 'payment_succeeded' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'PP-SUB-MISMATCH', payment_status: 'COMPLETE' });
+    // Webhooks always 200 to acknowledge receipt, even when the event is
+    // dropped — see makeWebhookHandler.
+    assert.equal(res.status, 200);
+
+    const after = await prisma.subscription.findUniqueOrThrow({ where: { id: subscription.id } });
+    assert.equal(after.status, 'trialing', 'a cross-provider event must not mutate a row belonging to a different provider');
+    assert.equal(after.providerSubscriptionId, 'PP-SUB-MISMATCH', 'the row must be completely untouched');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a stale event carrying a DIFFERENT providerSubscriptionId than the one already persisted is ignored (does not mutate the row)', async () => {
   const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   // Simulate the tenant having already had its first ITN land: the row

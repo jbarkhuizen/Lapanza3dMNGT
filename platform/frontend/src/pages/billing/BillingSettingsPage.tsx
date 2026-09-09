@@ -37,7 +37,7 @@ export function BillingSettingsPage() {
           Cancel subscription
         </button>
       )}
-      {(subscription.status === 'canceled' || subscription.status === 'lapsed') && (
+      {(subscription.status === 'canceled' || subscription.status === 'lapsed' || subscription.status === 'past_due') && (
         <Link
           to="/plans"
           className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"

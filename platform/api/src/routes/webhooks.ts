@@ -8,7 +8,7 @@ export const webhooksRouter = Router();
 
 const GRACE_PERIOD_DAYS = 7;
 
-async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
+async function applyEvent(event: NormalizedSubscriptionEvent, providerName: string): Promise<void> {
   if (!event.providerSubscriptionId) return;
 
   // PayFast's first-ever event for a subscription can't be found by
@@ -28,6 +28,13 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
     ? await prisma.subscription.findUnique({ where: { id: event.subscriptionId } })
     : await prisma.subscription.findFirst({ where: { providerSubscriptionId: event.providerSubscriptionId } });
   if (!subscription) return;
+
+  // Defense in depth: the resolved row must actually belong to the
+  // provider whose endpoint received this event — e.g. an id collision
+  // across providers, or an event simply misrouted to the wrong endpoint.
+  // Drop it before any binding/mutation rather than trusting the lookup
+  // alone.
+  if (subscription.paymentProvider !== providerName) return;
 
   // Defense in depth for the rare case PayFast ever reissued a token for
   // the same subscription: if the row is already bound to a
@@ -99,7 +106,7 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
   }
 }
 
-function makeWebhookHandler(provider: PaymentProvider) {
+function makeWebhookHandler(provider: PaymentProvider, providerName: string) {
   return async (req: import('express').Request, res: import('express').Response) => {
     const validSignature = await Promise.resolve(provider.verifyWebhookSignature(req));
     if (!validSignature) {
@@ -107,11 +114,13 @@ function makeWebhookHandler(provider: PaymentProvider) {
     }
     const event = provider.parseWebhookEvent(req);
     if (event) {
-      await applyEvent(event);
+      await applyEvent(event, providerName);
     }
     res.json({ ok: true });
   };
 }
 
-webhooksRouter.post('/api/webhooks/payfast', makeWebhookHandler(payfastProvider));
-webhooksRouter.post('/api/webhooks/paypal', makeWebhookHandler(paypalProvider));
+// These names match the lowercase provider keys used throughout billing.ts's
+// `providers` record and persisted verbatim as Subscription.paymentProvider.
+webhooksRouter.post('/api/webhooks/payfast', makeWebhookHandler(payfastProvider, 'payfast'));
+webhooksRouter.post('/api/webhooks/paypal', makeWebhookHandler(paypalProvider, 'paypal'));

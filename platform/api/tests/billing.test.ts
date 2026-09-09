@@ -357,6 +357,52 @@ test('POST /api/billing/cancel is fail-closed: if provider.cancelSubscription re
   }
 });
 
+test('a past_due tenant CAN call checkout again and succeed, attempting to cancel the old provider subscription first', async () => {
+  const app = buildApp();
+  const email = 'past-due-resub@acmeprints.co.za';
+  const agent = await loggedInAgent(app, email);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email } });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  // A past_due subscription normally DOES have a real providerSubscriptionId
+  // bound — that's how it got to past_due in the first place: a genuine
+  // payment_failed webhook, which only ever fires after first contact.
+  const oldSubscription = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'past_due',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'pf-sub-past-due',
+      pastDueSince: new Date(),
+      trialEndsAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const cancelCalls: string[] = [];
+  mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
+    cancelCalls.push(providerSubscriptionId);
+  });
+  mock.method(payfastProvider, 'createSubscriptionCheckout', async () => ({
+    redirectUrl: 'https://sandbox.payfast.co.za/eng/process?resub=1',
+  }));
+
+  try {
+    const res = await agent.post('/api/billing/checkout').send({ planId: plan.id, provider: 'payfast' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      cancelCalls,
+      ['pf-sub-past-due'],
+      'the failing provider subscription must be canceled before the row is deleted and replaced, or the tenant ends up paying for two',
+    );
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'trialing');
+    assert.notEqual(subscription?.id, oldSubscription.id, 'the old past_due row should have been replaced, not updated');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a canceled tenant CAN call checkout again and succeed (the old row does not block a resubscribe)', async () => {
   const app = buildApp();
   const email = 'resub@acmeprints.co.za';

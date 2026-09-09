@@ -27,6 +27,11 @@ test('createSubscriptionCheckout builds a redirect URL with a correctly-signed q
   const params = url.searchParams;
   assert.equal(params.get('merchant_id'), '10000100');
   assert.equal(params.get('subscription_type'), '1');
+  // The initial charge at checkout must be R0 (a genuine free trial) —
+  // distinct from `recurring_amount`, the real ongoing price that only
+  // applies from `billing_date`. See PayFast's "Can a subscription be set
+  // up with an initial zero amount 'payment'?" support article.
+  assert.equal(params.get('amount'), '0.00');
   assert.equal(params.get('recurring_amount'), '25.00');
   assert.equal(params.get('frequency'), '3');
   // m_payment_id must be built from the pre-generated subscription row id,
@@ -91,6 +96,35 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload confirmed VA
     // A tampered signature fails the local check and must never reach the
     // postback endpoint — still just the one call from the good request.
     assert.equal(calls.length, 1);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('verifyWebhookSignature accepts a correctly-signed ITN payload that carries blank-valued fields (PayFast\'s real ITN rule keeps blanks, unlike the checkout signature which skips them)', async () => {
+  const provider = createPayfastProvider(config);
+  // Modeled on the official payfast-php-sdk's own NotificationTest.php
+  // fixture, which is a genuinely-valid ITN carrying several blank
+  // custom_str*/item_description fields.
+  const payload: Record<string, string> = {
+    m_payment_id: 'sub_t1',
+    pf_payment_id: '12345',
+    payment_status: 'COMPLETE',
+    item_description: '',
+    amount_gross: '25.00',
+    custom_str1: '',
+    custom_str2: '',
+  };
+  // Recompute the signature per PayFast's real ITN rule: every field
+  // except "signature", IN THE ORDER RECEIVED, with blank values INCLUDED
+  // (not skipped) — i.e. exactly what signPayload() below already does.
+  const signature = signPayload(payload);
+
+  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'VALID' }) as Response);
+
+  try {
+    const req = { body: { ...payload, signature } } as unknown as Request;
+    assert.equal(await provider.verifyWebhookSignature(req), true);
   } finally {
     mock.restoreAll();
   }

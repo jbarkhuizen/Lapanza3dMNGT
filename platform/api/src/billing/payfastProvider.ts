@@ -27,6 +27,31 @@ function buildSignature(fields: Record<string, string>, passphrase: string): str
   return crypto.createHash('md5').update(paramString).digest('hex');
 }
 
+// ITN (webhook/notify) signature validation uses a DIFFERENT rule from the
+// outbound checkout signature above — confirmed against the official
+// payfast-php-sdk (github.com/Payfast/payfast-php-sdk), specifically
+// Notification::dataToString / Notification::pfValidSignature in
+// lib/PaymentIntegrations/Notification.php: every field PayFast posted is
+// included, IN THE ORDER RECEIVED, except "signature" itself — and
+// critically, BLANK values are KEPT, not skipped (unlike the checkout
+// signature's `if (!empty($value))` skip in Auth::generateSignature). The
+// SDK's own test fixture (tests/PaymentIntegrations/NotificationTest.php)
+// is a genuinely-valid ITN payload carrying nine blank
+// custom_str*/custom_int*/item_description fields, still signed correctly
+// with them included. No value trimming happens on this path either — the
+// SDK only applies stripslashes() (a PHP magic-quotes artifact with no
+// meaningful Node equivalent, since this body never passed through PHP's
+// magic quotes in the first place).
+function buildItnSignature(fields: Record<string, string>, passphrase: string): string {
+  const pairs: string[] = [];
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'signature' || value === undefined) continue;
+    pairs.push(`${key}=${payfastEncode(value)}`);
+  }
+  const paramString = `${pairs.join('&')}&passphrase=${payfastEncode(passphrase)}`;
+  return crypto.createHash('md5').update(paramString).digest('hex');
+}
+
 // Constant-time comparison so a webhook signature check (which gates whether
 // a subscription gets marked active) doesn't leak byte-by-byte timing
 // information to an attacker probing the endpoint.
@@ -50,7 +75,19 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
         cancel_url: returnUrl,
         notify_url: webhookUrl,
         m_payment_id: `sub_${subscriptionId}`,
-        amount: plan.monthlyPrice,
+        // `amount` is what PayFast charges IMMEDIATELY at checkout for a
+        // subscription_type=1 request — separate from `recurring_amount`
+        // below, which only starts from `billing_date`. This tenant is on a
+        // genuine free trial, so the initial charge must be zero; confirmed
+        // via PayFast's own support article "Can a subscription be set up
+        // with an initial zero amount 'payment'?" (support.payfast.help) —
+        // a subscription CAN be created with a zero-amount initial payment
+        // (used only to tokenize the card), while `recurring_amount` carries
+        // the real price from then on and can never itself be zero. '0.00'
+        // matches the same two-decimal formatting PayFast's own SDK applies
+        // to every amount field (see CustomIntegration::createFormFields),
+        // so it isn't treated as a blank/omitted value by either side.
+        amount: '0.00',
         item_name: `Barkie subscription — ${plan.name}`,
         subscription_type: '1',
         billing_date: billingDate.toISOString().slice(0, 10),
@@ -68,7 +105,7 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
       const body = req.body as Record<string, string>;
       const { signature, ...rest } = body;
       if (!signature) return false;
-      if (!safeCompare(buildSignature(rest, config.passphrase), signature)) return false;
+      if (!safeCompare(buildItnSignature(rest, config.passphrase), signature)) return false;
 
       // Defense-in-depth beyond the local signature check: confirm the
       // ITN is genuine by posting the exact received body back to

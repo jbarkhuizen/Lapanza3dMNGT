@@ -24,7 +24,7 @@ function buildTestApp(tenantId: string) {
 
 async function makeTenantWithSubscriptionStatus(
   status: string,
-  extra?: { trialEndsAt?: Date; pastDueSince?: Date | null },
+  extra?: { trialEndsAt?: Date; pastDueSince?: Date | null; currentPeriodEnd?: Date },
 ) {
   const tenant = await prisma.tenant.create({
     data: { businessName: 'Acme Prints', contactName: 'Jane Doe', email: `${status}-${Date.now()}-${Math.random()}@acmeprints.co.za`, passwordHash: 'x' },
@@ -35,6 +35,7 @@ async function makeTenantWithSubscriptionStatus(
     status,
     paymentProvider: 'payfast',
     trialEndsAt: extra?.trialEndsAt ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    currentPeriodEnd: extra?.currentPeriodEnd,
   });
   if (extra?.pastDueSince !== undefined) {
     await prisma.subscription.update({ where: { tenantId: tenant.id }, data: { pastDueSince: extra.pastDueSince } });
@@ -53,6 +54,39 @@ test('an active subscription is not blocked from POST', async () => {
   const tenant = await makeTenantWithSubscriptionStatus('active');
   const app = buildTestApp(tenant.id);
   const res = await request(app).post('/thing');
+  assert.equal(res.status, 200);
+});
+
+test('an active subscription whose currentPeriodEnd is still in the future is not blocked from POST', async () => {
+  const tenant = await makeTenantWithSubscriptionStatus('active', {
+    currentPeriodEnd: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000),
+  });
+  const app = buildTestApp(tenant.id);
+  const res = await request(app).post('/thing');
+  assert.equal(res.status, 200);
+});
+
+test('an active subscription whose currentPeriodEnd is far in the past is blocked from POST with 402, self-heals to lapsed', async () => {
+  const tenant = await makeTenantWithSubscriptionStatus('active', {
+    // Well past GRACE_PERIOD_MS (7 days) — a missed cancel/expiry webhook,
+    // e.g. PayPal's ACTIVATED-before-any-charge mapping with nothing ever
+    // re-confirming the subscription is still current.
+    currentPeriodEnd: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+  });
+  const app = buildTestApp(tenant.id);
+  const res = await request(app).post('/thing');
+  assert.equal(res.status, 402);
+
+  const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+  assert.equal(subscription?.status, 'lapsed');
+});
+
+test('an active subscription whose currentPeriodEnd is far in the past is NOT blocked from GET', async () => {
+  const tenant = await makeTenantWithSubscriptionStatus('active', {
+    currentPeriodEnd: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+  });
+  const app = buildTestApp(tenant.id);
+  const res = await request(app).get('/thing');
   assert.equal(res.status, 200);
 });
 

@@ -28,6 +28,12 @@ const lapsedSubscription = {
   status: 'lapsed',
 };
 
+const pastDueSubscription = {
+  ...activeSubscription,
+  id: 's4',
+  status: 'past_due',
+};
+
 function renderPage() {
   const queryClient = createTestQueryClient();
   return render(
@@ -70,6 +76,15 @@ describe('BillingSettingsPage', () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, subscription: lapsedSubscription });
     renderPage();
     await waitFor(() => expect(screen.getByText(/lapsed/i)).toBeInTheDocument());
+    const link = screen.getByRole('link', { name: /choose a plan/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/plans');
+  });
+
+  it('renders a link to /plans when the subscription is past_due', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, subscription: pastDueSubscription });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/payment past due/i)).toBeInTheDocument());
     const link = screen.getByRole('link', { name: /choose a plan/i });
     expect(link).toBeInTheDocument();
     expect(link).toHaveAttribute('href', '/plans');

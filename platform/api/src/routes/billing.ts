@@ -79,7 +79,15 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
 
   const scoped = tenantScope(req.tenantId!);
   const existing = await scoped.subscription.get();
-  if (existing && existing.status !== 'canceled' && existing.status !== 'lapsed') {
+  // 'past_due' must also be allowed to resubscribe — the banner and 402
+  // error copy both promise a way to fix a failing subscription, and this
+  // is the only path that exists to do it (there's no separate
+  // payment-method-update flow). A past_due row normally still has a real
+  // providerSubscriptionId bound (that's how it got to past_due in the
+  // first place — a genuine payment_failed webhook, which only ever fires
+  // after first contact), so the best-effort cancel-before-delete logic
+  // below still applies to it exactly like it does for canceled/lapsed.
+  if (existing && existing.status !== 'canceled' && existing.status !== 'lapsed' && existing.status !== 'past_due') {
     return res.status(400).json({ ok: false, error: 'You already have a subscription.' });
   }
 
@@ -124,16 +132,37 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
         );
       });
     }
-    await scoped.subscription.delete();
+    // The best-effort provider cancel above is an external network call and
+    // stays outside this transaction — its .catch() swallow must not
+    // change. But the delete-then-create pair that replaces the local row
+    // IS purely local DB work, so it's wrapped in a single transaction: a
+    // failure between the two (e.g. the create violating a constraint)
+    // must not leave the tenant with zero subscription rows, permanently
+    // stuck on the "no subscription" 402 with no way back in.
+    await prisma.$transaction([
+      prisma.subscription.deleteMany({ where: { tenantId: req.tenantId! } }),
+      prisma.subscription.create({
+        data: {
+          id: subscriptionId,
+          tenantId: req.tenantId!,
+          planId: plan.id,
+          status: 'trialing',
+          paymentProvider: providerName,
+          trialEndsAt,
+          providerSubscriptionId,
+        },
+      }),
+    ]);
+  } else {
+    await scoped.subscription.create({
+      id: subscriptionId,
+      planId: plan.id,
+      status: 'trialing',
+      paymentProvider: providerName,
+      trialEndsAt,
+      providerSubscriptionId,
+    });
   }
-  await scoped.subscription.create({
-    id: subscriptionId,
-    planId: plan.id,
-    status: 'trialing',
-    paymentProvider: providerName,
-    trialEndsAt,
-    providerSubscriptionId,
-  });
 
   res.json({ ok: true, redirectUrl });
 });
