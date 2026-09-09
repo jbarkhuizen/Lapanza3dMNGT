@@ -14,33 +14,37 @@ async function applyEvent(event: NormalizedSubscriptionEvent): Promise<void> {
   // PayFast's first-ever event for a subscription can't be found by
   // providerSubscriptionId (nothing was persisted at checkout time,
   // since PayFast has no synchronous "create" call) — resolve by the
-  // tenantId the adapter parsed from the payload instead. PayPal always
-  // has providerSubscriptionId persisted already (captured synchronously
-  // at checkout), so event.tenantId stays undefined for it and this
+  // Subscription row's own id instead, which checkout pre-generated and
+  // embedded in m_payment_id before ever calling PayFast (see
+  // billing.ts). Because a resubscribe deletes the old row and creates an
+  // entirely new one with a fresh id, a stale/delayed ITN carrying the
+  // old id simply finds no row — findUnique returns null and the event is
+  // silently dropped below. This resolves the whole stale-event problem
+  // structurally, with no heuristic needed. PayPal always has
+  // providerSubscriptionId persisted already (captured synchronously at
+  // checkout), so event.subscriptionId stays undefined for it and this
   // branch is skipped.
-  const subscription = event.tenantId
-    ? await prisma.subscription.findUnique({ where: { tenantId: event.tenantId } })
+  const subscription = event.subscriptionId
+    ? await prisma.subscription.findUnique({ where: { id: event.subscriptionId } })
     : await prisma.subscription.findFirst({ where: { providerSubscriptionId: event.providerSubscriptionId } });
   if (!subscription) return;
 
-  // Guard against a stale/delayed event mutating the wrong subscription
-  // after a tenant has resubscribed (old row deleted, new row created).
-  // PayFast ITNs ALWAYS carry tenantId (not just on first contact), so
-  // every PayFast event for this tenant resolves to whatever row
-  // currently exists — including a brand-new one that has nothing to do
-  // with the event's own (dead) provider subscription. If the row is
-  // already bound to a providerSubscriptionId and this event names a
-  // different one, it belongs to a subscription that no longer exists
-  // locally — ignore it rather than corrupting the current one.
+  // Defense in depth for the rare case PayFast ever reissued a token for
+  // the same subscription: if the row is already bound to a
+  // providerSubscriptionId and this event names a different one, ignore
+  // it rather than overwriting the currently-bound token.
   if (subscription.providerSubscriptionId && subscription.providerSubscriptionId !== event.providerSubscriptionId) {
     return;
   }
-  // First contact (no providerSubscriptionId bound yet) should only ever
-  // bind onto a row that's still alive — a canceled/lapsed row receiving
-  // its first-ever providerSubscriptionId binding means a stale ITN
-  // (e.g. that dead subscription's own final COMPLETE/CANCELLED
-  // notification) is trying to resurrect it after the tenant moved on.
-  if (!subscription.providerSubscriptionId && subscription.status !== 'trialing' && subscription.status !== 'active') {
+  // First contact (no providerSubscriptionId bound yet) binding onto this
+  // row is now scoped to this exact row's id, not shared across every
+  // resubscribe attempt a tenant has ever made — so a legitimately-paid
+  // subscription that self-healed to 'lapsed' while awaiting its first
+  // ITN (e.g. the charge clears a little after the grace-period slack
+  // runs out) must still be able to bind and reactivate. Only a
+  // 'canceled' row — a deliberate tenant action — refuses to be
+  // resurrected by a late positive event.
+  if (!subscription.providerSubscriptionId && subscription.status === 'canceled') {
     return;
   }
 

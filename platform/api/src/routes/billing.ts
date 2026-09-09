@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { tenantScope } from '../db/scoped.js';
@@ -87,9 +88,16 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
   // subscription row is left behind blocking every future checkout
   // attempt via the "already have a subscription" check above.
   const provider = providers[providerName];
+  // Generated BEFORE the provider call and used as the row's own primary
+  // key below, so the id PayFast echoes back on every ITN (via
+  // m_payment_id) names this exact row, not the tenant. A resubscribe
+  // deletes this row and creates a new one with a fresh id, so a stale ITN
+  // carrying this id can never resolve to whatever row exists later.
+  const subscriptionId = randomUUID();
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
   const { redirectUrl, providerSubscriptionId } = await provider.createSubscriptionCheckout({
     tenantId: req.tenantId!,
+    subscriptionId,
     plan: { id: plan.id, name: plan.name, monthlyPrice: plan.monthlyPrice.toFixed(2) },
     trialDays: TRIAL_DAYS,
     returnUrl: `${env.frontendOrigin}${env.frontendBasePath}/billing/complete`,
@@ -119,6 +127,7 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
     await scoped.subscription.delete();
   }
   await scoped.subscription.create({
+    id: subscriptionId,
     planId: plan.id,
     status: 'trialing',
     paymentProvider: providerName,

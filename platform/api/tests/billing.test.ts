@@ -165,11 +165,20 @@ test('full end-to-end resubscribe: checkout -> cancel -> checkout again, all thr
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email } });
   const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
 
-  mock.method(payfastProvider, 'createSubscriptionCheckout', async () => ({
-    redirectUrl: 'https://sandbox.payfast.co.za/eng/process?first=1',
-    // PayFast never returns a providerSubscriptionId synchronously, so
-    // leave it unset here just like the real adapter does.
-  }));
+  // Capture the subscriptionId billing.ts generates and passes into the
+  // provider call on each checkout — this is the id that's supposed to end
+  // up as the created row's own primary key (asserted below), proving the
+  // round trip: the id embedded in PayFast's m_payment_id is the exact id
+  // the row gets, not something derived from tenantId.
+  const checkoutCalls: Array<{ subscriptionId: string }> = [];
+  mock.method(payfastProvider, 'createSubscriptionCheckout', async (params: { subscriptionId: string }) => {
+    checkoutCalls.push({ subscriptionId: params.subscriptionId });
+    return {
+      redirectUrl: 'https://sandbox.payfast.co.za/eng/process?first=1',
+      // PayFast never returns a providerSubscriptionId synchronously, so
+      // leave it unset here just like the real adapter does.
+    };
+  });
   const cancelCalls: string[] = [];
   mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
     cancelCalls.push(providerSubscriptionId);
@@ -181,6 +190,13 @@ test('full end-to-end resubscribe: checkout -> cancel -> checkout again, all thr
     assert.equal(firstCheckout.status, 200);
     const firstSubscription = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
     assert.equal(firstSubscription.status, 'trialing');
+    assert.equal(checkoutCalls.length, 1);
+    assert.ok(checkoutCalls[0].subscriptionId, 'a subscriptionId must be generated and sent to the provider');
+    assert.equal(
+      firstSubscription.id,
+      checkoutCalls[0].subscriptionId,
+      'the row created must have the exact id that was sent to the provider as m_payment_id',
+    );
 
     // Simulate the ITN landing and activating the subscription, the same
     // way applyEvent() would on first webhook contact — this gives cancel
@@ -207,6 +223,18 @@ test('full end-to-end resubscribe: checkout -> cancel -> checkout again, all thr
     assert.equal(secondSubscription.status, 'trialing');
     assert.notEqual(secondSubscription.id, canceledSubscription.id);
     assert.equal(secondSubscription.providerSubscriptionId, null, 'the new row should not inherit the old provider id');
+
+    assert.equal(checkoutCalls.length, 2);
+    assert.equal(
+      secondSubscription.id,
+      checkoutCalls[1].subscriptionId,
+      'the resubscribed row must have the exact (fresh) id that was sent to the provider on this second checkout',
+    );
+    assert.notEqual(
+      checkoutCalls[1].subscriptionId,
+      checkoutCalls[0].subscriptionId,
+      'each checkout must generate a brand-new subscriptionId — this is what makes a stale ITN for the old row unresolvable after resubscribe',
+    );
   } finally {
     mock.restoreAll();
   }

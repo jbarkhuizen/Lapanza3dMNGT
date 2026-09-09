@@ -15,6 +15,7 @@ test('createSubscriptionCheckout builds a redirect URL with a correctly-signed q
   const provider = createPayfastProvider(config);
   const { redirectUrl } = await provider.createSubscriptionCheckout({
     tenantId: 't1',
+    subscriptionId: 'sub-row-1',
     plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
     trialDays: 14,
     returnUrl: 'https://barkie.co.za/app/billing/complete',
@@ -28,6 +29,12 @@ test('createSubscriptionCheckout builds a redirect URL with a correctly-signed q
   assert.equal(params.get('subscription_type'), '1');
   assert.equal(params.get('recurring_amount'), '25.00');
   assert.equal(params.get('frequency'), '3');
+  // m_payment_id must be built from the pre-generated subscription row id,
+  // not the tenant id — this is the id PayFast will echo back on every
+  // ITN, and it must uniquely identify this row so a stale event from a
+  // dead, since-deleted row can never resolve onto a resubscribed tenant's
+  // new row.
+  assert.equal(params.get('m_payment_id'), 'sub_sub-row-1');
   assert.ok(params.get('billing_date'));
   assert.ok(params.get('signature'));
 
@@ -86,19 +93,19 @@ test('verifyWebhookSignature returns false instead of throwing on a missing or m
 test('parseWebhookEvent normalizes a COMPLETE payment_status to "payment_succeeded"', () => {
   const provider = createPayfastProvider(config);
   const req = {
-    body: { m_payment_id: 'sub_t1', payment_status: 'COMPLETE', token: 'pf-sub-abc123' },
+    body: { m_payment_id: 'sub_row-1', payment_status: 'COMPLETE', token: 'pf-sub-abc123' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', tenantId: 't1', type: 'payment_succeeded' });
+  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', subscriptionId: 'row-1', type: 'payment_succeeded' });
 });
 
 test('parseWebhookEvent normalizes a FAILED payment_status to "payment_failed"', () => {
   const provider = createPayfastProvider(config);
   const req = {
-    body: { m_payment_id: 'sub_t1', payment_status: 'FAILED', token: 'pf-sub-abc123' },
+    body: { m_payment_id: 'sub_row-1', payment_status: 'FAILED', token: 'pf-sub-abc123' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', tenantId: 't1', type: 'payment_failed' });
+  assert.deepEqual(event, { providerSubscriptionId: 'pf-sub-abc123', subscriptionId: 'row-1', type: 'payment_failed' });
 });
 
 test('parseWebhookEvent returns null instead of throwing on a missing body', () => {
@@ -111,22 +118,22 @@ test('parseWebhookEvent returns null instead of throwing on a missing body', () 
   assert.equal(provider.parseWebhookEvent(nullBodyReq), null);
 });
 
-test('parseWebhookEvent extracts tenantId from a sub_-prefixed m_payment_id', () => {
+test('parseWebhookEvent extracts subscriptionId from a sub_-prefixed m_payment_id', () => {
   const provider = createPayfastProvider(config);
   const req = {
     body: { m_payment_id: 'sub_abc123', payment_status: 'COMPLETE', token: 'pf-sub-1' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.equal(event?.tenantId, 'abc123');
+  assert.equal(event?.subscriptionId, 'abc123');
 });
 
-test('parseWebhookEvent leaves tenantId undefined when m_payment_id does not start with sub_', () => {
+test('parseWebhookEvent leaves subscriptionId undefined when m_payment_id does not start with sub_', () => {
   const provider = createPayfastProvider(config);
   const req = {
     body: { m_payment_id: 'something-else', payment_status: 'COMPLETE', token: 'pf-sub-1' },
   } as unknown as Request;
   const event = provider.parseWebhookEvent(req);
-  assert.equal(event?.tenantId, undefined);
+  assert.equal(event?.subscriptionId, undefined);
 });
 
 test('cancelSubscription PUTs to the PayFast subscriptions API with a signed header set', async () => {

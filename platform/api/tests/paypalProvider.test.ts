@@ -38,6 +38,7 @@ test('createSubscriptionCheckout gets an access token, creates a plan and a subs
   const provider = createPaypalProvider(config, fakeFetch as unknown as typeof fetch);
   const { redirectUrl, providerSubscriptionId } = await provider.createSubscriptionCheckout({
     tenantId: 't1',
+    subscriptionId: 'sub-row-1',
     plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
     trialDays: 14,
     returnUrl: 'https://barkie.co.za/app/billing/complete',
@@ -85,6 +86,7 @@ test('createSubscriptionCheckout throws when any of the token/product/plan/subsc
       () =>
         provider.createSubscriptionCheckout({
           tenantId: 't1',
+          subscriptionId: 'sub-row-1',
           plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
           trialDays: 14,
           returnUrl: 'https://barkie.co.za/app/billing/complete',

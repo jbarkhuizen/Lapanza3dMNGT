@@ -17,9 +17,11 @@ async function makeTrialingTenant(email: string) {
   // No providerSubscriptionId set here — PayFast never returns one
   // synchronously at checkout, so it's only persisted once the first
   // webhook for this subscription actually arrives (Step 9's fix). Tests
-  // below resolve this row via the mocked event's own `tenantId` field,
-  // the same way a real first-contact PayFast webhook would.
-  await prisma.subscription.create({
+  // below resolve this row via the mocked event's own `subscriptionId`
+  // field — the Subscription row's own primary-key id, which is what
+  // checkout now embeds in m_payment_id, the same way a real first-contact
+  // PayFast webhook would.
+  const subscription = await prisma.subscription.create({
     data: {
       tenantId: tenant.id,
       planId: plan.id,
@@ -28,7 +30,7 @@ async function makeTrialingTenant(email: string) {
       trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     },
   });
-  return tenant;
+  return { tenant, subscriptionId: subscription.id };
 }
 
 test('POST /api/webhooks/payfast rejects a payload with an invalid signature', async () => {
@@ -40,11 +42,11 @@ test('POST /api/webhooks/payfast rejects a payload with an invalid signature', a
 });
 
 test('POST /api/webhooks/payfast updates the matching subscription to active on a valid COMPLETE event', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'pf-sub-1',
-    tenantId: tenant.id,
+    subscriptionId,
     type: 'payment_succeeded',
   }));
 
@@ -61,7 +63,7 @@ test('POST /api/webhooks/payfast updates the matching subscription to active on 
 });
 
 test('POST /api/webhooks/payfast processes a real application/x-www-form-urlencoded ITN body', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   // Assert on the real req.body here (rather than ignoring it like a plain
   // stub would) so this test actually fails if express.urlencoded() isn't
@@ -72,7 +74,7 @@ test('POST /api/webhooks/payfast processes a real application/x-www-form-urlenco
     assert.equal(typeof req.body, 'object');
     assert.equal(req.body.token, 'pf-sub-1');
     assert.equal(req.body.payment_status, 'COMPLETE');
-    return { providerSubscriptionId: 'pf-sub-1', tenantId: tenant.id, type: 'payment_succeeded' as const };
+    return { providerSubscriptionId: 'pf-sub-1', subscriptionId, type: 'payment_succeeded' as const };
   });
 
   try {
@@ -95,11 +97,11 @@ test('POST /api/webhooks/payfast processes a real application/x-www-form-urlenco
 });
 
 test('POST /api/webhooks/payfast marks the subscription past_due on a payment_failed event', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'pf-sub-1',
-    tenantId: tenant.id,
+    subscriptionId,
     type: 'payment_failed',
   }));
 
@@ -115,18 +117,18 @@ test('POST /api/webhooks/payfast marks the subscription past_due on a payment_fa
   }
 });
 
-test('POST /api/webhooks/payfast resolves the FIRST event for a fresh subscription via tenantId and persists providerSubscriptionId', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+test('POST /api/webhooks/payfast resolves the FIRST event for a fresh subscription via its row id and persists providerSubscriptionId', async () => {
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   // Confirm the fixture really has no providerSubscriptionId yet — this is
-  // the precondition that makes the tenantId-based resolution path in
-  // applyEvent() necessary in the first place.
+  // the precondition that makes the id-based first-contact resolution path
+  // in applyEvent() necessary in the first place.
   const before = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
   assert.equal(before?.providerSubscriptionId, null);
 
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'pf-sub-first-contact',
-    tenantId: tenant.id,
+    subscriptionId,
     type: 'payment_succeeded',
   }));
 
@@ -134,7 +136,7 @@ test('POST /api/webhooks/payfast resolves the FIRST event for a fresh subscripti
     const app = buildApp();
     const res = await request(app)
       .post('/api/webhooks/payfast')
-      .send({ token: 'pf-sub-first-contact', payment_status: 'COMPLETE', m_payment_id: `sub_${tenant.id}` });
+      .send({ token: 'pf-sub-first-contact', payment_status: 'COMPLETE', m_payment_id: `sub_${subscriptionId}` });
     assert.equal(res.status, 200);
 
     const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
@@ -145,7 +147,7 @@ test('POST /api/webhooks/payfast resolves the FIRST event for a fresh subscripti
   }
 });
 
-test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (tenantId stays undefined for PayPal events), and a concurrent PayFast first-contact event resolves via its own tenantId without cross-talk', async () => {
+test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (subscriptionId stays undefined for PayPal events), and a concurrent PayFast first-contact event resolves via its own row id without cross-talk', async () => {
   // PayPal tenant: providerSubscriptionId was already captured synchronously
   // at checkout (Step 6/7), so this row starts with it set, unlike the
   // PayFast fixture from makeTrialingTenant above.
@@ -165,18 +167,20 @@ test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (tenan
   });
 
   // PayFast tenant: first-contact fixture, no providerSubscriptionId yet.
-  const payfastTenant = await makeTrialingTenant('payfast-tenant@acmeprints.co.za');
+  const { tenant: payfastTenant, subscriptionId: payfastSubscriptionId } = await makeTrialingTenant(
+    'payfast-tenant@acmeprints.co.za',
+  );
 
   mock.method(paypalProvider, 'verifyWebhookSignature', () => true);
   mock.method(paypalProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'PP-SUB-1',
-    // tenantId intentionally absent — PayPal's adapter never sets it.
+    // subscriptionId intentionally absent — PayPal's adapter never sets it.
     type: 'payment_succeeded' as const,
   }));
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'PF-SUB-1',
-    tenantId: payfastTenant.id,
+    subscriptionId: payfastSubscriptionId,
     type: 'payment_succeeded' as const,
   }));
 
@@ -200,21 +204,22 @@ test('POST /api/webhooks/paypal resolves via providerSubscriptionId alone (tenan
 });
 
 test('a stale event carrying a DIFFERENT providerSubscriptionId than the one already persisted is ignored (does not mutate the row)', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
-  // Simulate the tenant having already resubscribed: the row currently
-  // bound to this tenant carries a NEW providerSubscriptionId.
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  // Simulate the tenant having already had its first ITN land: the row
+  // currently bound to this tenant carries a real providerSubscriptionId.
   await prisma.subscription.update({
     where: { tenantId: tenant.id },
     data: { status: 'active', providerSubscriptionId: 'pf-sub-current' },
   });
 
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
-  // A stale/delayed ITN for the OLD (dead) subscription — same tenantId
-  // (PayFast ITNs always carry it), but a providerSubscriptionId that no
-  // longer matches what's persisted on this tenant's row.
+  // A stale/delayed ITN for the SAME row id but naming a
+  // providerSubscriptionId that no longer matches what's persisted (e.g.
+  // PayFast reissued a token) — defense-in-depth, distinct from the
+  // dead-row scenario covered by the resubscribe test below.
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'pf-sub-old-dead',
-    tenantId: tenant.id,
+    subscriptionId,
     type: 'canceled' as const,
   }));
 
@@ -222,23 +227,77 @@ test('a stale event carrying a DIFFERENT providerSubscriptionId than the one alr
     const app = buildApp();
     const res = await request(app)
       .post('/api/webhooks/payfast')
-      .send({ token: 'pf-sub-old-dead', payment_status: 'CANCELLED', m_payment_id: `sub_${tenant.id}` });
+      .send({ token: 'pf-sub-old-dead', payment_status: 'CANCELLED', m_payment_id: `sub_${subscriptionId}` });
     assert.equal(res.status, 200);
 
     const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
-    assert.equal(subscription?.status, 'active', 'a stale event for a dead subscription id must not change status');
+    assert.equal(subscription?.status, 'active', 'an event naming the wrong providerSubscriptionId must not change status');
     assert.equal(
       subscription?.providerSubscriptionId,
       'pf-sub-current',
-      'a stale event must not overwrite the currently-bound providerSubscriptionId',
+      'a mismatched-token event must not overwrite the currently-bound providerSubscriptionId',
     );
   } finally {
     mock.restoreAll();
   }
 });
 
-test('a first-contact event for an already canceled row is ignored (a stale ITN cannot resurrect a dead subscription)', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+test('a stale ITN carrying a RESUBSCRIBED tenant\'s dead row id resolves to nothing and leaves the new row completely untouched', async () => {
+  // This is the actual bug the id-scoped correlation fix closes: a stale
+  // ITN belonging to an old (dead) subscription attempt arriving AFTER the
+  // tenant resubscribed. Under the old tenantId-based correlation this
+  // resolved straight onto the tenant's brand-new row (tenantId is stable
+  // across resubscribes) and could corrupt it. With id-scoped correlation
+  // the old row's id is gone once deleted, so lookup returns null and the
+  // event is silently dropped — no heuristic guard required.
+  const { tenant } = await makeTrialingTenant('jane@acmeprints.co.za');
+  const rowA = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  const oldRowId = rowA.id;
+
+  // Simulate the exact resubscribe flow billing.ts performs: delete the
+  // old row, create an entirely new one with a fresh id (a new checkout
+  // attempt after the tenant canceled and came back).
+  await prisma.subscription.delete({ where: { id: oldRowId } });
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const rowB = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'trialing',
+      paymentProvider: 'payfast',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+  const beforeSnapshot = await prisma.subscription.findUniqueOrThrow({ where: { id: rowB.id } });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  // A late notification for the OLD, now-deleted row — e.g. its own final
+  // COMPLETE or CANCELLED ITN, delayed in transit.
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-old-attempt',
+    subscriptionId: oldRowId,
+    type: 'canceled' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-old-attempt', payment_status: 'CANCELLED', m_payment_id: `sub_${oldRowId}` });
+    // Webhooks always 200 to acknowledge receipt, even when the event
+    // resolves to nothing — see makeWebhookHandler.
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    const afterSnapshot = await prisma.subscription.findUniqueOrThrow({ where: { id: rowB.id } });
+    assert.deepEqual(afterSnapshot, beforeSnapshot, 'the new row (subscription B) must be completely unchanged by the dead row\'s stale event');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a first-contact event for an already canceled row is ignored (a stale ITN cannot resurrect a deliberately canceled subscription)', async () => {
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
   // The tenant canceled — no providerSubscriptionId was ever persisted
   // for this row (matches the fixture's default), and status is now dead.
   await prisma.subscription.update({
@@ -249,7 +308,7 @@ test('a first-contact event for an already canceled row is ignored (a stale ITN 
   mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
   mock.method(payfastProvider, 'parseWebhookEvent', () => ({
     providerSubscriptionId: 'pf-sub-stale',
-    tenantId: tenant.id,
+    subscriptionId,
     type: 'payment_succeeded' as const,
   }));
 
@@ -257,19 +316,59 @@ test('a first-contact event for an already canceled row is ignored (a stale ITN 
     const app = buildApp();
     const res = await request(app)
       .post('/api/webhooks/payfast')
-      .send({ token: 'pf-sub-stale', payment_status: 'COMPLETE', m_payment_id: `sub_${tenant.id}` });
+      .send({ token: 'pf-sub-stale', payment_status: 'COMPLETE', m_payment_id: `sub_${subscriptionId}` });
     assert.equal(res.status, 200);
 
     const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
-    assert.equal(subscription?.status, 'canceled', 'a stale first-contact event must not resurrect a canceled row');
+    assert.equal(subscription?.status, 'canceled', 'a first-contact event must not resurrect a canceled row');
     assert.equal(subscription?.providerSubscriptionId, null);
   } finally {
     mock.restoreAll();
   }
 });
 
+test('a first-contact event for a subscription that self-healed to lapsed DOES bind and reactivate it (the lockout fix)', async () => {
+  // Before this fix, the first-contact guard blocked binding onto anything
+  // except 'trialing'/'active', which permanently stranded a legitimately-
+  // paid subscription whose first real ITN arrived after
+  // requireActiveSubscription's trial-expiry self-heal had already flipped
+  // it to 'lapsed' (e.g. the charge clears a little later than the grace
+  // window allows). Because resolution is now scoped to this exact row's
+  // id — not shared across every subscription a tenant has ever had — a
+  // 'lapsed' row is safe to resurrect: only 'canceled' (a deliberate
+  // tenant action) still refuses first contact.
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'lapsed' },
+  });
+  const before = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(before.providerSubscriptionId, null);
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-late-first-contact',
+    subscriptionId,
+    type: 'payment_succeeded' as const,
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-late-first-contact', payment_status: 'COMPLETE', m_payment_id: `sub_${subscriptionId}` });
+    assert.equal(res.status, 200);
+
+    const subscription = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    assert.equal(subscription.status, 'active', 'a lapsed row must be reactivated by its real first-contact event');
+    assert.equal(subscription.providerSubscriptionId, 'pf-sub-late-first-contact');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('a second payment_failed event for an already past_due subscription does NOT reset pastDueSince', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const { tenant } = await makeTrialingTenant('jane@acmeprints.co.za');
   const originalPastDueSince = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
   await prisma.subscription.update({
     where: { tenantId: tenant.id },
@@ -301,7 +400,7 @@ test('a second payment_failed event for an already past_due subscription does NO
 });
 
 test('a payment_failed event for a subscription already self-healed to lapsed does NOT reset pastDueSince', async () => {
-  const tenant = await makeTrialingTenant('jane@acmeprints.co.za');
+  const { tenant } = await makeTrialingTenant('jane@acmeprints.co.za');
   const originalPastDueSince = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
   // requireActiveSubscription self-heals status to 'lapsed' (not
   // 'past_due') once the grace window expires — a dunning retry landing
