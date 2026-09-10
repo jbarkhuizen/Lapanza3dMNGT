@@ -12,6 +12,9 @@ function switchView(name) {
     const panel = document.getElementById(`view-${tab}`);
     const active = tab === name;
     btn.setAttribute('aria-selected', String(active));
+    // Roving tabindex: only the active tab is Tab-reachable, matching the
+    // WAI-ARIA Authoring Practices tablist pattern.
+    btn.tabIndex = active ? 0 : -1;
     panel.hidden = !active;
   }
 }
@@ -19,6 +22,40 @@ function switchView(name) {
 for (const tab of TABS) {
   document.getElementById(`tab-${tab}`).addEventListener('click', () => switchView(tab));
 }
+
+// Arrow-key navigation for the tablist. The tablist has no aria-orientation
+// (defaults to horizontal), so Left/Right move and activate; Home/End jump
+// to the first/last tab, matching the APG tablist pattern.
+const tablistEl = document.querySelector('[role="tablist"]');
+tablistEl.addEventListener('keydown', (event) => {
+  const currentIndex = TABS.findIndex(
+    (tab) => document.getElementById(`tab-${tab}`) === document.activeElement,
+  );
+  if (currentIndex === -1) return;
+
+  let nextIndex;
+  switch (event.key) {
+    case 'ArrowRight':
+      nextIndex = (currentIndex + 1) % TABS.length;
+      break;
+    case 'ArrowLeft':
+      nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    case 'End':
+      nextIndex = TABS.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  event.preventDefault();
+  const nextTab = TABS[nextIndex];
+  document.getElementById(`tab-${nextTab}`).focus();
+  switchView(nextTab);
+});
 
 // ---- Shared: printer-requirement list (used by the grid and the Selector's result cards) ----
 function renderReqList(material) {
