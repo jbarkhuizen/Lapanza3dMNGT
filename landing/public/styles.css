@@ -124,6 +124,29 @@ body {
   margin: 0 0 32px;
 }
 
+.hero__cta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.hero__plans {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.hero__plans a {
+  color: var(--color-terracotta);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.hero__plans a:hover {
+  text-decoration: underline;
+}
+
 .btn {
   display: inline-block;
   font-family: var(--font-sans);
@@ -723,6 +746,7 @@ body {
   padding: 12px;
   cursor: pointer;
   background: var(--surface);
+  color: var(--ink);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
