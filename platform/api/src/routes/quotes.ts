@@ -1,30 +1,54 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { Quote, QuoteLineItem } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
-import { calculateQuoteTotals } from '../quoting/calculate.js';
+import { calculateQuoteTotals, MAX_MONEY_VALUE } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { prisma } from '../db/client.js';
 import { serializeInvoice } from './invoices.js';
 import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 import { mailer } from '../lib/mailer.js';
+import { env } from '../env.js';
 
 export const quotesRouter = Router();
 quotesRouter.use(requireTenantAuth);
 quotesRouter.use(requireActiveSubscription);
 
+// POST /api/quotes/:id/send is the first CPU-heavy (pdfkit-rendering),
+// otherwise-unthrottled endpoint on this router. Same shape as admin.ts's
+// adminLoginLimiter.
+//
+// quotesRouter is a module-level singleton (like adminRouter, unlike
+// auth.ts's per-buildApp() createAuthRouter() factory), so this limiter
+// instance — and its hit counter — persists for the entire process, not
+// just one app instance. Widening the budget under NODE_ENV=test only —
+// production and development keep the real 20/hour — avoids cross-test
+// bleed without weakening the actual protection anywhere it matters.
+const sendQuoteLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: env.nodeEnv === 'test' ? 1000 : 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 type QuoteWithOptionalLines = Quote & { lineItems?: QuoteLineItem[] };
 
-function serializeQuote(quote: QuoteWithOptionalLines) {
+async function serializeQuote(quote: QuoteWithOptionalLines) {
+  // A quote carries no direct column pointing at the invoice it was
+  // converted into (the pointer lives the other way round, on
+  // Invoice.quoteId), so look it up here to give callers a back-reference.
+  const invoice = await prisma.invoice.findUnique({ where: { quoteId: quote.id }, select: { id: true } });
   return {
     ...quote,
     subtotal: quote.subtotal.toFixed(2),
     vatAmount: quote.vatAmount.toFixed(2),
     total: quote.total.toFixed(2),
+    invoiceId: invoice?.id ?? null,
     lineItems: quote.lineItems?.map((line) => ({
       ...line,
       unitPrice: line.unitPrice.toFixed(2),
@@ -59,7 +83,7 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
 quotesRouter.get('/api/quotes', async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quotes = await scoped.quotes.findMany();
-  res.json({ ok: true, quotes: quotes.map(serializeQuote) });
+  res.json({ ok: true, quotes: await Promise.all(quotes.map(serializeQuote)) });
 });
 
 quotesRouter.get('/api/quotes/:id', async (req, res) => {
@@ -68,7 +92,7 @@ quotesRouter.get('/api/quotes/:id', async (req, res) => {
   if (!quote) {
     return res.status(404).json({ ok: false, error: 'Quote not found.' });
   }
-  res.json({ ok: true, quote: serializeQuote(quote) });
+  res.json({ ok: true, quote: await serializeQuote(quote) });
 });
 
 quotesRouter.post('/api/quotes', async (req, res) => {
@@ -125,6 +149,18 @@ quotesRouter.post('/api/quotes', async (req, res) => {
     vatApplied: profile.vatRegistered,
   });
 
+  // Each line's unitPrice is already capped by the zod schema above, but
+  // that only bounds a single line — many valid lines (or a large quantity)
+  // can still push the summed subtotal/vatAmount/total past what the
+  // Decimal(12,2) columns can hold. Check before burning a quote number.
+  if (
+    totals.subtotal.greaterThan(MAX_MONEY_VALUE) ||
+    totals.vatAmount.greaterThan(MAX_MONEY_VALUE) ||
+    totals.total.greaterThan(MAX_MONEY_VALUE)
+  ) {
+    return res.status(400).json({ ok: false, error: 'The quote total is too large.' });
+  }
+
   const sequenceValue = await scoped.tenantSequences.next('quote');
   const number = formatDocumentNumber(profile.quoteNumberPrefix, sequenceValue);
 
@@ -153,7 +189,7 @@ quotesRouter.post('/api/quotes', async (req, res) => {
     })),
   });
 
-  res.status(201).json({ ok: true, quote: serializeQuote(quote) });
+  res.status(201).json({ ok: true, quote: await serializeQuote(quote) });
 });
 
 quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
@@ -175,7 +211,7 @@ quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
   }
   await scoped.quotes.updateStatus(req.params.id, parsed.data.status);
   const updated = await scoped.quotes.findById(req.params.id);
-  res.json({ ok: true, quote: serializeQuote(updated!) });
+  res.json({ ok: true, quote: await serializeQuote(updated!) });
 });
 
 quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
@@ -257,7 +293,7 @@ quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
   }
 });
 
-quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
+quotesRouter.post('/api/quotes/:id/send', sendQuoteLimiter, async (req: Request<{ id: string }>, res: Response) => {
   const scoped = tenantScope(req.tenantId!);
   const quote = await scoped.quotes.findById(req.params.id);
   if (!quote) {
@@ -272,7 +308,7 @@ quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
     return res.status(404).json({ ok: false, error: 'Tenant not found.' });
   }
 
-  const serialized = serializeQuote(quote);
+  const serialized = await serializeQuote(quote);
   const pdfBuffer = await generateDocumentPdf({
     documentType: 'Quote',
     number: serialized.number,

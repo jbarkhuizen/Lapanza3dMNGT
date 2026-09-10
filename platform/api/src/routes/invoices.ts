@@ -1,19 +1,38 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import type { Invoice, InvoiceLineItem } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
-import { calculateQuoteTotals } from '../quoting/calculate.js';
+import { calculateQuoteTotals, MAX_MONEY_VALUE } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 import { mailer } from '../lib/mailer.js';
+import { env } from '../env.js';
 
 export const invoicesRouter = Router();
 invoicesRouter.use(requireTenantAuth);
 invoicesRouter.use(requireActiveSubscription);
+
+// POST /api/invoices/:id/send is the first CPU-heavy (pdfkit-rendering),
+// otherwise-unthrottled endpoint on this router. Same shape as admin.ts's
+// adminLoginLimiter.
+//
+// invoicesRouter is a module-level singleton (like adminRouter, unlike
+// auth.ts's per-buildApp() createAuthRouter() factory), so this limiter
+// instance — and its hit counter — persists for the entire process, not
+// just one app instance. Widening the budget under NODE_ENV=test only —
+// production and development keep the real 20/hour — avoids cross-test
+// bleed without weakening the actual protection anywhere it matters.
+const sendInvoiceLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: env.nodeEnv === 'test' ? 1000 : 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 type InvoiceWithOptionalLines = Invoice & { lineItems?: InvoiceLineItem[] };
 
@@ -122,6 +141,18 @@ invoicesRouter.post('/api/invoices', async (req, res) => {
     vatApplied: profile.vatRegistered,
   });
 
+  // Each line's unitPrice is already capped by the zod schema above, but
+  // that only bounds a single line — many valid lines (or a large quantity)
+  // can still push the summed subtotal/vatAmount/total past what the
+  // Decimal(12,2) columns can hold. Check before burning an invoice number.
+  if (
+    totals.subtotal.greaterThan(MAX_MONEY_VALUE) ||
+    totals.vatAmount.greaterThan(MAX_MONEY_VALUE) ||
+    totals.total.greaterThan(MAX_MONEY_VALUE)
+  ) {
+    return res.status(400).json({ ok: false, error: 'The invoice total is too large.' });
+  }
+
   const sequenceValue = await scoped.tenantSequences.next('invoice');
   const number = formatDocumentNumber(profile.invoiceNumberPrefix, sequenceValue);
   const resolvedDueDate = dueDate
@@ -212,7 +243,7 @@ invoicesRouter.patch('/api/invoices/:id/status', async (req, res) => {
   res.json({ ok: true, invoice: serializeInvoice(updated!) });
 });
 
-invoicesRouter.post('/api/invoices/:id/send', async (req, res) => {
+invoicesRouter.post('/api/invoices/:id/send', sendInvoiceLimiter, async (req: Request<{ id: string }>, res: Response) => {
   const scoped = tenantScope(req.tenantId!);
   const invoice = await scoped.invoices.findById(req.params.id);
   if (!invoice) {
