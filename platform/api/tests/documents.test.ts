@@ -1,7 +1,12 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import PDFDocument from 'pdfkit';
-import { generateDocumentPdf, TOTALS_LABEL_WIDTH } from '../src/documents/generateDocumentPdf.js';
+import {
+  generateDocumentPdf,
+  TOTALS_LABEL_WIDTH,
+  TOTAL_COLUMN_WIDTH,
+  QTY_COLUMN_WIDTH,
+} from '../src/documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../src/documents/sendDocumentEmail.js';
 import { mailer } from '../src/lib/mailer.js';
 
@@ -134,6 +139,13 @@ test('generateDocumentPdf paginates wrapped multi-line descriptions without a pa
   // ~3-line wrapped row's real ~35-40pt height, so pdfkit's own automatic
   // pagination keeps triggering mid-row breaks, producing 6 pages pre-fix vs 4
   // pages once the real per-row height is used for the fit check.
+  // Re-measured at 5 (was 4) after the Description column was narrowed from
+  // 270pt to 245pt (money-column widening fix for the Decimal(12,2) ceiling
+  // value "R 9999999999.99"): the same long description now wraps onto one
+  // more line sooner in the narrower cell, adding real height across the
+  // fixture and pushing one more row past a page boundary. Still nowhere
+  // near the pre-fix 6-page pathological case, so the upper bound moves to
+  // <=5 rather than indicating a regression.
   const wrappingLines = Array.from({ length: 50 }, (_, i) => ({
     description: `${longDescription} (item ${i + 1})`,
     quantity: 1,
@@ -159,8 +171,8 @@ test('generateDocumentPdf paginates wrapped multi-line descriptions without a pa
   const pdfText = buffer.toString('latin1');
   const pageCount = (pdfText.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
   assert.ok(
-    pageCount <= 4,
-    `expected wrapped rows to pack tightly (<=4 pages) for 50 wrapping items, got ${pageCount}`,
+    pageCount <= 5,
+    `expected wrapped rows to pack tightly (<=5 pages) for 50 wrapping items, got ${pageCount}`,
   );
 });
 
@@ -244,6 +256,48 @@ test('totals-block labels ("Balance Due", "Amount Paid", ...) render on a single
     TOTALS_LABEL_WIDTH - balanceDueWidth >= 5,
     `expected "Balance Due" (${balanceDueWidth}pt) to fit within TOTALS_LABEL_WIDTH ` +
       `(${TOTALS_LABEL_WIDTH}pt) with at least 5pt of margin, got ${TOTALS_LABEL_WIDTH - balanceDueWidth}pt`,
+  );
+
+  doc.end();
+});
+
+test('the Decimal(12,2) ceiling money value ("R 9999999999.99") fits within the Total and Unit Price/totals-label columns', () => {
+  // Regression guard for the widened Total/Unit Price columns. This exact string is the
+  // widest value serializeQuote()/serializeInvoice() can ever produce for a Decimal(12,2)
+  // money field: measured (via pdfkit's own bundled Helvetica.afm/Helvetica-Bold.afm) at
+  // exactly 79.50pt in both weights at 10pt, identical across weights since the digits,
+  // space, period, and "R" glyphs share the same em-width in both Helvetica AFMs.
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const ceilingValue = 'R 9999999999.99';
+
+  for (const font of ['Helvetica', 'Helvetica-Bold'] as const) {
+    doc.font(font).fontSize(10);
+    const width = doc.widthOfString(ceilingValue);
+    assert.ok(
+      TOTAL_COLUMN_WIDTH - width >= 5,
+      `expected "${ceilingValue}" (${width}pt, ${font}) to fit within TOTAL_COLUMN_WIDTH ` +
+        `(${TOTAL_COLUMN_WIDTH}pt) with at least 5pt of margin, got ${TOTAL_COLUMN_WIDTH - width}pt`,
+    );
+    assert.ok(
+      TOTALS_LABEL_WIDTH - width >= 5,
+      `expected "${ceilingValue}" (${width}pt, ${font}) to fit within TOTALS_LABEL_WIDTH ` +
+        `(${TOTALS_LABEL_WIDTH}pt) with at least 5pt of margin, got ${TOTALS_LABEL_WIDTH - width}pt`,
+    );
+  }
+
+  doc.end();
+});
+
+test('a realistic 8-digit quantity fits within the Qty column', () => {
+  const doc = new PDFDocument({ margin: 50, size: 'A4' });
+  const largeQty = '12345678';
+
+  doc.font('Helvetica').fontSize(10);
+  const width = doc.widthOfString(largeQty);
+  assert.ok(
+    QTY_COLUMN_WIDTH - width >= 5,
+    `expected "${largeQty}" (${width}pt) to fit within QTY_COLUMN_WIDTH ` +
+      `(${QTY_COLUMN_WIDTH}pt) with at least 5pt of margin, got ${QTY_COLUMN_WIDTH - width}pt`,
   );
 
   doc.end();

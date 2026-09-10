@@ -14,5 +14,7 @@ export function downloadBase64Pdf(base64: string, filename: string): void {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Deferred: Firefox and older Safari can abort the download if the object
+  // URL is revoked synchronously right after link.click() fires.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

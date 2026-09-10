@@ -66,18 +66,33 @@ const RIGHT = 545;
 // stale-doc.y pagination bug on quantities in the 5-8 digit range (e.g. "12345.67" wraps
 // in a 40pt Qty column). Taking the 10pt from Description instead — 280pt down to 270pt
 // has ample slack for real line-item descriptions — keeps Qty at its original 50pt.
-const COL_QTY = 330;
+// Was 330: the Decimal(12,2) ceiling value "R 9999999999.99" measures 79.50pt in both
+// Helvetica and Helvetica-Bold 10pt, which didn't fit the old 70/75pt Unit Price/Total
+// columns. Shifted 25pt left (taken from Description, 270pt -> 245pt, still ample) to
+// widen both money columns to 85pt while keeping Qty at its guarded 50pt width.
+const COL_QTY = 305;
 // Was 400: at that value the totals-block label column (COL_TOTAL - COL_UNIT_PRICE - 10 = 60pt)
 // was narrower than "Balance Due" measured in Helvetica-Bold 10pt (60.02pt), so pdfkit wrapped
 // it onto 2 lines. Shifting to 390 widens that shared label/unit-price column to 70pt.
-const COL_UNIT_PRICE = 390;
-const COL_TOTAL = 470;
+// Was 390: see COL_QTY comment above — widened further to 365 so the shared
+// Unit-Price/totals-label column becomes 85pt, clearing the 79.50pt worst case.
+const COL_UNIT_PRICE = 365;
+// Was 470: see COL_QTY comment above — widened to 460 so the Total column
+// (RIGHT - COL_TOTAL) becomes 85pt, clearing the 79.50pt worst case with margin.
+const COL_TOTAL = 460;
 // Shared by the "Unit Price" line-item column and the totals-block label column
 // (both are drawn at COL_UNIT_PRICE with this width). Exported so tests can
 // assert real labels ("Balance Due", "Amount Paid", ...) fit on one line at
 // this exact width, as a permanent regression guard against the column being
 // narrowed back below a label's rendered width.
 export const TOTALS_LABEL_WIDTH = COL_TOTAL - COL_UNIT_PRICE - 10;
+// Width of the right-aligned Total column. Exported as a regression guard so
+// tests can assert the Decimal(12,2) ceiling value ("R 9999999999.99") fits
+// within it.
+export const TOTAL_COLUMN_WIDTH = RIGHT - COL_TOTAL;
+// Width of the Qty column. Exported as a regression guard so tests can assert
+// a realistic large quantity string still fits within it.
+export const QTY_COLUMN_WIDTH = COL_UNIT_PRICE - COL_QTY - 10;
 
 function drawTableHeader(doc: PDFKit.PDFDocument): void {
   const y = doc.y;
@@ -114,7 +129,12 @@ function ensureRowFits(doc: PDFKit.PDFDocument, estimatedHeight: number): void {
 }
 
 // Real (not estimated) content height of a row's description cell, which is
-// the tallest cell in the row since it's the only one that can wrap.
+// the tallest cell in the row since it's the only one that can wrap. This
+// still only measures the description cell: Qty/Unit Price/Total render
+// fixed-format values (an integer quantity, or "<symbol> <12,2-decimal>"
+// money strings) that are structurally guaranteed to fit within their
+// columns (see COL_QTY/COL_UNIT_PRICE/COL_TOTAL and their *_WIDTH exports
+// above), so they never wrap and never need a measured height.
 function computeRowContentHeight(doc: PDFKit.PDFDocument, line: PdfLineItem): number {
   const descWidth = COL_QTY - LEFT - 10;
   doc.fontSize(10);
