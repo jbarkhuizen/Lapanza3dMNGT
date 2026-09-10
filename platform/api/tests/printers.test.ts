@@ -140,3 +140,49 @@ test('POST /api/printers rejects a negative electricityRatePerKwh', async () => 
   });
   assert.equal(res.status, 400);
 });
+
+test('PATCH /api/printers/:id can set then clear purchaseDate back to null', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/printers').send({ name: 'Printer 1' });
+  assert.equal(createRes.status, 201);
+  assert.equal(createRes.body.printer.purchaseDate, null);
+  const printerId = createRes.body.printer.id;
+
+  const setRes = await agent
+    .patch(`/api/printers/${printerId}`)
+    .send({ purchaseDate: '2024-01-15' });
+  assert.equal(setRes.status, 200);
+
+  const getAfterSet = await agent.get(`/api/printers/${printerId}`);
+  assert.ok(getAfterSet.body.printer.purchaseDate);
+
+  const clearRes = await agent
+    .patch(`/api/printers/${printerId}`)
+    .send({ purchaseDate: null });
+  assert.equal(clearRes.status, 200);
+
+  const getAfterClear = await agent.get(`/api/printers/${printerId}`);
+  assert.equal(getAfterClear.body.printer.purchaseDate, null);
+});
+
+test('PATCH /api/printers/:id omitting purchaseDate leaves it untouched', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent
+    .post('/api/printers')
+    .send({ name: 'Printer 1', purchaseDate: '2024-01-15' });
+  assert.equal(createRes.status, 201);
+  const printerId = createRes.body.printer.id;
+
+  const updateRes = await agent
+    .patch(`/api/printers/${printerId}`)
+    .send({ status: 'maintenance' });
+  assert.equal(updateRes.status, 200);
+
+  const getRes = await agent.get(`/api/printers/${printerId}`);
+  assert.ok(getRes.body.printer.purchaseDate);
+  assert.equal(getRes.body.printer.status, 'maintenance');
+});
