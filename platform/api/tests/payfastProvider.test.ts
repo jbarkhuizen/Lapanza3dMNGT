@@ -1,4 +1,4 @@
-import { test, mock } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import type { Request } from 'express';
@@ -81,7 +81,6 @@ function signPayload(payload: Record<string, string>): string {
 }
 
 test('verifyWebhookSignature accepts a correctly-signed ITN payload confirmed VALID by PayFast, and rejects a tampered one', async () => {
-  const provider = createPayfastProvider(config);
   const payload: Record<string, string> = {
     m_payment_id: 'sub_t1',
     pf_payment_id: '12345',
@@ -91,29 +90,25 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload confirmed VA
   const signature = signPayload(payload);
 
   const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
-  mock.method(globalThis, 'fetch', async (url: string, init: Record<string, unknown>) => {
+  const fakeFetch = async (url: string, init: Record<string, unknown> = {}) => {
     calls.push({ url, init });
     return { text: async () => 'VALID' } as Response;
-  });
+  };
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    const goodReq = { body: { ...payload, signature } } as unknown as Request;
-    assert.equal(await provider.verifyWebhookSignature(goodReq), true);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].url, 'https://sandbox.payfast.co.za/eng/query/validate');
+  const goodReq = { body: { ...payload, signature } } as unknown as Request;
+  assert.equal(await provider.verifyWebhookSignature(goodReq), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://sandbox.payfast.co.za/eng/query/validate');
 
-    const tamperedReq = { body: { ...payload, amount_gross: '999.00', signature } } as unknown as Request;
-    assert.equal(await provider.verifyWebhookSignature(tamperedReq), false);
-    // A tampered signature fails the local check and must never reach the
-    // postback endpoint — still just the one call from the good request.
-    assert.equal(calls.length, 1);
-  } finally {
-    mock.restoreAll();
-  }
+  const tamperedReq = { body: { ...payload, amount_gross: '999.00', signature } } as unknown as Request;
+  assert.equal(await provider.verifyWebhookSignature(tamperedReq), false);
+  // A tampered signature fails the local check and must never reach the
+  // postback endpoint — still just the one call from the good request.
+  assert.equal(calls.length, 1);
 });
 
 test('verifyWebhookSignature accepts a correctly-signed ITN payload that carries blank-valued fields (PayFast\'s real ITN rule keeps blanks, unlike the checkout signature which skips them)', async () => {
-  const provider = createPayfastProvider(config);
   // Modeled on the official payfast-php-sdk's own NotificationTest.php
   // fixture, which is a genuinely-valid ITN carrying several blank
   // custom_str*/item_description fields.
@@ -131,18 +126,14 @@ test('verifyWebhookSignature accepts a correctly-signed ITN payload that carries
   // (not skipped) — i.e. exactly what signPayload() below already does.
   const signature = signPayload(payload);
 
-  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'VALID' }) as Response);
+  const fakeFetch = async () => ({ text: async () => 'VALID' }) as Response;
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    const req = { body: { ...payload, signature } } as unknown as Request;
-    assert.equal(await provider.verifyWebhookSignature(req), true);
-  } finally {
-    mock.restoreAll();
-  }
+  const req = { body: { ...payload, signature } } as unknown as Request;
+  assert.equal(await provider.verifyWebhookSignature(req), true);
 });
 
 test('verifyWebhookSignature accepts an ITN payload whose fields contain characters PHP\'s urlencode() escapes but encodeURIComponent does not (! ~ * \' ( ))', async () => {
-  const provider = createPayfastProvider(config);
   // name_first/name_last and item_name/item_description are free text
   // PayFast passes straight through from what the payer or merchant
   // entered — an apostrophe in a surname, or parentheses/asterisks in a
@@ -158,21 +149,18 @@ test('verifyWebhookSignature accepts an ITN payload whose fields contain charact
     amount_gross: '25.00',
     name_first: "O'Brien",
     item_name: 'Barkie subscription (Pro)*',
+    item_description: 'Urgent! ~priority~ renewal',
   };
   const signature = signPayload(payload);
 
-  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'VALID' }) as Response);
+  const fakeFetch = async () => ({ text: async () => 'VALID' }) as Response;
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    const req = { body: { ...payload, signature } } as unknown as Request;
-    assert.equal(await provider.verifyWebhookSignature(req), true);
-  } finally {
-    mock.restoreAll();
-  }
+  const req = { body: { ...payload, signature } } as unknown as Request;
+  assert.equal(await provider.verifyWebhookSignature(req), true);
 });
 
 test('verifyWebhookSignature returns false when the local signature is correct but PayFast\'s postback validation does not confirm VALID', async () => {
-  const provider = createPayfastProvider(config);
   const payload: Record<string, string> = {
     m_payment_id: 'sub_t1',
     pf_payment_id: '12345',
@@ -181,14 +169,11 @@ test('verifyWebhookSignature returns false when the local signature is correct b
   };
   const signature = signPayload(payload);
 
-  mock.method(globalThis, 'fetch', async () => ({ text: async () => 'INVALID' }) as Response);
+  const fakeFetch = async () => ({ text: async () => 'INVALID' }) as Response;
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    const req = { body: { ...payload, signature } } as unknown as Request;
-    assert.equal(await provider.verifyWebhookSignature(req), false);
-  } finally {
-    mock.restoreAll();
-  }
+  const req = { body: { ...payload, signature } } as unknown as Request;
+  assert.equal(await provider.verifyWebhookSignature(req), false);
 });
 
 test('verifyWebhookSignature returns false instead of throwing on a missing or malformed body', async () => {
@@ -251,63 +236,55 @@ test('parseWebhookEvent leaves subscriptionId undefined when m_payment_id does n
 });
 
 test('cancelSubscription PUTs to the PayFast subscriptions API with a correctly-signed header set', async () => {
-  const provider = createPayfastProvider(config);
   const calls: Array<{ url: string; init: Record<string, unknown> }> = [];
-  mock.method(globalThis, 'fetch', async (url: string, init: Record<string, unknown>) => {
+  const fakeFetch = async (url: string, init: Record<string, unknown> = {}) => {
     calls.push({ url, init });
     return { ok: true, text: async () => '' } as Response;
-  });
+  };
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    await provider.cancelSubscription('pf-sub-1');
+  await provider.cancelSubscription('pf-sub-1');
 
-    assert.equal(calls.length, 1);
-    const { url, init } = calls[0];
-    assert.ok(url.startsWith('https://api.payfast.co.za/subscriptions/pf-sub-1/cancel'));
-    assert.ok(url.includes('testing=true'), 'sandbox mode should include the testing=true query param');
-    assert.equal(init.method, 'PUT');
-    const headers = init.headers as Record<string, string>;
-    assert.equal(headers['merchant-id'], config.merchantId);
-    assert.equal(headers.version, 'v1');
-    // PayFast's management API requires an offset-bearing timestamp
-    // (PHP's date("Y-m-d\TH:i:sO"), e.g. "2026-09-09T14:11:56+0200") — a
-    // bare toISOString().slice(0, 19) with no offset was part of the real
-    // 401 "Merchant authorization failed" this test now guards against.
-    assert.match(headers.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4}$/);
+  assert.equal(calls.length, 1);
+  const { url, init } = calls[0];
+  assert.ok(url.startsWith('https://api.payfast.co.za/subscriptions/pf-sub-1/cancel'));
+  assert.ok(url.includes('testing=true'), 'sandbox mode should include the testing=true query param');
+  assert.equal(init.method, 'PUT');
+  const headers = init.headers as Record<string, string>;
+  assert.equal(headers['merchant-id'], config.merchantId);
+  assert.equal(headers.version, 'v1');
+  // PayFast's management API requires an offset-bearing timestamp
+  // (PHP's date("Y-m-d\TH:i:sO"), e.g. "2026-09-09T14:11:56+0200") — a
+  // bare toISOString().slice(0, 19) with no offset was part of the real
+  // 401 "Merchant authorization failed" this test now guards against.
+  assert.match(headers.timestamp, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{4}$/);
 
-    // Recompute the signature the way PayFast's own management API expects
-    // (confirmed against the official payfast-php-sdk's
-    // Auth::generateApiSignature + Request::sendApiRequest, NOT the
-    // checkout/ITN rules above): merge the sent headers with the
-    // passphrase into one object, sort ALL keys alphabetically (passphrase
-    // included at its sorted position, not appended last), urlencode each
-    // value PHP-style, join with "&", MD5. This is what actually
-    // distinguishes the fix from the original buggy implementation, which
-    // reused the checkout rule (append-passphrase-last, no `version` field
-    // in the hash at all) and got a real 401 from PayFast's sandbox.
-    const toSign: Record<string, string> = {
-      'merchant-id': config.merchantId,
-      version: 'v1',
-      timestamp: headers.timestamp,
-      passphrase: config.passphrase,
-    };
-    const pairs = Object.keys(toSign)
-      .sort()
-      .map((key) => `${key}=${phpUrlencode(toSign[key])}`);
-    const expectedSignature = crypto.createHash('md5').update(pairs.join('&')).digest('hex');
-    assert.equal(headers.signature, expectedSignature);
-  } finally {
-    mock.restoreAll();
-  }
+  // Recompute the signature the way PayFast's own management API expects
+  // (confirmed against the official payfast-php-sdk's
+  // Auth::generateApiSignature + Request::sendApiRequest, NOT the
+  // checkout/ITN rules above): merge the sent headers with the
+  // passphrase into one object, sort ALL keys alphabetically (passphrase
+  // included at its sorted position, not appended last), urlencode each
+  // value PHP-style, join with "&", MD5. This is what actually
+  // distinguishes the fix from the original buggy implementation, which
+  // reused the checkout rule (append-passphrase-last, no `version` field
+  // in the hash at all) and got a real 401 from PayFast's sandbox.
+  const toSign: Record<string, string> = {
+    'merchant-id': config.merchantId,
+    version: 'v1',
+    timestamp: headers.timestamp,
+    passphrase: config.passphrase,
+  };
+  const pairs = Object.keys(toSign)
+    .sort()
+    .map((key) => `${key}=${phpUrlencode(toSign[key])}`);
+  const expectedSignature = crypto.createHash('md5').update(pairs.join('&')).digest('hex');
+  assert.equal(headers.signature, expectedSignature);
 });
 
 test('cancelSubscription throws when the PayFast API responds with a non-ok status', async () => {
-  const provider = createPayfastProvider(config);
-  mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 500, text: async () => 'boom' }) as Response);
+  const fakeFetch = async () => ({ ok: false, status: 500, text: async () => 'boom' }) as Response;
+  const provider = createPayfastProvider(config, fakeFetch as unknown as typeof fetch);
 
-  try {
-    await assert.rejects(() => provider.cancelSubscription('pf-sub-1'));
-  } finally {
-    mock.restoreAll();
-  }
+  await assert.rejects(() => provider.cancelSubscription('pf-sub-1'));
 });

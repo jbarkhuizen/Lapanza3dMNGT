@@ -115,7 +115,10 @@ function safeCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
-export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
+export function createPayfastProvider(
+  config: PayfastConfig,
+  fetchImpl: typeof fetch = fetch,
+): PaymentProvider {
   const baseUrl = config.live ? 'https://www.payfast.co.za' : 'https://sandbox.payfast.co.za';
 
   return {
@@ -171,7 +174,7 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
         ? 'https://www.payfast.co.za/eng/query/validate'
         : 'https://sandbox.payfast.co.za/eng/query/validate';
       const params = new URLSearchParams(body as Record<string, string>).toString();
-      const res = await fetch(validateUrl, {
+      const res = await fetchImpl(validateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: params,
@@ -215,7 +218,7 @@ export function createPayfastProvider(config: PayfastConfig): PaymentProvider {
       const version = 'v1';
       const signature = buildApiSignature({ 'merchant-id': config.merchantId, version, timestamp }, config.passphrase);
       const testingParam = config.live ? '' : '?testing=true';
-      const res = await fetch(`https://api.payfast.co.za/subscriptions/${providerSubscriptionId}/cancel${testingParam}`, {
+      const res = await fetchImpl(`https://api.payfast.co.za/subscriptions/${providerSubscriptionId}/cancel${testingParam}`, {
         method: 'PUT',
         headers: {
           'merchant-id': config.merchantId,

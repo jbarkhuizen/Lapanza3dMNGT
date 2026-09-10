@@ -31,6 +31,22 @@ export function buildApp() {
     app.set('trust proxy', 1);
   }
   app.use(cors({ origin: env.frontendOrigin, credentials: true }));
+  // PayPal's webhook signature check (see paypalProvider.ts's
+  // verifyWebhookSignature) must send PayPal the EXACT bytes it originally
+  // posted, not a re-serialized JSON.stringify(req.body) — a known source
+  // of intermittent verification failures. Capture those raw bytes onto
+  // req.rawBody, scoped to just this one path and registered BEFORE the
+  // blanket express.json() below: body-parser's own "already parsed" guard
+  // then makes the blanket parser skip re-parsing this route's body, so no
+  // other route's request-body handling changes.
+  app.use(
+    '/api/webhooks/paypal',
+    express.json({
+      verify: (req, _res, buf) => {
+        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+      },
+    }),
+  );
   app.use(express.json());
   // PayFast's ITN webhook POSTs as application/x-www-form-urlencoded, not
   // JSON (PayPal's webhook is genuine JSON, handled by express.json() above).

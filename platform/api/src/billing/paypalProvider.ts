@@ -2,6 +2,18 @@ import type { Request } from 'express';
 import type { PaymentProvider, NormalizedSubscriptionEvent } from './types.js';
 import { env } from '../env.js';
 
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      // Captured only on the PayPal webhook route by the path-scoped
+      // express.json({ verify }) in app.ts -- see verifyWebhookSignature
+      // below for why the raw bytes matter. Undefined everywhere else.
+      rawBody?: Buffer;
+    }
+  }
+}
+
 interface PaypalConfig {
   clientId: string;
   clientSecret: string;
@@ -112,21 +124,40 @@ export function createPaypalProvider(
 
     async verifyWebhookSignature(req: Request): Promise<boolean> {
       const accessToken = await getAccessToken();
+      // PayPal recomputes its signature over the EXACT bytes it originally
+      // sent (a CRC32 of the raw body) -- re-serializing the already-parsed
+      // req.body with JSON.stringify can silently reorder keys or change
+      // whitespace/escaping, producing a byte string that no longer
+      // matches and intermittently failing verification for perfectly
+      // valid webhooks. Prefer the raw bytes captured by app.ts's
+      // path-scoped express.json({ verify }) on this route; fall back to
+      // re-serializing req.body if rawBody wasn't captured (e.g. a
+      // hand-built request in a test), which preserves prior behavior.
+      const webhookEventJson = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(req.body);
+      // Only webhook_event needs byte-for-byte fidelity (it's the field
+      // PayPal's CRC32 covers); the other fields are plain strings from
+      // headers with no re-serialization ambiguity, so they're still built
+      // via a normal object + JSON.stringify. A placeholder token is
+      // swapped for the raw JSON text afterwards rather than nesting it
+      // directly, so JSON.stringify never touches -- and can't reformat --
+      // the raw bytes.
+      const placeholderToken = 'RAW_WEBHOOK_EVENT_PLACEHOLDER';
+      const payload = JSON.stringify({
+        transmission_id: req.headers['paypal-transmission-id'],
+        transmission_time: req.headers['paypal-transmission-time'],
+        cert_url: req.headers['paypal-cert-url'],
+        auth_algo: req.headers['paypal-auth-algo'],
+        transmission_sig: req.headers['paypal-transmission-sig'],
+        webhook_id: config.webhookId,
+        webhook_event: placeholderToken,
+      }).replace(`"${placeholderToken}"`, webhookEventJson);
       const res = await fetchImpl(`${baseUrl}/v1/notifications/verify-webhook-signature`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          transmission_id: req.headers['paypal-transmission-id'],
-          transmission_time: req.headers['paypal-transmission-time'],
-          cert_url: req.headers['paypal-cert-url'],
-          auth_algo: req.headers['paypal-auth-algo'],
-          transmission_sig: req.headers['paypal-transmission-sig'],
-          webhook_id: config.webhookId,
-          webhook_event: req.body,
-        }),
+        body: payload,
       });
       const data = await res.json();
       return data.verification_status === 'SUCCESS';
