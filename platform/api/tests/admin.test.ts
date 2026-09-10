@@ -277,6 +277,219 @@ test('cancel on a subscription with a real providerSubscriptionId calls the real
   }
 });
 
+test('grant on an existing subscription calls the real provider to cancel it BEFORE the local row is replaced', async () => {
+  // Direct coverage for the provider-cancel-before-delete ordering (the
+  // first of the review round's Important fixes) — mocking
+  // payfastProvider.cancelSubscription the same way the cancel-route test
+  // above does, and the tenant-facing billing.test.ts does for the
+  // equivalent resubscribe-over-an-existing-row path.
+  const { tenant } = await makeTenantAndPlan();
+  const tier1 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const tier2 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 2' } });
+  const original = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: tier1.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'sub_test_456',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const cancelCalls: string[] = [];
+  let rowIdAtCallTime: string | undefined;
+  mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
+    cancelCalls.push(providerSubscriptionId);
+    const current = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    rowIdAtCallTime = current.id;
+  });
+
+  try {
+    const agent = await loggedInAdminAgent();
+    const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: tier2.id });
+    assert.equal(res.status, 302);
+    assert.deepEqual(cancelCalls, ['sub_test_456']);
+    assert.equal(rowIdAtCallTime, original.id, 'the provider must be called BEFORE the old row is deleted and replaced');
+
+    const replaced = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    assert.notEqual(replaced.id, original.id);
+    assert.equal(replaced.planId, tier2.id);
+    assert.equal(replaced.paymentProvider, 'manual');
+    assert.equal(replaced.providerSubscriptionId, null);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('grant on a subscription with an unrecognized paymentProvider fails loudly instead of throwing past the best-effort catch', async () => {
+  // Direct coverage for the !provider guard mirrored from the cancel
+  // route (this task's finding 1). Without it, `providers[existing.
+  // paymentProvider]` returns undefined and calling .cancelSubscription()
+  // on it throws a TypeError before the .catch() below ever attaches,
+  // turning this "never blocks the grant" best-effort path into an
+  // unhandled 500 with no clear message.
+  const { tenant } = await makeTenantAndPlan();
+  const tier1 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const tier2 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 2' } });
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: tier1.id,
+      status: 'active',
+      paymentProvider: 'some-legacy-provider-no-longer-registered',
+      providerSubscriptionId: 'sub_test_789',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: tier2.id });
+  assert.equal(res.status, 500);
+  assert.match(res.text, /Unrecognized payment provider/);
+
+  const unchanged = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(unchanged.paymentProvider, 'some-legacy-provider-no-longer-registered');
+  assert.equal(unchanged.planId, tier1.id, 'the existing row must be untouched when the guard fires');
+});
+
+test('grant with a planId that is not a real active plan is rejected before contacting the provider or touching the existing subscription', async () => {
+  // Direct coverage for finding 2: planId must be validated against the
+  // active-plans set before the irreversible provider-cancel call runs,
+  // not after. Covers both a planId that doesn't exist at all and one
+  // that exists but has been deactivated.
+  const { tenant } = await makeTenantAndPlan();
+  const tier1 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const inactivePlan = await prisma.plan.create({
+    data: { name: 'Retired Tier', monthlyPrice: '99.00', sortOrder: 99, active: false },
+  });
+  const original = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: tier1.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'sub_test_planid',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const cancelCalls: string[] = [];
+  mock.method(payfastProvider, 'cancelSubscription', async (providerSubscriptionId: string) => {
+    cancelCalls.push(providerSubscriptionId);
+  });
+
+  try {
+    const agent = await loggedInAdminAgent();
+
+    const resMissing = await agent
+      .post(`/api/admin/tenants/${tenant.id}/subscription/grant`)
+      .send({ planId: 'not-a-real-plan-id' });
+    assert.equal(resMissing.status, 302);
+
+    const resInactive = await agent
+      .post(`/api/admin/tenants/${tenant.id}/subscription/grant`)
+      .send({ planId: inactivePlan.id });
+    assert.equal(resInactive.status, 302);
+
+    assert.deepEqual(cancelCalls, [], 'the provider must never be contacted for a bad planId');
+
+    const untouched = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+    assert.equal(untouched.id, original.id, 'the existing subscription row must not be deleted or replaced');
+    assert.equal(untouched.planId, tier1.id);
+    assert.equal(untouched.providerSubscriptionId, 'sub_test_planid');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('the transactional delete+create leaves the tenant with a subscription row, not zero, when the create fails mid-transaction', async () => {
+  // Direct coverage for finding 4's transactional delete+create fix. Fix
+  // 2 above means a bad planId can no longer reach this transaction via
+  // the route itself (it's rejected earlier), so this exercises the same
+  // delete-then-create pair admin.ts wraps in prisma.$transaction directly
+  // with a planId that doesn't exist, to prove the FK violation on create
+  // rolls the whole transaction back rather than leaving the delete
+  // committed and the tenant with zero subscription rows.
+  const { tenant } = await makeTenantAndPlan();
+  const tier1 = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  const original = await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: tier1.id,
+      status: 'active',
+      paymentProvider: 'manual',
+      providerSubscriptionId: null,
+      trialEndsAt: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const { Prisma } = await import('@prisma/client');
+  await assert.rejects(
+    () =>
+      prisma.$transaction([
+        prisma.subscription.deleteMany({ where: { tenantId: tenant.id } }),
+        prisma.subscription.create({
+          data: {
+            tenantId: tenant.id,
+            planId: 'does-not-exist-as-a-plan-id',
+            status: 'active',
+            paymentProvider: 'manual',
+            providerSubscriptionId: null,
+            trialEndsAt: new Date(),
+            currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          },
+        }),
+      ]),
+    (error: unknown) => error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003',
+  );
+
+  const survivors = await prisma.subscription.findMany({ where: { tenantId: tenant.id } });
+  assert.equal(survivors.length, 1, 'the transaction must roll back atomically, leaving the original row intact');
+  assert.equal(survivors[0]?.id, original.id);
+});
+
+test('adjust to status=active with no explicit date extends a genuinely stale currentPeriodEnd forward', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  // Simulate a row that's gone stale (e.g. weeks-old from a past_due ->
+  // lapsed history) the way requireActiveSubscription.ts's self-heal
+  // would treat it: currentPeriodEnd already in the past.
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { currentPeriodEnd: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000) },
+  });
+
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'active' });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.ok(updated.currentPeriodEnd);
+  assert.ok(updated.currentPeriodEnd!.getTime() > Date.now(), 'a stale currentPeriodEnd must be pushed into the future');
+});
+
+test('adjust to status=active with no explicit date leaves an already-current currentPeriodEnd untouched', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  const granted = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.ok(granted.currentPeriodEnd);
+  assert.ok(granted.currentPeriodEnd!.getTime() > Date.now(), 'sanity check: the freshly granted row is not stale');
+
+  // Re-saving status=active with no explicit date on an already-current,
+  // already-active subscription must not push its currentPeriodEnd out —
+  // it was never stale in the first place.
+  const res = await agent.post(`/api/admin/tenants/${tenant.id}/subscription/adjust`).send({ status: 'active' });
+  assert.equal(res.status, 302);
+
+  const after = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.deepEqual(after.currentPeriodEnd, granted.currentPeriodEnd);
+});
+
 test('adjust manages pastDueSince like the webhook flow: stamps on first past_due, does not re-stamp on a second, clears on recovery', async () => {
   const { tenant, plan } = await makeTenantAndPlan();
   const agent = await loggedInAdminAgent();
