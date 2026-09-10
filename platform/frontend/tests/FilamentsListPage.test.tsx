@@ -54,4 +54,28 @@ describe('FilamentsListPage', () => {
       expect(screen.getByRole('link', { name: 'New Filament' })).toHaveAttribute('href', '/filaments/new'),
     );
   });
+
+  it('shows an em-dash placeholder for a colour cleared to an empty string', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      filaments: [{ ...baseFilament, id: '2', brand: 'Cleared Colour', colour: '' }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Cleared Colour')).toBeInTheDocument());
+    const row = screen.getByText('Cleared Colour').closest('tr');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('—');
+  });
+
+  it('shows an em-dash placeholder for a null colour', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      filaments: [{ ...baseFilament, id: '3', brand: 'Null Colour', colour: null }],
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Null Colour')).toBeInTheDocument());
+    const row = screen.getByText('Null Colour').closest('tr');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('—');
+  });
 });

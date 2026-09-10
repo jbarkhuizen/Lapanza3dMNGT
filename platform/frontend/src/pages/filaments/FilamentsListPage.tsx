@@ -32,7 +32,7 @@ export function FilamentsListPage() {
                 <td className="py-2">{filament.brand}</td>
                 <td className="py-2">{filament.materialType}</td>
                 <td className="py-2">{filament.diameterMm}mm</td>
-                <td className="py-2">{filament.colour ?? '—'}</td>
+                <td className="py-2">{filament.colour || '—'}</td>
                 <td className="py-2 text-right">
                   <Link to={`/filaments/${filament.id}`} className="text-slate-600 underline">
                     Edit
