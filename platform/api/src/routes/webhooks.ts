@@ -6,8 +6,6 @@ import type { PaymentProvider, NormalizedSubscriptionEvent } from '../billing/ty
 
 export const webhooksRouter = Router();
 
-const GRACE_PERIOD_DAYS = 7;
-
 async function applyEvent(event: NormalizedSubscriptionEvent, providerName: string): Promise<void> {
   if (!event.providerSubscriptionId) return;
 
@@ -51,8 +49,10 @@ async function applyEvent(event: NormalizedSubscriptionEvent, providerName: stri
   // an in-flight charge that was already processing when the tenant
   // clicked cancel would otherwise pass the token-match guard above (same
   // subscription, same token) and silently resurrect access. Block every
-  // event type except 'canceled' itself (idempotent — the row is already
-  // canceled, applying it again is harmless). This is intentionally
+  // event type except 'canceled' itself — status stays 'canceled' either
+  // way, though the update below still binds providerIdPatch as a side
+  // effect if the row wasn't already bound (harmless: same value the
+  // token-match guard above would otherwise gate on). This is intentionally
   // narrower than 'lapsed': a lapsed row self-healed locally because the
   // provider never told us anything, so it legitimately needs to accept
   // its real first-contact ITN (see the token-match guard above) — that
