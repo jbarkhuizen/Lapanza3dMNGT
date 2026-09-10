@@ -227,6 +227,21 @@ adminRouter.post(
       return res.redirect(`/api/admin/tenants/${tenantId}`);
     }
 
+    // Must happen before anything irreversible (the provider-cancel call
+    // below) runs. The grant form's <select> is only ever populated from
+    // active plans (see the `prisma.plan.findMany({ where: { active: true
+    // } })` call that builds it above, in the tenant-detail GET route) —
+    // mirror that same active-plans set here so a hand-crafted request with
+    // a bogus or inactive planId is rejected before it can cancel a
+    // tenant's real subscription at the provider and only then fail the
+    // local create on an FK violation, which would leave the old
+    // provider-side subscription dead with no local record pointing back
+    // at it.
+    const plan = await prisma.plan.findUnique({ where: { id: planId } });
+    if (!plan || !plan.active) {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
     const existing = await prisma.subscription.findUnique({ where: { tenantId } });
     const now = new Date();
     const newSubscriptionData = {
@@ -253,6 +268,18 @@ adminRouter.post(
       // the admin's grant.
       if (existing.providerSubscriptionId) {
         const oldProvider = providers[existing.paymentProvider];
+        if (!oldProvider) {
+          // Should be unreachable: an admin-granted subscription never sets
+          // providerSubscriptionId, so any row that reaches here with one
+          // set has a real paymentProvider ('payfast'/'paypal') from a
+          // genuine signup. Fail loudly rather than let an unrecognized
+          // value throw past the .catch() below — that .catch() only
+          // swallows a failed *cancel call*, not a TypeError from indexing
+          // `providers` with a bad key, so without this guard a bad value
+          // here would turn this "never blocks the grant" best-effort path
+          // into an unhandled 500. Same contract as the cancel route below.
+          return res.status(500).type('html').send(adminPage('Error', '<p class="error">Unrecognized payment provider on this subscription &mdash; refusing to grant. Check the database directly.</p>'));
+        }
         await oldProvider.cancelSubscription(existing.providerSubscriptionId).catch((error) => {
           console.error(
             `Failed to cancel previous ${existing.paymentProvider} subscription ${existing.providerSubscriptionId} during admin grant:`,
@@ -314,8 +341,17 @@ adminRouter.post(
     // tenant write, silently undoing this fix. Default it forward the same
     // way the grant route does (now + 30 days) whenever the admin is
     // setting status to 'active' and did NOT supply an explicit date —
-    // but never override an intentionally-supplied one.
-    if (status === 'active' && !explicitPeriodEnd) {
+    // but never override an intentionally-supplied one, and never touch a
+    // row that isn't actually stale: an already-current paying subscription
+    // (currentPeriodEnd comfortably in the future) must be left alone.
+    // "Stale" is defined the same way requireActiveSubscription.ts's
+    // GRACE_PERIOD_MS-based self-heal effectively treats it — missing, or
+    // already at/past currentPeriodEnd — which covers both a row still
+    // inside that 7-day grace window (not yet self-healed to 'lapsed') and
+    // one already past it (would have self-healed). Anything still in the
+    // future needs no help.
+    const isCurrentPeriodEndStale = !existing.currentPeriodEnd || existing.currentPeriodEnd.getTime() <= Date.now();
+    if (status === 'active' && !explicitPeriodEnd && isCurrentPeriodEndStale) {
       data.currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     }
 
