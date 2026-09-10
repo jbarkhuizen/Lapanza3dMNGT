@@ -52,9 +52,9 @@ customersRouter.patch('/api/customers/:id', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Invalid customer fields.' });
   }
   const scoped = tenantScope(req.tenantId!);
-  const result = await scoped.customers.update(req.params.id, parsed.data);
-  if (result.count === 0) {
+  const customer = await scoped.customers.update(req.params.id, parsed.data);
+  if (!customer) {
     return res.status(404).json({ ok: false, error: 'Customer not found.' });
   }
-  res.json({ ok: true });
+  res.json({ ok: true, customer });
 });
