@@ -5,8 +5,13 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const customersRouter = Router();
-customersRouter.use(requireTenantAuth);
-customersRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a path this router doesn't define — e.g. a typo, or any
+// other genuinely unmatched /api/* route that merely happens to fall
+// through to this router in the app.ts mount chain — falls through to the
+// next router (and eventually app.ts's final 404 handler) instead of a
+// misleading 401 from an auth check that never had a real route to
+// protect. See backlog #6.
 
 const createCustomerSchema = z.object({
   name: z.string().min(1),
@@ -21,13 +26,13 @@ const createCustomerSchema = z.object({
 
 const updateCustomerSchema = createCustomerSchema.partial();
 
-customersRouter.get('/api/customers', async (req, res) => {
+customersRouter.get('/api/customers', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const customers = await scoped.customers.findMany();
   res.json({ ok: true, customers });
 });
 
-customersRouter.post('/api/customers', async (req, res) => {
+customersRouter.post('/api/customers', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createCustomerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Customer name and billing address are required.' });
@@ -37,7 +42,7 @@ customersRouter.post('/api/customers', async (req, res) => {
   res.status(201).json({ ok: true, customer });
 });
 
-customersRouter.get('/api/customers/:id', async (req, res) => {
+customersRouter.get('/api/customers/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const customer = await scoped.customers.findById(req.params.id);
   if (!customer) {
@@ -46,7 +51,7 @@ customersRouter.get('/api/customers/:id', async (req, res) => {
   res.json({ ok: true, customer });
 });
 
-customersRouter.patch('/api/customers/:id', async (req, res) => {
+customersRouter.patch('/api/customers/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateCustomerSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid customer fields.' });

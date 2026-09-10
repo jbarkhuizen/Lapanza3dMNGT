@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const labourStepsRouter = Router();
-labourStepsRouter.use(requireTenantAuth);
-labourStepsRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const createLabourStepSchema = z.object({
   name: z.string().min(1),
@@ -16,13 +18,13 @@ const createLabourStepSchema = z.object({
 
 const updateLabourStepSchema = createLabourStepSchema.partial();
 
-labourStepsRouter.get('/api/labour-steps', async (req, res) => {
+labourStepsRouter.get('/api/labour-steps', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const labourSteps = await scoped.labourSteps.findMany();
   res.json({ ok: true, labourSteps });
 });
 
-labourStepsRouter.post('/api/labour-steps', async (req, res) => {
+labourStepsRouter.post('/api/labour-steps', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createLabourStepSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Name and hourly rate are required.' });
@@ -32,7 +34,7 @@ labourStepsRouter.post('/api/labour-steps', async (req, res) => {
   res.status(201).json({ ok: true, labourStep });
 });
 
-labourStepsRouter.get('/api/labour-steps/:id', async (req, res) => {
+labourStepsRouter.get('/api/labour-steps/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const labourStep = await scoped.labourSteps.findById(req.params.id);
   if (!labourStep) {
@@ -41,7 +43,7 @@ labourStepsRouter.get('/api/labour-steps/:id', async (req, res) => {
   res.json({ ok: true, labourStep });
 });
 
-labourStepsRouter.patch('/api/labour-steps/:id', async (req, res) => {
+labourStepsRouter.patch('/api/labour-steps/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateLabourStepSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid labour step fields.' });

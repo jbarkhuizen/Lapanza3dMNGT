@@ -1,4 +1,5 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction, ParamsDictionary } from 'express-serve-static-core';
+import type { ParsedQs } from 'qs';
 import { tenantScope } from '../db/scoped.js';
 
 const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
@@ -8,7 +9,15 @@ const GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000;
 // moments before this check runs.
 const TRIAL_EXPIRY_SLACK_MS = 24 * 60 * 60 * 1000;
 
-export async function requireActiveSubscription(req: Request, res: Response, next: NextFunction) {
+// Kept as a genuinely generic function — see requireTenantAuth.ts for why
+// (keeps a route's own inferred `:param` types, e.g. `req.params.id`,
+// intact when this is passed alongside the route's handler to the same
+// router call).
+export async function requireActiveSubscription<P = ParamsDictionary>(
+  req: Request<P, unknown, unknown, ParsedQs, Record<string, unknown>>,
+  res: Response<unknown, Record<string, unknown>>,
+  next: NextFunction,
+) {
   if (req.method === 'GET') {
     return next();
   }

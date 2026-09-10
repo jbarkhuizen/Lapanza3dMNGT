@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const printerMaintenanceRouter = Router();
-printerMaintenanceRouter.use(requireTenantAuth);
-printerMaintenanceRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const createMaintenanceLogSchema = z.object({
   date: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.'),
@@ -20,7 +22,7 @@ async function requireOwnedPrinter(tenantId: string, printerId: string) {
   return scoped.printers.findById(printerId);
 }
 
-printerMaintenanceRouter.get('/api/printers/:printerId/maintenance-log', async (req, res) => {
+printerMaintenanceRouter.get('/api/printers/:printerId/maintenance-log', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const printer = await requireOwnedPrinter(req.tenantId!, req.params.printerId);
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });
@@ -30,7 +32,7 @@ printerMaintenanceRouter.get('/api/printers/:printerId/maintenance-log', async (
   res.json({ ok: true, entries });
 });
 
-printerMaintenanceRouter.post('/api/printers/:printerId/maintenance-log', async (req, res) => {
+printerMaintenanceRouter.post('/api/printers/:printerId/maintenance-log', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const printer = await requireOwnedPrinter(req.tenantId!, req.params.printerId);
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });

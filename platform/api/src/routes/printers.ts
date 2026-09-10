@@ -18,8 +18,10 @@ function serializePrinter(printer: Printer) {
     electricityRatePerKwh: printer.electricityRatePerKwh != null ? printer.electricityRatePerKwh.toFixed(4) : null,
   };
 }
-printersRouter.use(requireTenantAuth);
-printersRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
 
@@ -57,13 +59,13 @@ const updatePrinterSchema = createPrinterSchema.partial().extend({
   expectedLifetimeHours: z.number().positive().nullable().optional(),
 });
 
-printersRouter.get('/api/printers', async (req, res) => {
+printersRouter.get('/api/printers', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const printers = await scoped.printers.findMany();
   res.json({ ok: true, printers: printers.map(serializePrinter) });
 });
 
-printersRouter.post('/api/printers', async (req, res) => {
+printersRouter.post('/api/printers', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createPrinterSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Printer name is required.' });
@@ -73,7 +75,7 @@ printersRouter.post('/api/printers', async (req, res) => {
   res.status(201).json({ ok: true, printer: serializePrinter(printer) });
 });
 
-printersRouter.get('/api/printers/:id', async (req, res) => {
+printersRouter.get('/api/printers/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const printer = await scoped.printers.findById(req.params.id);
   if (!printer) {
@@ -82,7 +84,7 @@ printersRouter.get('/api/printers/:id', async (req, res) => {
   res.json({ ok: true, printer: serializePrinter(printer) });
 });
 
-printersRouter.patch('/api/printers/:id', async (req, res) => {
+printersRouter.patch('/api/printers/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updatePrinterSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid printer fields.' });
