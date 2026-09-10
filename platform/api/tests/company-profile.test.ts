@@ -81,11 +81,42 @@ test('a lapsed subscription blocks PATCH /api/company-profile with 402', async (
   assert.equal(res.status, 402);
 });
 
-test('PATCH rejects a whitespace-only quoteNumberPrefix', async () => {
+test('PATCH trims a whitespace-only quoteNumberPrefix down to blank (clearing it)', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);
   const res = await agent.patch('/api/company-profile').send({ quoteNumberPrefix: '   ' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.companyProfile.quoteNumberPrefix, '');
+});
+
+test('PATCH can clear an already-set vatNumber back to blank when vatRegistered is false', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatNumber: '4123456789' });
+
+  const res = await agent.patch('/api/company-profile').send({ vatNumber: '' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.companyProfile.vatNumber, '');
+});
+
+test('PATCH rejects clearing vatNumber to blank while vatRegistered is true in the same request', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+
+  const res = await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '' });
   assert.equal(res.status, 400);
+});
+
+test('PATCH can clear quoteNumberPrefix and invoiceNumberPrefix back to blank', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent
+    .patch('/api/company-profile')
+    .send({ quoteNumberPrefix: '', invoiceNumberPrefix: '' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.companyProfile.quoteNumberPrefix, '');
+  assert.equal(res.body.companyProfile.invoiceNumberPrefix, '');
 });
 
 test('PATCH rejects vatRegistered: true without a vatNumber, on a tenant that has never set one', async () => {
