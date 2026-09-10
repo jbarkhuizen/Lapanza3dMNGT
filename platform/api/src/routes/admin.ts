@@ -43,17 +43,59 @@ adminRouter.get('/login', (req, res) => {
 <head>
 <meta charset="utf-8" />
 <title>Admin login &mdash; Barkie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:opsz,wght@9..144,500..700&display=swap" rel="stylesheet" />
 <style>
-  body { font-family: ui-sans-serif, system-ui, sans-serif; background: #f7f3eb; color: #1a1612; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-  .card { background: #efe7d8; border: 1px solid #e0d8c8; border-radius: 8px; padding: 32px; width: 320px; }
-  h1 { font-size: 18px; margin: 0 0 16px; }
-  input { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px; padding: 10px; margin-bottom: 12px; border: 1px solid #cbbfa8; border-radius: 4px; }
-  button { width: 100%; font-family: inherit; font-size: 14px; padding: 10px; border: none; border-radius: 4px; background: #c24b28; color: #fff; cursor: pointer; }
-  .error { color: #c24b28; font-weight: 600; margin-bottom: 12px; }
+  :root {
+    --bg: #f3eee4; --panel: #fffdf8; --ink: #1a1612; --muted: #6a5f54;
+    --line: rgb(26 22 18 / 0.12); --brand: #c24b28; --bg-elevated: #faf7f1;
+    --shadow: 0 18px 40px rgb(26 22 18 / 0.08); --radius: 14px;
+    --font: "DM Sans", system-ui, sans-serif; --serif: "Fraunces", Georgia, serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12100e; --panel: #1e1a16; --ink: #f4efe6; --muted: #b0a497;
+      --line: rgb(244 239 230 / 0.12); --brand: #e06a45; --bg-elevated: #1a1714;
+      --shadow: 0 18px 40px rgb(0 0 0 / 0.35);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: var(--font); color: var(--ink);
+    background:
+      radial-gradient(900px 500px at 100% 0%, rgb(194 75 40 / 0.12), transparent 55%),
+      radial-gradient(700px 400px at 0% 100%, rgb(217 235 77 / 0.08), transparent 50%),
+      var(--bg);
+    display: flex; align-items: center; justify-content: center; height: 100vh;
+  }
+  .login-card {
+    width: min(420px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: calc(var(--radius) + 4px);
+    padding: 2rem;
+    box-shadow: var(--shadow);
+  }
+  .login-card h1 { font-family: var(--serif); font-weight: 600; font-size: 2rem; margin: 0 0 0.5rem; letter-spacing: -0.03em; }
+  input {
+    width: 100%; box-sizing: border-box; font-family: inherit; font-size: 0.9rem;
+    padding: 0.7rem 0.85rem; margin-bottom: 12px; border: 1px solid var(--line);
+    background: var(--bg-elevated); color: var(--ink); border-radius: 10px;
+  }
+  button {
+    width: 100%; font-family: inherit; font-size: 0.9rem; font-weight: 600;
+    padding: 0.65rem 1.05rem; border: 1px solid var(--ink); border-radius: 999px;
+    background: var(--ink); color: var(--bg); cursor: pointer;
+  }
+  .error { color: var(--danger, #b42318); font-weight: 600; margin-bottom: 12px; }
 </style>
 </head>
 <body>
-<div class="card">
+<div class="login-card">
 <h1>Barkie Admin</h1>
 ${showError ? '<p class="error">Wrong email or password.</p>' : ''}
 <form method="post" action="/api/admin/login">
@@ -98,12 +140,15 @@ adminRouter.post('/logout', requirePlatformAdminAuth, async (req, res) => {
 
 adminRouter.get('/', requirePlatformAdminAuth, (_req, res) => {
   res.type('html').send(adminPage('Dashboard', `
-    <ul>
-      <li><a href="/api/admin/tenants">Tenants</a></li>
-      <li><a href="/api/admin/plans">Plans</a></li>
-      <li><a href="/api/admin/backlog">Backlog</a></li>
-    </ul>
-  `));
+    <div class="panel">
+      <h2>Quick links</h2>
+      <div class="stack gap-2">
+        <a class="btn btn-secondary" href="/api/admin/tenants">Tenants</a>
+        <a class="btn btn-secondary" href="/api/admin/plans">Plans</a>
+        <a class="btn btn-secondary" href="/api/admin/backlog">Backlog</a>
+      </div>
+    </div>
+  `, 'dashboard'));
 });
 
 adminRouter.get('/tenants', requirePlatformAdminAuth, async (_req, res) => {
@@ -120,11 +165,13 @@ adminRouter.get('/tenants', requirePlatformAdminAuth, async (_req, res) => {
       <td>${t.subscription ? escapeHtml(t.subscription.status) : 'None'}</td>
     </tr>`).join('');
   res.type('html').send(adminPage('Tenants', `
-    <table>
-      <thead><tr><th>Business</th><th>Email</th><th>Signed up</th><th>Verified</th><th>Subscription</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5">No tenants yet.</td></tr>'}</tbody>
-    </table>
-  `));
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Business</th><th>Email</th><th>Signed up</th><th>Verified</th><th>Subscription</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">No tenants yet.</td></tr>'}</tbody>
+      </table>
+    </div>
+  `, 'tenants'));
 });
 
 adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
@@ -137,13 +184,15 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
   }
 
   const editForm = `
-    <div class="card">
+    <div class="panel">
       <h2>Edit tenant</h2>
-      <form method="post" action="/api/admin/tenants/${tenant.id}/edit">
-        <label>Business name<br /><input name="businessName" value="${escapeHtml(tenant.businessName)}" required /></label><br /><br />
-        <label>Contact name<br /><input name="contactName" value="${escapeHtml(tenant.contactName)}" required /></label><br /><br />
-        <label>Email<br /><input type="email" name="email" value="${escapeHtml(tenant.email)}" required /></label><br /><br />
-        <button type="submit">Save</button>
+      <form method="post" action="/api/admin/tenants/${tenant.id}/edit" class="stack gap-3">
+        <div class="grid-2">
+          <label class="field"><span>Business name</span><input name="businessName" value="${escapeHtml(tenant.businessName)}" required /></label>
+          <label class="field"><span>Contact name</span><input name="contactName" value="${escapeHtml(tenant.contactName)}" required /></label>
+        </div>
+        <label class="field"><span>Email</span><input type="email" name="email" value="${escapeHtml(tenant.email)}" required /></label>
+        <button type="submit" class="btn btn-primary">Save</button>
       </form>
     </div>`;
 
@@ -158,25 +207,25 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
   const showGrantForm = !sub || sub.status === 'canceled' || sub.status === 'lapsed';
   const showAdjustForm = Boolean(sub);
 
-  let subscriptionSection = '<div class="card"><h2>Subscription</h2>';
+  let subscriptionSection = '<div class="panel"><h2>Subscription</h2>';
   if (sub) {
     subscriptionSection += `
-      <p>${escapeHtml(sub.plan.name)} &mdash; status <strong>${escapeHtml(sub.status)}</strong>,
+      <p>${escapeHtml(sub.plan.name)} &mdash; status ${badge(sub.status)},
       trial ends ${sub.trialEndsAt.toISOString().slice(0, 10)},
       period ends ${sub.currentPeriodEnd ? sub.currentPeriodEnd.toISOString().slice(0, 10) : '&mdash;'}</p>`;
   } else {
-    subscriptionSection += '<p>No subscription.</p>';
+    subscriptionSection += '<p style="color:var(--muted)">No subscription.</p>';
   }
 
   if (showGrantForm) {
     const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
     const planOptions = plans.map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (R${p.monthlyPrice.toFixed(2)})</option>`).join('');
     subscriptionSection += `
-      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/grant">
-        <label>Grant plan<br />
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/grant" class="stack gap-3" style="margin-top:12px">
+        <label class="field"><span>Grant plan</span>
           <select name="planId" required>${planOptions}</select>
         </label>
-        <button type="submit">Grant subscription</button>
+        <button type="submit" class="btn btn-primary">Grant subscription</button>
       </form>`;
   }
 
@@ -185,15 +234,15 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
       .map((s) => `<option value="${s}" ${s === sub.status ? 'selected' : ''}>${s}</option>`)
       .join('');
     subscriptionSection += `
-      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/adjust" style="margin-top:12px">
-        <label>Status<br />
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/adjust" class="grid-2" style="margin-top:12px;align-items:end">
+        <label class="field"><span>Status</span>
           <select name="status">${statusOptions}</select>
         </label>
-        <label>Extend period end to<br /><input type="date" name="currentPeriodEnd" /></label>
-        <button type="submit">Save</button>
+        <label class="field"><span>Extend period end to</span><input type="date" name="currentPeriodEnd" /></label>
+        <button type="submit" class="btn btn-primary">Save</button>
       </form>
       <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/cancel" style="margin-top:12px">
-        <button type="submit">Cancel subscription</button>
+        <button type="submit" class="btn btn-danger">Cancel subscription</button>
       </form>`;
   }
   subscriptionSection += '</div>';
@@ -201,8 +250,8 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
   res.type('html').send(adminPage(tenant.businessName, `
     ${editForm}
     ${subscriptionSection}
-    <p><a href="/api/admin/tenants/${tenant.id}/quotes">View quotes</a> &middot; <a href="/api/admin/tenants/${tenant.id}/invoices">View invoices</a></p>
-  `));
+    <p><a class="btn btn-secondary small" href="/api/admin/tenants/${tenant.id}/quotes">View quotes</a> <a class="btn btn-secondary small" href="/api/admin/tenants/${tenant.id}/invoices">View invoices</a></p>
+  `, 'tenants'));
 });
 
 adminRouter.post('/tenants/:id/edit', requirePlatformAdminAuth, async (req, res) => {
@@ -442,11 +491,13 @@ adminRouter.get(
       </tr>`).join('');
     res.type('html').send(adminPage(`${tenant.businessName} — Quotes`, `
       <p><a href="/api/admin/tenants/${tenant.id}">&larr; Back to tenant</a></p>
-      <table>
-        <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5">No quotes.</td></tr>'}</tbody>
-      </table>
-    `));
+      <div class="panel table-wrap">
+        <table class="catalog">
+          <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Date</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5">No quotes.</td></tr>'}</tbody>
+        </table>
+      </div>
+    `, 'tenants'));
   },
 );
 
@@ -474,11 +525,13 @@ adminRouter.get(
       </tr>`).join('');
     res.type('html').send(adminPage(`${tenant.businessName} — Invoices`, `
       <p><a href="/api/admin/tenants/${tenant.id}">&larr; Back to tenant</a></p>
-      <table>
-        <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Paid</th><th>Date</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6">No invoices.</td></tr>'}</tbody>
-      </table>
-    `));
+      <div class="panel table-wrap">
+        <table class="catalog">
+          <thead><tr><th>Number</th><th>Customer</th><th>Status</th><th>Total</th><th>Paid</th><th>Date</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6">No invoices.</td></tr>'}</tbody>
+        </table>
+      </div>
+    `, 'tenants'));
   },
 );
 
@@ -490,27 +543,29 @@ adminRouter.get('/plans', requirePlatformAdminAuth, async (_req, res) => {
   const rows = plans.map((p) => `
     <tr>
       <td>
-        <form method="post" action="/api/admin/plans/${p.id}/edit" class="inline">
-          <input name="name" value="${escapeHtml(p.name)}" style="width:120px" required />
-          <input name="monthlyPrice" value="${p.monthlyPrice.toFixed(2)}" style="width:80px" required />
-          <input name="sortOrder" type="number" value="${p.sortOrder}" style="width:60px" required />
-          <label><input type="checkbox" name="active" ${p.active ? 'checked' : ''} /> Active</label>
-          <button type="submit">Save</button>
+        <form method="post" action="/api/admin/plans/${p.id}/edit" class="grid-3" style="align-items:end;gap:0.5rem">
+          <label class="field"><span>Name</span><input name="name" value="${escapeHtml(p.name)}" required /></label>
+          <label class="field"><span>Monthly price</span><span class="rand-input"><input name="monthlyPrice" value="${p.monthlyPrice.toFixed(2)}" required /></span></label>
+          <label class="field"><span>Sort order</span><input name="sortOrder" type="number" value="${p.sortOrder}" required /></label>
+          <label class="field checkbox"><input type="checkbox" name="active" ${p.active ? 'checked' : ''} /><span>Active</span></label>
+          <button type="submit" class="btn btn-primary small">Save</button>
         </form>
       </td>
     </tr>`).join('');
   res.type('html').send(adminPage('Plans', `
-    <table><tbody>${rows}</tbody></table>
-    <div class="card">
+    <div class="panel table-wrap">
+      <table class="catalog"><tbody>${rows}</tbody></table>
+    </div>
+    <div class="panel">
       <h2>New plan</h2>
-      <form method="post" action="/api/admin/plans">
-        <label>Name<br /><input name="name" required /></label><br /><br />
-        <label>Monthly price (R)<br /><input name="monthlyPrice" required /></label><br /><br />
-        <label>Sort order<br /><input name="sortOrder" type="number" required /></label><br /><br />
-        <button type="submit">Create plan</button>
+      <form method="post" action="/api/admin/plans" class="stack gap-3">
+        <label class="field"><span>Name</span><input name="name" required /></label>
+        <label class="field"><span>Monthly price (R)</span><span class="rand-input"><input name="monthlyPrice" required /></span></label>
+        <label class="field"><span>Sort order</span><input name="sortOrder" type="number" required /></label>
+        <button type="submit" class="btn btn-primary">Create plan</button>
       </form>
     </div>
-  `));
+  `, 'plans'));
 });
 
 adminRouter.post('/plans', requirePlatformAdminAuth, async (req, res) => {
@@ -558,36 +613,41 @@ adminRouter.get('/backlog', requirePlatformAdminAuth, async (req, res) => {
   const rows = items.map((item) => `
     <tr>
       <td>#${item.number}</td>
-      <td><a href="/api/admin/backlog/${item.id}">${escapeHtml(item.title)}</a><br /><span style="color:#6a5f54;font-size:13px">${escapeHtml(truncate(item.description, 140))}</span></td>
+      <td><a href="/api/admin/backlog/${item.id}">${escapeHtml(item.title)}</a><br /><span style="color:var(--muted);font-size:13px">${escapeHtml(truncate(item.description, 140))}</span></td>
       <td>${escapeHtml(item.category)}</td>
       <td>${badge(item.priority)}</td>
       <td>${badge(item.status)}</td>
     </tr>`).join('');
 
-  const filterLink = (value: string, label: string) => `<a href="/api/admin/backlog?status=${encodeURIComponent(value)}" ${statusFilter === value ? 'aria-current="page"' : ''}>${label}</a>`;
+  const filterLink = (value: string, label: string) => `<a class="nav-btn${statusFilter === value ? ' active' : ''}" style="display:inline-block" href="/api/admin/backlog?status=${encodeURIComponent(value)}">${label}</a>`;
 
   res.type('html').send(adminPage('Backlog', `
-    <p>${filterLink('Backlog', 'Open')} &middot; ${filterLink('Done', 'Done')} &middot; ${filterLink('all', 'All')}</p>
-    <table>
-      <thead><tr><th>#</th><th>Item</th><th>Category</th><th>Priority</th><th>Status</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5">No items.</td></tr>'}</tbody>
-    </table>
-    <div class="card">
+    <div class="panel" style="padding:0.5rem 0.75rem;display:inline-flex;gap:0.25rem;margin-bottom:1.25rem">
+      ${filterLink('Backlog', 'Open')}${filterLink('Done', 'Done')}${filterLink('all', 'All')}
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>#</th><th>Item</th><th>Category</th><th>Priority</th><th>Status</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5">No items.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="panel">
       <h2>New backlog item</h2>
-      <form method="post" action="/api/admin/backlog">
-        <label>Title<br /><input name="title" required style="width:100%" /></label><br /><br />
-        <label>Description<br /><textarea name="description" rows="4" required></textarea></label><br /><br />
-        <label>Category<br />
-          <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
-        </label>
-        <label>Priority<br />
-          <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === 'Medium' ? 'selected' : ''}>${p}</option>`).join('')}</select>
-        </label>
-        <br /><br />
-        <button type="submit">Create item</button>
+      <form method="post" action="/api/admin/backlog" class="stack gap-3">
+        <label class="field"><span>Title</span><input name="title" required /></label>
+        <label class="field"><span>Description</span><textarea name="description" rows="4" required></textarea></label>
+        <div class="grid-2">
+          <label class="field"><span>Category</span>
+            <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+          </label>
+          <label class="field"><span>Priority</span>
+            <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === 'Medium' ? 'selected' : ''}>${p}</option>`).join('')}</select>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-primary">Create item</button>
       </form>
     </div>
-  `));
+  `, 'backlog'));
 });
 
 adminRouter.post('/backlog', requirePlatformAdminAuth, async (req, res) => {
@@ -626,25 +686,26 @@ adminRouter.get('/backlog/:id', requirePlatformAdminAuth, async (req: Request<{ 
 
   res.type('html').send(adminPage(`#${item.number} — ${item.title}`, `
     <p><a href="/api/admin/backlog">&larr; Back to backlog</a></p>
-    <div class="card" style="max-width:720px">
-      <form method="post" action="/api/admin/backlog/${item.id}/edit">
-        <label>Title<br /><input name="title" value="${escapeHtml(item.title)}" required style="width:100%" /></label><br /><br />
-        <label>Description<br /><textarea name="description" rows="10" required>${escapeHtml(item.description)}</textarea></label><br /><br />
-        <label>Category<br />
-          <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}" ${c === item.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
-        </label>
-        <label>Priority<br />
-          <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === item.priority ? 'selected' : ''}>${p}</option>`).join('')}</select>
-        </label>
-        <label>Status<br />
-          <select name="status">${BACKLOG_STATUSES.map((s) => `<option value="${s}" ${s === item.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
-        </label>
-        <br /><br />
-        <p style="color:#6a5f54;font-size:13px">Added ${item.dateAdded.toISOString().slice(0, 10)}${item.actualFixDate ? ` &middot; Fixed ${item.actualFixDate.toISOString().slice(0, 10)}` : ''}</p>
-        <button type="submit">Save</button>
+    <div class="panel" style="max-width:720px">
+      <form method="post" action="/api/admin/backlog/${item.id}/edit" class="stack gap-3">
+        <label class="field"><span>Title</span><input name="title" value="${escapeHtml(item.title)}" required /></label>
+        <label class="field"><span>Description</span><textarea name="description" rows="10" required>${escapeHtml(item.description)}</textarea></label>
+        <div class="grid-3">
+          <label class="field"><span>Category</span>
+            <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}" ${c === item.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+          </label>
+          <label class="field"><span>Priority</span>
+            <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === item.priority ? 'selected' : ''}>${p}</option>`).join('')}</select>
+          </label>
+          <label class="field"><span>Status</span>
+            <select name="status">${BACKLOG_STATUSES.map((s) => `<option value="${s}" ${s === item.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+          </label>
+        </div>
+        <p style="color:var(--muted);font-size:13px">Added ${item.dateAdded.toISOString().slice(0, 10)}${item.actualFixDate ? ` &middot; Fixed ${item.actualFixDate.toISOString().slice(0, 10)}` : ''}</p>
+        <button type="submit" class="btn btn-primary">Save</button>
       </form>
     </div>
-  `));
+  `, 'backlog'));
 });
 
 adminRouter.post('/backlog/:id/edit', requirePlatformAdminAuth, async (req: Request<{ id: string }>, res: Response) => {
