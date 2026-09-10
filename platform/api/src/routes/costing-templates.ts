@@ -127,18 +127,32 @@ costingTemplatesRouter.post('/api/costing-templates', async (req, res) => {
   const purchaseCost = printer.purchaseCost;
   const powerDrawWatts = printer.powerDrawWatts;
 
+  // Batch-resolve labour steps and consumables in one round trip per type
+  // (instead of one findById per line) via a findMany({ id: { in: [...] } }),
+  // then look each line up from an id -> record Map. Tenant scoping and the
+  // "missing/invalid id" 400 behavior are unchanged from the per-line findById.
+  const labourStepsById = new Map(
+    (await scoped.labourSteps.findManyByIds([...new Set(labourLines.map((line) => line.labourStepId))])).map(
+      (step) => [step.id, step],
+    ),
+  );
   const resolvedLabourLines: Array<{ id: string; name: string; hourlyRate: number; hours: number }> = [];
   for (const line of labourLines) {
-    const step = await scoped.labourSteps.findById(line.labourStepId);
+    const step = labourStepsById.get(line.labourStepId);
     if (!step) {
       return res.status(400).json({ ok: false, error: 'One of the labour steps was not found.' });
     }
     resolvedLabourLines.push({ id: step.id, name: step.name, hourlyRate: step.hourlyRate, hours: line.hours });
   }
 
+  const consumablesById = new Map(
+    (await scoped.consumables.findManyByIds([...new Set(consumableLines.map((line) => line.consumableId))])).map(
+      (consumable) => [consumable.id, consumable],
+    ),
+  );
   const resolvedConsumableLines: Array<{ id: string; name: string; costPerUnit: number; quantity: number }> = [];
   for (const line of consumableLines) {
-    const consumable = await scoped.consumables.findById(line.consumableId);
+    const consumable = consumablesById.get(line.consumableId);
     if (!consumable) {
       return res.status(400).json({ ok: false, error: 'One of the consumables was not found.' });
     }

@@ -440,6 +440,13 @@ export function tenantScope(tenantId: string) {
 
       findById: (id: string) => prisma.labourStep.findFirst({ where: { id, tenantId } }),
 
+      // Batch lookup for resolving multiple references (e.g. costing template
+      // labour lines) in one round trip instead of one findById per id. Tenant
+      // scoping is enforced the same way as findById -- rows belonging to
+      // another tenant are simply absent from the result, same as a miss.
+      findManyByIds: (ids: string[]) =>
+        ids.length === 0 ? Promise.resolve([]) : prisma.labourStep.findMany({ where: { id: { in: ids }, tenantId } }),
+
       create: (data: CreateLabourStepInput) =>
         prisma.labourStep.create({ data: { ...data, tenantId } }),
 
@@ -451,6 +458,10 @@ export function tenantScope(tenantId: string) {
       findMany: () => prisma.consumable.findMany({ where: { tenantId } }),
 
       findById: (id: string) => prisma.consumable.findFirst({ where: { id, tenantId } }),
+
+      // See labourSteps.findManyByIds -- same batch-lookup, same tenant scoping.
+      findManyByIds: (ids: string[]) =>
+        ids.length === 0 ? Promise.resolve([]) : prisma.consumable.findMany({ where: { id: { in: ids }, tenantId } }),
 
       create: (data: CreateConsumableInput) =>
         prisma.consumable.create({ data: { ...data, tenantId } }),

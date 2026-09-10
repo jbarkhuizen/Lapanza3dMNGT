@@ -185,6 +185,30 @@ test('rounds each labour/consumable line to exact cents before summing, using ro
   assert.equal(result.consumableLineCosts[0].toFixed(2), '7.02');
 });
 
+test('suggestedPrice rounds markupPercent BEFORE applying it to totalCost, not after', () => {
+  // totalCost is a clean 200.00 (one labour line, everything else zeroed out),
+  // so suggestedPrice = totalCost * (1 + markup/100) is exact once markup is fixed --
+  // isolating which markup value (rounded-first vs raw) actually gets used.
+  //
+  // markupPercent = 9.335 sits exactly halfway between two cents once doubled:
+  //   - round markup FIRST (implemented, correct): round(9.335, 2) = 9.34,
+  //     then 200 * 1.0934 = 218.68 exactly.
+  //   - apply raw markup FIRST, round only the final price (the old, fixed
+  //     defect): 200 * 1.09335 = 218.67 exactly.
+  // The two orderings genuinely diverge by a full cent (218.68 vs 218.67) --
+  // this pins the correct (already-implemented) ordering.
+  const result = calculateCosting({
+    filament: baseFilament,
+    printer: basePrinter,
+    labourLines: [{ hourlyRate: 200, hours: 1 }],
+    consumableLines: [],
+    markupPercent: 9.335,
+  });
+  assert.equal(result.totalCost.toFixed(2), '200.00');
+  assert.equal(result.markupPercent.toFixed(2), '9.34');
+  assert.equal(result.suggestedPrice.toFixed(2), '218.68');
+});
+
 test('rounds markupPercent, hourlyRate, and costPerUnit snapshots to 2dp and returns them for persistence', () => {
   const result = calculateCosting({
     filament: baseFilament,
