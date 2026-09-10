@@ -7,8 +7,10 @@ import { tenantScope } from '../db/scoped.js';
 import { calculateCosting, CostingInputError } from '../costing/calculate.js';
 
 export const costingTemplatesRouter = Router();
-costingTemplatesRouter.use(requireTenantAuth);
-costingTemplatesRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 // Same reasoning as printers.ts's serializePrinter(): Prisma's Decimal
 // normalizes trailing zeros away by default, so fix the display scale to
@@ -74,13 +76,13 @@ const createCostingTemplateSchema = z.object({
   consumableLines: z.array(consumableLineSchema).default([]),
 });
 
-costingTemplatesRouter.get('/api/costing-templates', async (req, res) => {
+costingTemplatesRouter.get('/api/costing-templates', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const costingTemplates = await scoped.costingTemplates.findMany();
   res.json({ ok: true, costingTemplates: costingTemplates.map(serializeCostingTemplate) });
 });
 
-costingTemplatesRouter.get('/api/costing-templates/:id', async (req, res) => {
+costingTemplatesRouter.get('/api/costing-templates/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const costingTemplate = await scoped.costingTemplates.findById(req.params.id);
   if (!costingTemplate) {
@@ -89,7 +91,7 @@ costingTemplatesRouter.get('/api/costing-templates/:id', async (req, res) => {
   res.json({ ok: true, costingTemplate: serializeCostingTemplate(costingTemplate) });
 });
 
-costingTemplatesRouter.post('/api/costing-templates', async (req, res) => {
+costingTemplatesRouter.post('/api/costing-templates', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createCostingTemplateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({

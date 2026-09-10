@@ -72,6 +72,12 @@ test('update only affects the owning tenant\'s row', async () => {
 
 test('tenantScope throws when given a falsy tenantId', () => {
   assert.throws(() => tenantScope(''), /tenantScope requires a tenantId/);
+  // tenantScope's signature requires a string precisely so real callers
+  // can't pass undefined — this test exists to prove the runtime guard
+  // still catches it if a caller bypasses that (e.g. an untyped/JS caller,
+  // or a value that only looks like a string until runtime). `any` is the
+  // only way to construct that call past the type system on purpose.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   assert.throws(() => tenantScope(undefined as any), /tenantScope requires a tenantId/);
 });
 
@@ -82,6 +88,12 @@ test('update cannot reassign a row to a different tenant via a smuggled tenantId
   const scopedA = tenantScope(tenantA.id);
   const created = await scopedA.customers.create({ name: 'Alice Customer', billingAddress: '1 Main Rd' });
 
+  // The update type deliberately excludes tenantId so it can't be
+  // reassigned through the app's normal, typed call sites. This test
+  // proves the DB layer itself also ignores a smuggled tenantId at
+  // runtime (defense in depth) — which requires constructing a payload
+  // the type system would otherwise refuse to let this call accept.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await scopedA.customers.update(created.id, { tenantId: tenantB.id, notes: 'attempted takeover' } as any);
 
   const stillOwnedByA = await scopedA.customers.findById(created.id);
@@ -131,6 +143,10 @@ test('printers update cannot reassign a row to a different tenant via a smuggled
   const scopedA = tenantScope(tenantA.id);
   const created = await scopedA.printers.create({ name: 'Printer A' });
 
+  // Same smuggled-tenantId defense-in-depth check as the customers case
+  // above — the update type has no tenantId field, so bypassing the type
+  // system with `any` is the only way to build a payload that attempts it.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await scopedA.printers.update(created.id, { tenantId: tenantB.id, make: 'Attempted takeover' } as any);
 
   const stillOwnedByA = await scopedA.printers.findById(created.id);
@@ -278,11 +294,14 @@ test('printerPresets update cannot reassign a row via a smuggled tenantId or pri
   const scopedA = tenantScope(tenantA.id);
   const created = await scopedA.printerPresets.create(printerA.id, { name: 'PLA — Standard', materialType: 'PLA' });
 
+  // Same smuggled-field defense-in-depth check as the customers/printers
+  // cases above, this time for both tenantId and printerId — the update
+  // type has neither field, so `any` is required to build the attempt.
   await scopedA.printerPresets.update(printerA.id, created.id, {
     tenantId: tenantB.id,
     printerId: printerB.id,
     notes: 'attempted takeover',
-  } as any);
+  } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
   const stillOwnedByA = await scopedA.printerPresets.findById(printerA.id, created.id);
   assert.ok(stillOwnedByA, 'preset should still belong to printer A / tenant A');

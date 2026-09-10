@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const consumablesRouter = Router();
-consumablesRouter.use(requireTenantAuth);
-consumablesRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const CATEGORIES = ['resin', 'nozzle', 'build-plate-adhesive', 'post-processing', 'packaging', 'other'] as const;
 
@@ -22,13 +24,13 @@ const createConsumableSchema = z.object({
 
 const updateConsumableSchema = createConsumableSchema.partial();
 
-consumablesRouter.get('/api/consumables', async (req, res) => {
+consumablesRouter.get('/api/consumables', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const consumables = await scoped.consumables.findMany();
   res.json({ ok: true, consumables });
 });
 
-consumablesRouter.post('/api/consumables', async (req, res) => {
+consumablesRouter.post('/api/consumables', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createConsumableSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Name, a valid category, unit of measure, and cost per unit are required.' });
@@ -38,7 +40,7 @@ consumablesRouter.post('/api/consumables', async (req, res) => {
   res.status(201).json({ ok: true, consumable });
 });
 
-consumablesRouter.get('/api/consumables/:id', async (req, res) => {
+consumablesRouter.get('/api/consumables/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const consumable = await scoped.consumables.findById(req.params.id);
   if (!consumable) {
@@ -47,7 +49,7 @@ consumablesRouter.get('/api/consumables/:id', async (req, res) => {
   res.json({ ok: true, consumable });
 });
 
-consumablesRouter.patch('/api/consumables/:id', async (req, res) => {
+consumablesRouter.patch('/api/consumables/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateConsumableSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid consumable fields.' });

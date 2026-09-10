@@ -42,40 +42,28 @@ export function buildApp() {
   app.use(healthRouter);
   app.use(publicRouter);
   app.use(createAuthRouter());
-  // Mounted here, before the unpathed-middleware resource routers below, for
-  // the same reason as webhooksRouter/billingRouter just below: adminRouter
-  // applies its own auth gate (requirePlatformAdminAuth) on individual routes,
-  // but that only protects THIS router — it does nothing to protect
-  // adminRouter's own requests from routers mounted BEFORE it that apply
-  // *unpathed* blanket middleware (billingRouter's `router.use(requireTenantAuth)`
-  // with no path, on a router itself mounted at `/`, matches every request
-  // that reaches it — not just billing's own routes). GET/POST /api/admin/login
-  // in particular must be reachable with no session at all, so adminRouter
-  // needs first refusal on its own paths before any such blanket-auth router
-  // gets a chance to short-circuit the request to a 401. (Being "path-scoped"
-  // on the way in — app.use('/api/admin', adminRouter) — only controls which
-  // requests reach adminRouter; it says nothing about what other routers do
-  // to a request before it gets there.)
+  // adminRouter applies its own auth gate (requirePlatformAdminAuth) per
+  // route, not via a blanket `router.use` — see requireTenantAuth.ts and
+  // backlog #6 — so GET/POST /api/admin/login (which must be reachable with
+  // no session at all) is never at risk of being intercepted by an earlier
+  // router's auth check regardless of mount order. Kept mounted here, ahead
+  // of the resource routers below, purely to group "platform-level" routers
+  // (health/public/auth/admin/webhooks/billing) before per-tenant resource
+  // routers — not because correctness now depends on it.
   app.use('/api/admin', adminRouter);
-  // Mounted here (before the auth-protected routers below) because every one
-  // of those routers applies `requireTenantAuth` via an unpathed `router.use`,
-  // which — since each router is itself mounted at `/` — intercepts every
-  // request that flows into it, not just requests matching its own routes.
-  // Payment-provider webhooks arrive with no session cookie, so webhooksRouter
-  // must get first refusal on its own paths before any blanket-auth router
-  // can short-circuit the request to a 401. webhooksRouter has no such
-  // blanket middleware itself, so unrelated requests pass through untouched.
+  // webhooksRouter has no auth of its own (payment-provider webhooks arrive
+  // with no session cookie) and none of the routers below define any
+  // `/api/webhooks/*` route, so mount order relative to them doesn't affect
+  // correctness. Kept here with the other platform-level routers for the
+  // same grouping reason as adminRouter above.
   app.use(webhooksRouter);
-  // Also mounted here, before the resource routers below, for the same
-  // reason as webhooksRouter above: every one of those routers now applies
-  // `requireActiveSubscription` via an unpathed `router.use`, which — since
-  // each router is mounted at `/` — intercepts every request that reaches
-  // it, not just requests matching its own routes. A tenant with no
-  // subscription yet must be able to reach POST /api/billing/checkout (the
-  // endpoint that gives them one), so billingRouter needs first refusal on
-  // its own paths before any resource router's subscription gate can
-  // short-circuit the request to a 402. billingRouter still applies its own
-  // `requireTenantAuth` (unlike webhooksRouter, which needs no auth at all).
+  // billingRouter applies requireTenantAuth per route (like every resource
+  // router below — see requireTenantAuth.ts and backlog #6), so a tenant
+  // with no subscription yet can still reach POST /api/billing/checkout (the
+  // endpoint that gives them one) regardless of mount order: the
+  // subscription-gating routers below only ever gate their OWN routes now,
+  // never billing's. Kept here for the same platform-level grouping reason
+  // as adminRouter/webhooksRouter above.
   app.use(billingRouter);
   app.use(customersRouter);
   app.use(printersRouter);
@@ -88,6 +76,18 @@ export function buildApp() {
   app.use(companyProfileRouter);
   app.use(quotesRouter);
   app.use(invoicesRouter);
+
+  // Catch-all for anything that fell through every router above without
+  // matching a route. Must be mounted after all real routers (so it never
+  // shadows a genuine route) and before the error-handling middleware below
+  // (a 4-arg handler, only invoked on `next(err)`, so it would never see a
+  // plain unmatched request anyway) — otherwise an unmatched path would fall
+  // through to Express's default handler, or worse, get swallowed by an
+  // unpathed `router.use(requireTenantAuth)` in one of the routers above,
+  // which would 401 (and pay for a session DB lookup) instead of 404.
+  app.use((req: Request, res: Response) => {
+    res.status(404).json({ ok: false, error: 'Not found.' });
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

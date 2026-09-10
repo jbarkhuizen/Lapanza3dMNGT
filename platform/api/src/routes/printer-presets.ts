@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const printerPresetsRouter = Router();
-printerPresetsRouter.use(requireTenantAuth);
-printerPresetsRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const createPresetSchema = z.object({
   name: z.string().min(1),
@@ -26,7 +28,7 @@ async function requireOwnedPrinter(tenantId: string, printerId: string) {
   return scoped.printers.findById(printerId);
 }
 
-printerPresetsRouter.get('/api/printers/:printerId/presets', async (req, res) => {
+printerPresetsRouter.get('/api/printers/:printerId/presets', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const printer = await requireOwnedPrinter(req.tenantId!, req.params.printerId);
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });
@@ -36,7 +38,7 @@ printerPresetsRouter.get('/api/printers/:printerId/presets', async (req, res) =>
   res.json({ ok: true, presets });
 });
 
-printerPresetsRouter.post('/api/printers/:printerId/presets', async (req, res) => {
+printerPresetsRouter.post('/api/printers/:printerId/presets', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const printer = await requireOwnedPrinter(req.tenantId!, req.params.printerId);
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });
@@ -50,7 +52,7 @@ printerPresetsRouter.post('/api/printers/:printerId/presets', async (req, res) =
   res.status(201).json({ ok: true, preset });
 });
 
-printerPresetsRouter.patch('/api/printers/:printerId/presets/:id', async (req, res) => {
+printerPresetsRouter.patch('/api/printers/:printerId/presets/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const printer = await requireOwnedPrinter(req.tenantId!, req.params.printerId);
   if (!printer) {
     return res.status(404).json({ ok: false, error: 'Printer not found.' });

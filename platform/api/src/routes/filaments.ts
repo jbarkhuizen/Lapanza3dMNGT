@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const filamentsRouter = Router();
-filamentsRouter.use(requireTenantAuth);
-filamentsRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const createFilamentSchema = z.object({
   brand: z.string().min(1),
@@ -34,13 +36,13 @@ const updateFilamentSchema = createFilamentSchema.partial().extend({
     .optional(),
 });
 
-filamentsRouter.get('/api/filaments', async (req, res) => {
+filamentsRouter.get('/api/filaments', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const filaments = await scoped.filaments.findMany();
   res.json({ ok: true, filaments });
 });
 
-filamentsRouter.post('/api/filaments', async (req, res) => {
+filamentsRouter.post('/api/filaments', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createFilamentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Brand, material type, and a diameter of 1.75 or 2.85mm are required.' });
@@ -50,7 +52,7 @@ filamentsRouter.post('/api/filaments', async (req, res) => {
   res.status(201).json({ ok: true, filament });
 });
 
-filamentsRouter.get('/api/filaments/:id', async (req, res) => {
+filamentsRouter.get('/api/filaments/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const filament = await scoped.filaments.findById(req.params.id);
   if (!filament) {
@@ -59,7 +61,7 @@ filamentsRouter.get('/api/filaments/:id', async (req, res) => {
   res.json({ ok: true, filament });
 });
 
-filamentsRouter.patch('/api/filaments/:id', async (req, res) => {
+filamentsRouter.patch('/api/filaments/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateFilamentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid filament fields.' });

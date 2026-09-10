@@ -12,8 +12,10 @@ import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 import { mailer } from '../lib/mailer.js';
 
 export const invoicesRouter = Router();
-invoicesRouter.use(requireTenantAuth);
-invoicesRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 type InvoiceWithOptionalLines = Invoice & { lineItems?: InvoiceLineItem[] };
 
@@ -53,13 +55,13 @@ const createInvoiceSchema = z.object({
 
 const DEFAULT_DUE_DAYS = 30;
 
-invoicesRouter.get('/api/invoices', async (req, res) => {
+invoicesRouter.get('/api/invoices', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const invoices = await scoped.invoices.findMany();
   res.json({ ok: true, invoices: invoices.map(serializeInvoice) });
 });
 
-invoicesRouter.get('/api/invoices/:id', async (req, res) => {
+invoicesRouter.get('/api/invoices/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const invoice = await scoped.invoices.findById(req.params.id);
   if (!invoice) {
@@ -68,7 +70,7 @@ invoicesRouter.get('/api/invoices/:id', async (req, res) => {
   res.json({ ok: true, invoice: serializeInvoice(invoice) });
 });
 
-invoicesRouter.post('/api/invoices', async (req, res) => {
+invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createInvoiceSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -173,7 +175,7 @@ const VALID_INVOICE_STATUS_TRANSITIONS: Record<string, string[]> = {
   paid: [],
 };
 
-invoicesRouter.patch('/api/invoices/:id/status', async (req, res) => {
+invoicesRouter.patch('/api/invoices/:id/status', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateInvoiceStatusSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid status update.' });
@@ -212,7 +214,7 @@ invoicesRouter.patch('/api/invoices/:id/status', async (req, res) => {
   res.json({ ok: true, invoice: serializeInvoice(updated!) });
 });
 
-invoicesRouter.post('/api/invoices/:id/send', async (req, res) => {
+invoicesRouter.post('/api/invoices/:id/send', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const invoice = await scoped.invoices.findById(req.params.id);
   if (!invoice) {

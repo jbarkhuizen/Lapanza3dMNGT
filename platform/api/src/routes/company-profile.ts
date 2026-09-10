@@ -5,8 +5,10 @@ import { requireActiveSubscription } from '../middleware/requireActiveSubscripti
 import { tenantScope } from '../db/scoped.js';
 
 export const companyProfileRouter = Router();
-companyProfileRouter.use(requireTenantAuth);
-companyProfileRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 const updateCompanyProfileSchema = z
   .object({
@@ -36,13 +38,13 @@ const updateCompanyProfileSchema = z
     message: 'VAT number is required when VAT-registered.',
   });
 
-companyProfileRouter.get('/api/company-profile', async (req, res) => {
+companyProfileRouter.get('/api/company-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const profile = await scoped.companyProfile.get();
   res.json({ ok: true, companyProfile: profile });
 });
 
-companyProfileRouter.patch('/api/company-profile', async (req, res) => {
+companyProfileRouter.patch('/api/company-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = updateCompanyProfileSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid company profile fields.' });

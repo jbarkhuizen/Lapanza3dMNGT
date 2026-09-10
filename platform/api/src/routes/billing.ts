@@ -10,7 +10,11 @@ import { paypalProvider } from '../billing/paypalProvider.js';
 import type { PaymentProvider } from '../billing/types.js';
 
 export const billingRouter = Router();
-billingRouter.use(requireTenantAuth);
+// Auth is applied per-route (not via a blanket `.use()`) so a genuinely
+// unmatched path that falls through to this router doesn't get a
+// misleading 401 from an auth check that never had a real route to
+// protect — it falls through to the next router / app.ts's final 404
+// handler instead. See backlog #6.
 
 const TRIAL_DAYS = 14;
 
@@ -49,12 +53,12 @@ function serializeSubscription(
   };
 }
 
-billingRouter.get('/api/plans', async (_req, res) => {
+billingRouter.get('/api/plans', requireTenantAuth, async (_req, res) => {
   const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
   res.json({ ok: true, plans: plans.map(serializePlan) });
 });
 
-billingRouter.get('/api/billing/subscription', async (req, res) => {
+billingRouter.get('/api/billing/subscription', requireTenantAuth, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const subscription = await scoped.subscription.get();
   res.json({ ok: true, subscription: serializeSubscription(subscription) });
@@ -65,7 +69,7 @@ const checkoutSchema = z.object({
   provider: z.enum(['payfast', 'paypal']),
 });
 
-billingRouter.post('/api/billing/checkout', async (req, res) => {
+billingRouter.post('/api/billing/checkout', requireTenantAuth, async (req, res) => {
   const parsed = checkoutSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'A plan and a payment provider are required.' });
@@ -167,7 +171,7 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
   res.json({ ok: true, redirectUrl });
 });
 
-billingRouter.post('/api/billing/cancel', async (req, res) => {
+billingRouter.post('/api/billing/cancel', requireTenantAuth, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const subscription = await scoped.subscription.get();
   if (!subscription) {

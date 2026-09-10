@@ -14,8 +14,10 @@ import { sendDocumentEmail } from '../documents/sendDocumentEmail.js';
 import { mailer } from '../lib/mailer.js';
 
 export const quotesRouter = Router();
-quotesRouter.use(requireTenantAuth);
-quotesRouter.use(requireActiveSubscription);
+// Auth/subscription gating is applied per-route (not via a blanket
+// `.use()`) so a genuinely unmatched path that falls through to this
+// router doesn't get a misleading 401 — it falls through to the next
+// router / app.ts's final 404 handler instead. See backlog #6.
 
 type QuoteWithOptionalLines = Quote & { lineItems?: QuoteLineItem[] };
 
@@ -56,13 +58,13 @@ const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   sent: ['accepted', 'expired'],
 };
 
-quotesRouter.get('/api/quotes', async (req, res) => {
+quotesRouter.get('/api/quotes', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quotes = await scoped.quotes.findMany();
   res.json({ ok: true, quotes: quotes.map(serializeQuote) });
 });
 
-quotesRouter.get('/api/quotes/:id', async (req, res) => {
+quotesRouter.get('/api/quotes/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quote = await scoped.quotes.findById(req.params.id);
   if (!quote) {
@@ -71,7 +73,7 @@ quotesRouter.get('/api/quotes/:id', async (req, res) => {
   res.json({ ok: true, quote: serializeQuote(quote) });
 });
 
-quotesRouter.post('/api/quotes', async (req, res) => {
+quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = createQuoteSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -156,7 +158,7 @@ quotesRouter.post('/api/quotes', async (req, res) => {
   res.status(201).json({ ok: true, quote: serializeQuote(quote) });
 });
 
-quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
+quotesRouter.patch('/api/quotes/:id/status', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const parsed = z.object({ status: z.enum(['sent', 'accepted', 'expired']) }).safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'status must be one of: sent, accepted, expired.' });
@@ -178,7 +180,7 @@ quotesRouter.patch('/api/quotes/:id/status', async (req, res) => {
   res.json({ ok: true, quote: serializeQuote(updated!) });
 });
 
-quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
+quotesRouter.post('/api/quotes/:id/convert-to-invoice', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quote = await scoped.quotes.findById(req.params.id);
   if (!quote) {
@@ -257,7 +259,7 @@ quotesRouter.post('/api/quotes/:id/convert-to-invoice', async (req, res) => {
   }
 });
 
-quotesRouter.post('/api/quotes/:id/send', async (req, res) => {
+quotesRouter.post('/api/quotes/:id/send', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quote = await scoped.quotes.findById(req.params.id);
   if (!quote) {
