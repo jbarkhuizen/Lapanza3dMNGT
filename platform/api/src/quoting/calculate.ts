@@ -20,6 +20,16 @@ export interface QuoteTotalsResult {
 
 const VAT_RATE = new Prisma.Decimal('0.15');
 
+// Quote/Invoice subtotal, vatAmount and total columns are all
+// @db.Decimal(12, 2) in prisma/schema.prisma — 12 significant digits, 2
+// after the decimal point, so this is the largest value that column can
+// physically hold. Per-line-item unitPrice is already capped well under
+// this at the zod-schema layer (routes/quotes.ts, routes/invoices.ts), but
+// that only bounds a single line — summing many valid lines (or a large
+// quantity) can still push subtotal/vatAmount/total past this ceiling, so
+// callers must check the *computed* totals against it before persisting.
+export const MAX_MONEY_VALUE = new Prisma.Decimal('9999999999.99');
+
 function toDecimal(value: number | Prisma.Decimal): Prisma.Decimal {
   return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }

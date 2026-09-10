@@ -384,7 +384,9 @@ test('a tenant cannot see another tenant\'s quotes', async () => {
     vatAmount: '0.00',
     total: '100.00',
     notes: null,
-    lineItems: [],
+    lineItems: [
+      { costingTemplateId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' },
+    ],
   });
 
   const aList = await scopedA.quotes.findMany();
@@ -418,7 +420,16 @@ test('a tenant cannot see another tenant\'s invoices', async () => {
     vatAmount: '0.00',
     total: '100.00',
     notes: null,
-    lineItems: [],
+    lineItems: [
+      {
+        quoteLineItemId: null,
+        costingTemplateId: null,
+        description: 'Custom bracket',
+        quantity: 1,
+        unitPrice: '100.00',
+        lineTotal: '100.00',
+      },
+    ],
   });
 
   const aList = await scopedA.invoices.findMany();

@@ -1,9 +1,10 @@
-import { test, beforeEach } from 'node:test';
+import { test, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
+import { mailer } from '../src/lib/mailer.js';
 
 beforeEach(resetTestDatabase);
 
@@ -141,6 +142,31 @@ test('POST /api/invoices rejects an out-of-range unitPrice with 400, not 500', a
     lineItems: [{ description: 'Part', unitPrice: 99999999999.99, quantity: 1 }],
   });
   assert.equal(res.status, 400);
+});
+
+test('POST /api/invoices rejects with 400 (not 500) when a computed total exceeds what Decimal(12,2) can hold, and does not burn an invoice number', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  // Each individual unitPrice (9999999999.99) passes the per-line zod cap,
+  // but two of them summed blows past the subtotal/total column's
+  // Decimal(12,2) ceiling (9999999999.99) — the case MAX_MONEY_VALUE guards.
+  const tooLarge = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [
+      { description: 'Part A', unitPrice: 9999999999.99, quantity: 1 },
+      { description: 'Part B', unitPrice: 9999999999.99, quantity: 1 },
+    ],
+  });
+  assert.equal(tooLarge.status, 400);
+
+  const good = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(good.status, 201);
+  assert.equal(good.body.invoice.number, 'INV-0001');
 });
 
 test('PATCH /api/invoices/:id/status rejects a partially_paid amountPaid that rounds up to the full total', async () => {
@@ -304,6 +330,9 @@ test('POST /api/quotes/:id/convert-to-invoice copies totals and line items from 
   assert.equal(res.body.invoice.total, '230.00');
   assert.equal(res.body.invoice.lineItems[0].description, 'Custom bracket');
   assert.equal(res.body.invoice.lineItems[0].lineTotal, '200.00');
+
+  const quoteAfterConversion = await agent.get(`/api/quotes/${quoteId}`);
+  assert.equal(quoteAfterConversion.body.quote.invoiceId, res.body.invoice.id);
 });
 
 test('POST /api/quotes/:id/convert-to-invoice rejects converting the same quote twice', async () => {
@@ -367,6 +396,42 @@ test('POST /api/invoices/:id/send rejects with 400 when the customer has no emai
 
   assert.equal(res.status, 400);
   assert.match(res.body.error, /no email on file/);
+});
+
+test('POST /api/invoices/:id/send gives the email sender the tenant business name and reply-to address in the correct positions', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomerWithEmail(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 200, quantity: 1 }],
+  });
+
+  mock.method(mailer, 'isConfigured', () => true);
+  const sendMailCalls: Array<Record<string, unknown>> = [];
+  mock.method(mailer, 'sendMail', async (opts: Record<string, unknown>) => {
+    sendMailCalls.push(opts);
+  });
+
+  try {
+    const res = await agent.post(`/api/invoices/${created.body.invoice.id}/send`);
+    assert.equal(res.status, 200);
+    assert.equal(sendMailCalls.length, 1);
+
+    // sendDocumentEmail(to, documentType, documentNumber, pdfBuffer,
+    // businessName, replyTo) feeds businessName into the subject/text and
+    // replyTo into the reply-to header. profile.businessName ('Acme
+    // Prints') and profile.email ('jane@acmeprints.co.za') are both
+    // strings, so a swap of the two arguments at the invoices.ts call site
+    // would typecheck fine — only asserting the actual values in their
+    // actual destinations catches it.
+    assert.equal(sendMailCalls[0].replyTo, 'jane@acmeprints.co.za');
+    assert.match(sendMailCalls[0].subject as string, /Acme Prints/);
+    assert.match(sendMailCalls[0].text as string, /Acme Prints/);
+    assert.doesNotMatch(sendMailCalls[0].subject as string, /jane@acmeprints\.co\.za/);
+  } finally {
+    mock.restoreAll();
+  }
 });
 
 test('POST /api/invoices/:id/send returns 404 for an invoice belonging to another tenant', async () => {
