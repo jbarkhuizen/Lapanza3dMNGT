@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { verifyPassword } from '../auth/password.js';
 import { createSession, destroySession } from '../auth/session.js';
@@ -661,20 +662,37 @@ adminRouter.post('/backlog', requirePlatformAdminAuth, async (req, res) => {
     return res.redirect('/api/admin/backlog');
   }
 
-  const highest = await prisma.backlogItem.findFirst({ orderBy: { number: 'desc' } });
-  const nextNumber = (highest?.number ?? 0) + 1;
+  // Concurrent creates can both read the same "highest" number before either
+  // commits, then collide on the @unique constraint. Retry a couple of times
+  // with a fresh read on that specific failure (P2002) rather than 500ing and
+  // losing everything the admin typed — mirrors the P2002 handling used for
+  // tenant signup (auth.ts) and quote->invoice conversion (quotes.ts).
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const highest = await prisma.backlogItem.findFirst({ orderBy: { number: 'desc' } });
+    const nextNumber = (highest?.number ?? 0) + 1;
 
-  await prisma.backlogItem.create({
-    data: {
-      number: nextNumber,
-      title,
-      description,
-      category,
-      priority,
-      status: 'Backlog',
-      dateAdded: new Date(),
-    },
-  });
+    try {
+      await prisma.backlogItem.create({
+        data: {
+          number: nextNumber,
+          title,
+          description,
+          category,
+          priority,
+          status: 'Backlog',
+          dateAdded: new Date(),
+        },
+      });
+      break;
+    } catch (error) {
+      const isNumberCollision = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+      if (isNumberCollision && attempt < MAX_ATTEMPTS) {
+        continue;
+      }
+      throw error;
+    }
+  }
   res.redirect('/api/admin/backlog');
 });
 

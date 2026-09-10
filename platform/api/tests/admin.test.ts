@@ -710,6 +710,85 @@ test('POST /api/admin/backlog creates a new item with the next sequential number
   assert.equal(created.actualFixDate, null);
 });
 
+test('POST /api/admin/backlog two concurrent creates both succeed with distinct numbers instead of one 500ing', async () => {
+  // Regression test for backlog #68: the route used to read the highest
+  // number then create in two separate steps, so two requests racing each
+  // other could both compute the same "next" number and collide on the
+  // @unique constraint. Firing two real requests concurrently against a
+  // real Postgres connection pool exercises that race directly.
+  await prisma.backlogItem.create({
+    data: { number: 5, title: 'Existing', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+  });
+  const agent = await loggedInAdminAgent();
+
+  const [resA, resB] = await Promise.all([
+    agent.post('/api/admin/backlog').send({
+      title: 'Concurrent idea A', description: 'First concurrent submission.', category: 'Feature', priority: 'High',
+    }),
+    agent.post('/api/admin/backlog').send({
+      title: 'Concurrent idea B', description: 'Second concurrent submission.', category: 'Feature', priority: 'High',
+    }),
+  ]);
+
+  assert.equal(resA.status, 302, 'first concurrent create must not 500');
+  assert.equal(resB.status, 302, 'second concurrent create must not 500');
+
+  const itemA = await prisma.backlogItem.findFirstOrThrow({ where: { title: 'Concurrent idea A' } });
+  const itemB = await prisma.backlogItem.findFirstOrThrow({ where: { title: 'Concurrent idea B' } });
+  assert.notEqual(itemA.number, itemB.number, 'both creates must succeed with distinct numbers rather than colliding');
+  assert.deepEqual([itemA.number, itemB.number].sort((x, y) => x - y), [6, 7]);
+});
+
+test('POST /api/admin/backlog retries the number computation when it loses a race for the next number', async () => {
+  // Deterministic companion to the concurrent test above: forces the exact
+  // P2002 collision the retry loop is meant to catch, so this coverage
+  // doesn't depend on the real connection pool actually interleaving two
+  // requests. Mirrors the P2002 handling already used elsewhere (auth.ts's
+  // tenant signup, quotes.ts's quote->invoice conversion).
+  const { Prisma } = await import('@prisma/client');
+  await prisma.backlogItem.create({
+    data: { number: 5, title: 'Existing', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+  });
+
+  // node:test's mock.method() requires an own method descriptor, which the
+  // generated Prisma model delegate doesn't expose — so this patches
+  // prisma.backlogItem.create directly (restored in the finally block)
+  // rather than going through mock.method like the payfastProvider tests
+  // above.
+  let calls = 0;
+  const originalCreate = prisma.backlogItem.create.bind(prisma.backlogItem);
+  prisma.backlogItem.create = (async (args: Parameters<typeof prisma.backlogItem.create>[0]) => {
+    calls += 1;
+    if (calls === 1) {
+      // Simulate another request winning the race for number 6 in the gap
+      // between our read and our create, then report the same unique-
+      // constraint failure Postgres would raise for our own attempt.
+      await originalCreate({
+        data: { number: 6, title: 'Raced in first', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+      });
+      throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed on the fields: (`number`)', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+    }
+    return originalCreate(args);
+  }) as unknown as typeof prisma.backlogItem.create;
+
+  try {
+    const agent = await loggedInAdminAgent();
+    const res = await agent.post('/api/admin/backlog').send({
+      title: 'New feature idea', description: 'A longer description of the idea.', category: 'Feature', priority: 'High',
+    });
+    assert.equal(res.status, 302, 'the retry must recover instead of surfacing the collision as a 500');
+
+    const created = await prisma.backlogItem.findFirstOrThrow({ where: { title: 'New feature idea' } });
+    assert.equal(created.number, 7, 'after losing the race for 6, the retry must re-read and pick the next free number');
+    assert.equal(calls, 2, 'expected exactly one retry after the simulated collision');
+  } finally {
+    prisma.backlogItem.create = originalCreate;
+  }
+});
+
 test('GET /api/admin/backlog/:id shows the full item with an edit form pre-filled', async () => {
   const item = await prisma.backlogItem.create({
     data: { number: 10, title: 'Detail test item', description: 'The full description text.', category: 'Tech Debt', priority: 'Medium', status: 'Backlog', dateAdded: new Date() },
