@@ -69,7 +69,7 @@ const createCostingTemplateSchema = z.object({
   weightGrams: z.number().positive(),
   printerId: z.string().min(1),
   printTimeHours: z.number().positive(),
-  markupPercent: z.number().min(0),
+  markupPercent: z.number().min(0).max(9999.99),
   labourLines: z.array(labourLineSchema).default([]),
   consumableLines: z.array(consumableLineSchema).default([]),
 });
