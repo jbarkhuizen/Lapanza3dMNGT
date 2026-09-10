@@ -38,7 +38,16 @@ const createPrinterSchema = z.object({
   status: z.enum(STATUSES).optional(),
 });
 
-const updatePrinterSchema = createPrinterSchema.partial();
+const updatePrinterSchema = createPrinterSchema.partial().extend({
+  // Unlike create, PATCH must be able to explicitly clear purchaseDate back
+  // to null -- omitting the key still leaves it untouched (see .partial()
+  // above), but an explicit `null` is now accepted rather than rejected.
+  purchaseDate: z
+    .string()
+    .refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.')
+    .nullable()
+    .optional(),
+});
 
 printersRouter.get('/api/printers', async (req, res) => {
   const scoped = tenantScope(req.tenantId!);

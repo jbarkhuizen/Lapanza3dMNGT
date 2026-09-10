@@ -23,7 +23,16 @@ const createFilamentSchema = z.object({
   lowStockThresholdGrams: z.number().optional(),
 });
 
-const updateFilamentSchema = createFilamentSchema.partial();
+const updateFilamentSchema = createFilamentSchema.partial().extend({
+  // Unlike create, PATCH must be able to explicitly clear purchaseDate back
+  // to null -- omitting the key still leaves it untouched (see .partial()
+  // above), but an explicit `null` is now accepted rather than rejected.
+  purchaseDate: z
+    .string()
+    .refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.')
+    .nullable()
+    .optional(),
+});
 
 filamentsRouter.get('/api/filaments', async (req, res) => {
   const scoped = tenantScope(req.tenantId!);

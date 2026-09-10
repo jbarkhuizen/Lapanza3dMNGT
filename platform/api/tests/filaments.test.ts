@@ -102,3 +102,55 @@ test('full create -> list -> get -> update cycle', async () => {
   const getRes = await agent.get(`/api/filaments/${filamentId}`);
   assert.equal(getRes.body.filament.remainingWeightGrams, 640);
 });
+
+test('PATCH /api/filaments/:id can set then clear purchaseDate back to null', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+  });
+  assert.equal(createRes.status, 201);
+  assert.equal(createRes.body.filament.purchaseDate, null);
+  const filamentId = createRes.body.filament.id;
+
+  const setRes = await agent
+    .patch(`/api/filaments/${filamentId}`)
+    .send({ purchaseDate: '2024-01-15' });
+  assert.equal(setRes.status, 200);
+
+  const getAfterSet = await agent.get(`/api/filaments/${filamentId}`);
+  assert.ok(getAfterSet.body.filament.purchaseDate);
+
+  const clearRes = await agent
+    .patch(`/api/filaments/${filamentId}`)
+    .send({ purchaseDate: null });
+  assert.equal(clearRes.status, 200);
+
+  const getAfterClear = await agent.get(`/api/filaments/${filamentId}`);
+  assert.equal(getAfterClear.body.filament.purchaseDate, null);
+});
+
+test('PATCH /api/filaments/:id omitting purchaseDate leaves it untouched', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+    purchaseDate: '2024-01-15',
+  });
+  assert.equal(createRes.status, 201);
+  const filamentId = createRes.body.filament.id;
+
+  const updateRes = await agent
+    .patch(`/api/filaments/${filamentId}`)
+    .send({ remainingWeightGrams: 500 });
+  assert.equal(updateRes.status, 200);
+
+  const getRes = await agent.get(`/api/filaments/${filamentId}`);
+  assert.ok(getRes.body.filament.purchaseDate);
+});

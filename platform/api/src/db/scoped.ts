@@ -44,7 +44,8 @@ export interface UpdatePrinterInput {
   buildVolumeXMm?: number;
   buildVolumeYMm?: number;
   buildVolumeZMm?: number;
-  purchaseDate?: string;
+  // string to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  purchaseDate?: string | null;
   purchaseCost?: number;
   powerDrawWatts?: number;
   electricityRatePerKwh?: number;
@@ -106,7 +107,8 @@ export interface UpdateFilamentInput {
   spoolWeightGrams?: number;
   remainingWeightGrams?: number;
   supplier?: string;
-  purchaseDate?: string;
+  // string to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  purchaseDate?: string | null;
   notes?: string;
   lowStockThresholdGrams?: number;
 }
@@ -330,7 +332,12 @@ export function tenantScope(tenantId: string) {
           where: { id, tenantId },
           data: {
             ...data,
-            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            // 'purchaseDate' in data distinguishes "key omitted" (undefined
+            // here -> don't touch it) from "explicitly null" (clear it) --
+            // `data.purchaseDate ? ... : undefined` couldn't tell those apart.
+            purchaseDate: 'purchaseDate' in data
+              ? (data.purchaseDate ? new Date(data.purchaseDate) : null)
+              : undefined,
             tenantId: undefined,
           },
         }),
@@ -385,7 +392,12 @@ export function tenantScope(tenantId: string) {
           where: { id, tenantId },
           data: {
             ...data,
-            purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : undefined,
+            // 'purchaseDate' in data distinguishes "key omitted" (undefined
+            // here -> don't touch it) from "explicitly null" (clear it) --
+            // `data.purchaseDate ? ... : undefined` couldn't tell those apart.
+            purchaseDate: 'purchaseDate' in data
+              ? (data.purchaseDate ? new Date(data.purchaseDate) : null)
+              : undefined,
             tenantId: undefined,
           },
         }),
