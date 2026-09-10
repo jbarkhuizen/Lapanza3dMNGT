@@ -38,22 +38,22 @@
     </section>
 
     <div class="view-tabs wrap" role="tablist" aria-label="Materials Guide views">
-      <button class="view-tab" role="tab" id="tab-selector" aria-controls="view-selector" aria-selected="true" type="button">Selector</button>
-      <button class="view-tab" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" type="button">All materials</button>
-      <button class="view-tab" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" type="button">Head to head</button>
+      <button class="view-tab" role="tab" id="tab-selector" aria-controls="view-selector" aria-selected="true" tabindex="0" type="button">Selector</button>
+      <button class="view-tab" role="tab" id="tab-grid" aria-controls="view-grid" aria-selected="false" tabindex="-1" type="button">All materials</button>
+      <button class="view-tab" role="tab" id="tab-compare" aria-controls="view-compare" aria-selected="false" tabindex="-1" type="button">Head to head</button>
     </div>
 
-    <div class="view-panel wrap" id="view-selector" role="tabpanel" aria-labelledby="tab-selector">
+    <div class="view-panel wrap" id="view-selector" role="tabpanel" aria-labelledby="tab-selector" tabindex="-1">
       <!-- Task 6 renders the Selector view here -->
     </div>
 
-    <div class="view-panel wrap" id="view-grid" role="tabpanel" aria-labelledby="tab-grid" hidden>
+    <div class="view-panel wrap" id="view-grid" role="tabpanel" aria-labelledby="tab-grid" tabindex="-1" hidden>
       <div class="tag-filters" id="tag-filters"></div>
       <input class="material-search" id="material-search" type="search" placeholder="Search materials…" aria-label="Search materials" />
       <div class="material-grid" id="material-grid"></div>
     </div>
 
-    <div class="view-panel wrap" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+    <div class="view-panel wrap" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" tabindex="-1" hidden>
       <!-- Task 7 renders the Head to head view here -->
     </div>
 
