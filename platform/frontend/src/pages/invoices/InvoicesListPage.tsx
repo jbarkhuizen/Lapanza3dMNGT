@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInvoices, type InvoiceStatus } from '../../api/invoices.js';
+import { useInvoices, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
 
 const STATUS_OPTIONS: Array<InvoiceStatus | 'all'> = ['all', 'unpaid', 'partially_paid', 'paid', 'overdue'];
 
 export function InvoicesListPage() {
   const { data: invoices, isLoading, isError } = useInvoices();
-  const { lookup: customerLookup } = useCustomerLookup();
+  const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const currency = useDisplayCurrency();
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
 
   const filteredInvoices = invoices?.filter((invoice) => statusFilter === 'all' || invoice.status === statusFilter);
@@ -31,7 +33,7 @@ export function InvoicesListPage() {
         >
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
-              {option === 'all' ? 'All' : option}
+              {option === 'all' ? 'All' : INVOICE_STATUS_LABELS[option]}
             </option>
           ))}
         </select>
@@ -60,10 +62,12 @@ export function InvoicesListPage() {
                     {invoice.number}
                   </Link>
                 </td>
-                <td className="py-2">{customerLookup.get(invoice.customerId)?.name ?? 'Unknown customer'}</td>
-                <td className="py-2">{invoice.status}</td>
-                <td className="py-2">{formatCurrency(invoice.total)}</td>
-                <td className="py-2">{formatCurrency(invoice.balanceDue)}</td>
+                <td className="py-2">
+                  {isCustomerLookupError ? "Couldn't load customer" : (customerLookup.get(invoice.customerId)?.name ?? 'Unknown customer')}
+                </td>
+                <td className="py-2">{INVOICE_STATUS_LABELS[invoice.status]}</td>
+                <td className="py-2">{formatCurrency(invoice.total, currency)}</td>
+                <td className="py-2">{formatCurrency(invoice.balanceDue, currency)}</td>
                 <td className="py-2">{invoice.dueDate.slice(0, 10)}</td>
               </tr>
             ))}

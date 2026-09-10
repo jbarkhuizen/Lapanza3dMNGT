@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useCostingTemplates } from '../../api/costingTemplates.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
@@ -8,6 +9,7 @@ function formatDate(iso: string): string {
 
 export function CostingTemplatesListPage() {
   const { data: costingTemplates, isLoading, isError } = useCostingTemplates();
+  const currency = useDisplayCurrency();
 
   return (
     <div className="flex flex-col gap-4">
@@ -41,8 +43,8 @@ export function CostingTemplatesListPage() {
                 <td className="py-2">{template.name}</td>
                 <td className="py-2">{template.filamentSnapshotBrand ?? '—'}</td>
                 <td className="py-2">{template.printerSnapshotName ?? '—'}</td>
-                <td className="py-2">{formatCurrency(template.totalCost)}</td>
-                <td className="py-2">{formatCurrency(template.suggestedPrice)}</td>
+                <td className="py-2">{formatCurrency(template.totalCost, currency)}</td>
+                <td className="py-2">{formatCurrency(template.suggestedPrice, currency)}</td>
                 <td className="py-2">{formatDate(template.createdAt)}</td>
                 <td className="py-2 text-right">
                   <Link to={`/costing-templates/${template.id}`} className="text-slate-600 underline">

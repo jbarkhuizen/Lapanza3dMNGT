@@ -51,13 +51,25 @@ const paidInvoice = {
   balanceDue: '0.00',
 };
 
-function mockReferenceData(invoices = [unpaidInvoice, paidInvoice]) {
+const testCompanyProfile = {
+  businessName: 'Acme Prints', contactName: 'Jane Doe', email: 'jane@acmeprints.co.za',
+  registrationNumber: null, vatRegistered: false, vatNumber: null, logoUrl: null,
+  addressLine1: null, addressLine2: null, city: null, postalCode: null, phone: null, website: null,
+  bankName: null, bankAccountHolder: null, bankAccountNumber: null, bankBranchCode: null,
+  termsAndConditionsText: null, defaultCurrency: 'ZAR', defaultQuoteValidityDays: null,
+  quoteNumberPrefix: 'QT', invoiceNumberPrefix: 'INV',
+};
+
+function mockReferenceData(invoices = [unpaidInvoice, paidInvoice], companyProfile = testCompanyProfile) {
   vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
     if (path === '/api/invoices') {
       return Promise.resolve({ ok: true, invoices });
     }
     if (path === '/api/customers') {
       return Promise.resolve({ ok: true, customers: [customer] });
+    }
+    if (path === '/api/company-profile') {
+      return Promise.resolve({ ok: true, companyProfile });
     }
     return Promise.reject(new client.ApiError('not found', 404));
   });
@@ -122,5 +134,39 @@ describe('InvoicesListPage', () => {
 
     expect(screen.queryByText('INV-0001')).not.toBeInTheDocument();
     expect(screen.getByText('INV-0002')).toBeInTheDocument();
+  });
+
+  it('shows the human-readable status label, not the raw enum value', async () => {
+    mockReferenceData();
+    renderPage();
+    await waitFor(() => expect(screen.getByText('INV-0001')).toBeInTheDocument());
+    // "Unpaid"/"Paid" also appear as option text in the status filter <select>, so assert
+    // against the table cell specifically rather than requiring a page-wide unique match.
+    expect(screen.getByRole('cell', { name: 'Unpaid' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'Paid' })).toBeInTheDocument();
+    expect(screen.queryByText('unpaid')).not.toBeInTheDocument();
+  });
+
+  it('formats money using the tenant\'s actual currency, not the ZAR default', async () => {
+    mockReferenceData([unpaidInvoice, paidInvoice], { ...testCompanyProfile, defaultCurrency: 'USD' });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('INV-0001')).toBeInTheDocument());
+    expect(screen.getByText('USD 150.00')).toBeInTheDocument();
+    expect(screen.getByText('USD 100.00')).toBeInTheDocument();
+    expect(screen.getByText('USD 200.00')).toBeInTheDocument();
+    expect(screen.getByText('USD 0.00')).toBeInTheDocument();
+  });
+
+  it('shows a distinguishable error instead of "Unknown customer" when the customer lookup fails', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/invoices') return Promise.resolve({ ok: true, invoices: [unpaidInvoice] });
+      if (path === '/api/customers') return Promise.reject(new client.ApiError('Something went wrong.', 500));
+      if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile: testCompanyProfile });
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('INV-0001')).toBeInTheDocument());
+    expect(screen.getByText("Couldn't load customer")).toBeInTheDocument();
+    expect(screen.queryByText('Unknown customer')).not.toBeInTheDocument();
   });
 });

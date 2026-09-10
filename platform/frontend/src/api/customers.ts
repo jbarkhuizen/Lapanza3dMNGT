@@ -70,7 +70,7 @@ export function useUpdateCustomer(id: string) {
  * customer names client-side through this Map lookup.
  */
 export function useCustomerLookup() {
-  const { data: customers, isLoading } = useCustomers();
+  const { data: customers, isLoading, isError } = useCustomers();
   const lookup = useMemo(() => new Map(customers?.map((c) => [c.id, c]) ?? []), [customers]);
-  return { lookup, isLoading };
+  return { lookup, isLoading, isError };
 }

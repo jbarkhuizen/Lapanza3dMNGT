@@ -1,30 +1,25 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { useInvoice, useUpdateInvoiceStatus, useSendInvoice, VALID_INVOICE_STATUS_TRANSITIONS, type InvoiceStatus } from '../../api/invoices.js';
+import { useInvoice, useUpdateInvoiceStatus, useSendInvoice, VALID_INVOICE_STATUS_TRANSITIONS, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
-import { useCompanyProfile } from '../../api/companyProfile.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
-import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
+import { useSendDocument } from '../../lib/useSendDocument.js';
+import { SendToCustomerButton } from '../../components/SendToCustomerButton.js';
 import { FormField } from '../../components/FormField.js';
 import { ApiError } from '../../api/client.js';
-
-const STATUS_LABELS: Record<InvoiceStatus, string> = {
-  unpaid: 'Unpaid',
-  partially_paid: 'Partially Paid',
-  paid: 'Paid',
-  overdue: 'Overdue',
-};
 
 export function InvoiceDetailPage() {
   const { id } = useParams();
   const { data: invoice, isLoading, isError } = useInvoice(id);
-  const { lookup: customerLookup } = useCustomerLookup();
-  const { data: companyProfile } = useCompanyProfile();
+  const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const currency = useDisplayCurrency();
   const updateStatusMutation = useUpdateInvoiceStatus(id ?? '');
   const sendMutation = useSendInvoice(id ?? '');
   const [amountPaid, setAmountPaid] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const handleSend = useSendDocument(sendMutation, invoice?.number ?? '', setError, setSuccessMessage);
 
   // Keep the amount input pre-filled with the CURRENT cumulative amount paid to date,
   // since PATCH /status sets amountPaid rather than incrementing it. Re-sync whenever
@@ -43,12 +38,13 @@ export function InvoiceDetailPage() {
   }
 
   const customer = customerLookup.get(invoice.customerId);
+  const customerDisplayName = isCustomerLookupError ? "Couldn't load customer" : (customer?.name ?? 'Unknown customer');
   const nextStatuses = VALID_INVOICE_STATUS_TRANSITIONS[invoice.status] ?? [];
   const invoiceTotal = Number(invoice.total);
-  const invoiceNumber = invoice.number;
 
   async function handleStatusChange(status: InvoiceStatus, requiresAmount: boolean) {
     setError(null);
+    setSuccessMessage(null);
     try {
       // "Mark as Paid" must send the invoice's exact total — the backend requires an exact
       // match for the `paid` status — not whatever happens to be in the amount input.
@@ -64,50 +60,48 @@ export function InvoiceDetailPage() {
     }
   }
 
-  async function handleSend() {
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const result = await sendMutation.mutateAsync();
-      downloadBase64Pdf(result.pdfBase64, `${invoiceNumber}.pdf`);
-      setSuccessMessage(
-        result.devMode
-          ? `Emailed to ${result.sentTo} (dev mode — check server console for the email log).`
-          : `Emailed to ${result.sentTo}.`,
-      );
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
-    }
-  }
-
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">{invoice.number}</h1>
-        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{STATUS_LABELS[invoice.status]}</span>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">{invoice.number}</h1>
+          <p className="text-sm text-slate-500">Issued {invoice.createdAt.slice(0, 10)}</p>
+        </div>
+        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{INVOICE_STATUS_LABELS[invoice.status]}</span>
       </div>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
-        <div><div className="text-slate-500">Customer</div><div>{customer?.name ?? 'Unknown customer'}</div></div>
+        <div><div className="text-slate-500">Customer</div><div>{customerDisplayName}</div></div>
         <div><div className="text-slate-500">Due date</div><div>{invoice.dueDate.slice(0, 10)}</div></div>
       </section>
 
       <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
         <h2 className="text-lg font-semibold text-slate-900">Line items</h2>
-        {invoice.lineItems?.map((line) => (
-          <div key={line.id} className="flex justify-between">
-            <span>
-              <span>{line.description}</span>
-              <span className="text-slate-500"> × {line.quantity}</span>
-            </span>
-            <span>{formatCurrency(line.lineTotal, companyProfile?.defaultCurrency)}</span>
-          </div>
-        ))}
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal, companyProfile?.defaultCurrency)}</span></div>
-        {invoice.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(invoice.vatAmount, companyProfile?.defaultCurrency)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total, companyProfile?.defaultCurrency)}</span></div>
-        <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid, companyProfile?.defaultCurrency)}</span></div>
-        <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue, companyProfile?.defaultCurrency)}</span></div>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="py-1 font-normal">Description</th>
+              <th className="py-1 text-right font-normal">Qty</th>
+              <th className="py-1 text-right font-normal">Unit price</th>
+              <th className="py-1 text-right font-normal">Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoice.lineItems?.map((line) => (
+              <tr key={line.id}>
+                <td className="py-1">{line.description}</td>
+                <td className="py-1 text-right">{line.quantity}</td>
+                <td className="py-1 text-right">{formatCurrency(line.unitPrice, currency)}</td>
+                <td className="py-1 text-right">{formatCurrency(line.lineTotal, currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal, currency)}</span></div>
+        {invoice.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(invoice.vatAmount, currency)}</span></div>}
+        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total, currency)}</span></div>
+        <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid, currency)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue, currency)}</span></div>
       </section>
 
       {invoice.notes && (
@@ -121,14 +115,7 @@ export function InvoiceDetailPage() {
       {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
 
       <div className="flex gap-3">
-        <button
-          onClick={handleSend}
-          disabled={sendMutation.isPending || !customer?.email}
-          title={!customer?.email ? 'Add a customer email to enable sending' : undefined}
-          className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
-        >
-          Send to Customer
-        </button>
+        <SendToCustomerButton onSend={handleSend} isPending={sendMutation.isPending} hasCustomerEmail={!!customer?.email} />
       </div>
 
       {nextStatuses.length > 0 && (
@@ -140,6 +127,7 @@ export function InvoiceDetailPage() {
               type="number"
               value={amountPaid}
               onChange={(e) => setAmountPaid(e.target.value)}
+              onFocus={(e) => e.target.select()}
             />
           )}
           <div className="flex gap-3">
@@ -161,7 +149,7 @@ export function InvoiceDetailPage() {
                 Mark as Paid
               </button>
             )}
-            {nextStatuses.includes('overdue') && (
+            {nextStatuses.includes('overdue') && invoice.status !== 'overdue' && (
               <button
                 onClick={() => handleStatusChange('overdue', false)}
                 disabled={updateStatusMutation.isPending}

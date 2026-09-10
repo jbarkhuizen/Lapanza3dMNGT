@@ -46,9 +46,26 @@ const baseTemplate = {
   createdAt: '2026-01-01T00:00:00.000Z',
 };
 
+const testCompanyProfile = {
+  businessName: 'Acme Prints', contactName: 'Jane Doe', email: 'jane@acmeprints.co.za',
+  registrationNumber: null, vatRegistered: false, vatNumber: null, logoUrl: null,
+  addressLine1: null, addressLine2: null, city: null, postalCode: null, phone: null, website: null,
+  bankName: null, bankAccountHolder: null, bankAccountNumber: null, bankBranchCode: null,
+  termsAndConditionsText: null, defaultCurrency: 'ZAR', defaultQuoteValidityDays: null,
+  quoteNumberPrefix: 'QT', invoiceNumberPrefix: 'INV',
+};
+
+function mockReferenceData(costingTemplates = [baseTemplate], companyProfile = testCompanyProfile) {
+  vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+    if (path === '/api/costing-templates') return Promise.resolve({ ok: true, costingTemplates });
+    if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile });
+    return Promise.reject(new client.ApiError('not found', 404));
+  });
+}
+
 describe('CostingTemplatesListPage', () => {
   it('lists costing templates returned by the API', async () => {
-    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, costingTemplates: [baseTemplate] });
+    mockReferenceData();
     renderPage();
     await waitFor(() => expect(screen.getByText('Standard PLA bracket')).toBeInTheDocument());
     expect(screen.getByText('eSun')).toBeInTheDocument();
@@ -58,7 +75,7 @@ describe('CostingTemplatesListPage', () => {
   });
 
   it('shows an empty state when there are no costing templates', async () => {
-    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, costingTemplates: [] });
+    mockReferenceData([]);
     renderPage();
     await waitFor(() => expect(screen.getByText(/no costing templates yet/i)).toBeInTheDocument());
   });
@@ -70,7 +87,7 @@ describe('CostingTemplatesListPage', () => {
   });
 
   it('has a link to create a new costing template', async () => {
-    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, costingTemplates: [] });
+    mockReferenceData([]);
     renderPage();
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'New Costing Template' })).toHaveAttribute(
@@ -78,5 +95,13 @@ describe('CostingTemplatesListPage', () => {
         '/costing-templates/new',
       ),
     );
+  });
+
+  it('formats money using the tenant\'s actual currency, not the ZAR default', async () => {
+    mockReferenceData([baseTemplate], { ...testCompanyProfile, defaultCurrency: 'USD' });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Standard PLA bracket')).toBeInTheDocument());
+    expect(screen.getByText(formatCurrency('190.00', 'USD'))).toBeInTheDocument();
+    expect(screen.getByText(formatCurrency('285.00', 'USD'))).toBeInTheDocument();
   });
 });

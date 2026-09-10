@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from './client.js';
+import type { SendDocumentResponse } from './sendDocument.js';
+
+export type { SendDocumentResponse } from './sendDocument.js';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'expired';
 
@@ -45,6 +48,15 @@ export interface QuoteFormInput {
 export const VALID_QUOTE_STATUS_TRANSITIONS: Record<string, QuoteStatus[]> = {
   draft: ['sent', 'expired'],
   sent: ['accepted', 'expired'],
+};
+
+// Single source of truth for human-readable status text — shared by QuoteDetailPage
+// and QuotesListPage so the list no longer shows raw enum text (backlog #52).
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+  draft: 'Draft',
+  sent: 'Sent',
+  accepted: 'Accepted',
+  expired: 'Expired',
 };
 
 export const QUOTES_QUERY_KEY = ['quotes'] as const;
@@ -94,12 +106,6 @@ export function useConvertQuoteToInvoice(id: string) {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
     },
   });
-}
-
-export interface SendDocumentResponse {
-  pdfBase64: string;
-  sentTo: string;
-  devMode: boolean;
 }
 
 export function useSendQuote(id: string) {

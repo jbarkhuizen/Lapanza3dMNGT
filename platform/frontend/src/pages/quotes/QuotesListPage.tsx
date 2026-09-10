@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuotes, type QuoteStatus } from '../../api/quotes.js';
+import { useQuotes, QUOTE_STATUS_LABELS, type QuoteStatus } from '../../api/quotes.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
 
 const STATUS_OPTIONS: Array<QuoteStatus | 'all'> = ['all', 'draft', 'sent', 'accepted', 'expired'];
 
 export function QuotesListPage() {
   const { data: quotes, isLoading, isError } = useQuotes();
-  const { lookup: customerLookup } = useCustomerLookup();
+  const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const currency = useDisplayCurrency();
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
 
   const filteredQuotes = quotes?.filter((quote) => statusFilter === 'all' || quote.status === statusFilter);
@@ -34,7 +36,7 @@ export function QuotesListPage() {
         >
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
-              {option === 'all' ? 'All' : option}
+              {option === 'all' ? 'All' : QUOTE_STATUS_LABELS[option]}
             </option>
           ))}
         </select>
@@ -62,10 +64,12 @@ export function QuotesListPage() {
                     {quote.number}
                   </Link>
                 </td>
-                <td className="py-2">{customerLookup.get(quote.customerId)?.name ?? 'Unknown customer'}</td>
-                <td className="py-2">{quote.status}</td>
+                <td className="py-2">
+                  {isCustomerLookupError ? "Couldn't load customer" : (customerLookup.get(quote.customerId)?.name ?? 'Unknown customer')}
+                </td>
+                <td className="py-2">{QUOTE_STATUS_LABELS[quote.status]}</td>
                 <td className="py-2">{quote.validUntil?.slice(0, 10) ?? '—'}</td>
-                <td className="py-2">{formatCurrency(quote.total)}</td>
+                <td className="py-2">{formatCurrency(quote.total, currency)}</td>
               </tr>
             ))}
           </tbody>

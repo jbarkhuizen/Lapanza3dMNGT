@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from './client.js';
+import type { SendDocumentResponse } from './sendDocument.js';
+
+export type { SendDocumentResponse } from './sendDocument.js';
 
 export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue';
 
@@ -38,6 +41,15 @@ export const VALID_INVOICE_STATUS_TRANSITIONS: Record<string, InvoiceStatus[]> =
   paid: [],
 };
 
+// Single source of truth for human-readable status text — shared by InvoiceDetailPage
+// and InvoicesListPage so the list no longer shows raw enum text (backlog #52).
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  unpaid: 'Unpaid',
+  partially_paid: 'Partially Paid',
+  paid: 'Paid',
+  overdue: 'Overdue',
+};
+
 const INVOICES_QUERY_KEY = ['invoices'] as const;
 
 export function useInvoices() {
@@ -64,12 +76,6 @@ export function useUpdateInvoiceStatus(id: string) {
       queryClient.invalidateQueries({ queryKey: INVOICES_QUERY_KEY });
     },
   });
-}
-
-export interface SendDocumentResponse {
-  pdfBase64: string;
-  sentTo: string;
-  devMode: boolean;
 }
 
 export function useSendInvoice(id: string) {

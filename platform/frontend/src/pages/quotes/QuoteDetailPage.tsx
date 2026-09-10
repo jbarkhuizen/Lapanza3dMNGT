@@ -1,30 +1,25 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuote, useUpdateQuoteStatus, useConvertQuoteToInvoice, useSendQuote, VALID_QUOTE_STATUS_TRANSITIONS, type QuoteStatus } from '../../api/quotes.js';
+import { useQuote, useUpdateQuoteStatus, useConvertQuoteToInvoice, useSendQuote, VALID_QUOTE_STATUS_TRANSITIONS, QUOTE_STATUS_LABELS, type QuoteStatus } from '../../api/quotes.js';
 import { useCustomerLookup } from '../../api/customers.js';
-import { useCompanyProfile } from '../../api/companyProfile.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
-import { downloadBase64Pdf } from '../../lib/downloadPdf.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
+import { useSendDocument } from '../../lib/useSendDocument.js';
+import { SendToCustomerButton } from '../../components/SendToCustomerButton.js';
 import { ApiError } from '../../api/client.js';
-
-const STATUS_LABELS: Record<QuoteStatus, string> = {
-  draft: 'Draft',
-  sent: 'Sent',
-  accepted: 'Accepted',
-  expired: 'Expired',
-};
 
 export function QuoteDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: quote, isLoading, isError } = useQuote(id);
-  const { lookup: customerLookup } = useCustomerLookup();
-  const { data: companyProfile } = useCompanyProfile();
+  const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const currency = useDisplayCurrency();
   const updateStatusMutation = useUpdateQuoteStatus(id ?? '');
   const convertMutation = useConvertQuoteToInvoice(id ?? '');
   const sendMutation = useSendQuote(id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const handleSend = useSendDocument(sendMutation, quote?.number ?? '', setError, setSuccessMessage);
 
   if (isLoading) {
     return <p className="text-slate-500">Loading…</p>;
@@ -34,11 +29,12 @@ export function QuoteDetailPage() {
   }
 
   const customer = customerLookup.get(quote.customerId);
+  const customerDisplayName = isCustomerLookupError ? "Couldn't load customer" : (customer?.name ?? 'Unknown customer');
   const nextStatuses = VALID_QUOTE_STATUS_TRANSITIONS[quote.status] ?? [];
-  const quoteNumber = quote.number;
 
   async function handleStatusChange(status: QuoteStatus) {
     setError(null);
+    setSuccessMessage(null);
     try {
       await updateStatusMutation.mutateAsync(status);
     } catch (err) {
@@ -48,6 +44,7 @@ export function QuoteDetailPage() {
 
   async function handleConvert() {
     setError(null);
+    setSuccessMessage(null);
     try {
       const invoice = await convertMutation.mutateAsync();
       navigate(`/invoices/${invoice.id}`);
@@ -56,47 +53,46 @@ export function QuoteDetailPage() {
     }
   }
 
-  async function handleSend() {
-    setError(null);
-    setSuccessMessage(null);
-    try {
-      const result = await sendMutation.mutateAsync();
-      downloadBase64Pdf(result.pdfBase64, `${quoteNumber}.pdf`);
-      setSuccessMessage(
-        result.devMode
-          ? `Emailed to ${result.sentTo} (dev mode — check server console for the email log).`
-          : `Emailed to ${result.sentTo}.`,
-      );
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again shortly.');
-    }
-  }
-
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">{quote.number}</h1>
-        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{STATUS_LABELS[quote.status]}</span>
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">{quote.number}</h1>
+          <p className="text-sm text-slate-500">Issued {quote.createdAt.slice(0, 10)}</p>
+        </div>
+        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{QUOTE_STATUS_LABELS[quote.status]}</span>
       </div>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
-        <div><div className="text-slate-500">Customer</div><div>{customer?.name ?? 'Unknown customer'}</div></div>
+        <div><div className="text-slate-500">Customer</div><div>{customerDisplayName}</div></div>
         <div><div className="text-slate-500">Valid until</div><div>{quote.validUntil?.slice(0, 10) ?? '—'}</div></div>
       </section>
 
       <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
         <h2 className="text-lg font-semibold text-slate-900">Line items</h2>
-        {quote.lineItems?.map((line) => (
-          <div key={line.id} className="flex justify-between">
-            <span>
-              <span>{line.description}</span> × {line.quantity}
-            </span>
-            <span>{formatCurrency(line.lineTotal, companyProfile?.defaultCurrency)}</span>
-          </div>
-        ))}
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(quote.subtotal, companyProfile?.defaultCurrency)}</span></div>
-        {quote.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(quote.vatAmount, companyProfile?.defaultCurrency)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total, companyProfile?.defaultCurrency)}</span></div>
+        <table className="w-full text-left">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="py-1 font-normal">Description</th>
+              <th className="py-1 text-right font-normal">Qty</th>
+              <th className="py-1 text-right font-normal">Unit price</th>
+              <th className="py-1 text-right font-normal">Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {quote.lineItems?.map((line) => (
+              <tr key={line.id}>
+                <td className="py-1">{line.description}</td>
+                <td className="py-1 text-right">{line.quantity}</td>
+                <td className="py-1 text-right">{formatCurrency(line.unitPrice, currency)}</td>
+                <td className="py-1 text-right">{formatCurrency(line.lineTotal, currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(quote.subtotal, currency)}</span></div>
+        {quote.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(quote.vatAmount, currency)}</span></div>}
+        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total, currency)}</span></div>
       </section>
 
       {quote.notes && (
@@ -110,14 +106,7 @@ export function QuoteDetailPage() {
       {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
 
       <div className="flex gap-3">
-        <button
-          onClick={handleSend}
-          disabled={sendMutation.isPending || !customer?.email}
-          title={!customer?.email ? 'Add a customer email to enable sending' : undefined}
-          className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
-        >
-          Send to Customer
-        </button>
+        <SendToCustomerButton onSend={handleSend} isPending={sendMutation.isPending} hasCustomerEmail={!!customer?.email} />
         {nextStatuses.map((status) => (
           <button
             key={status}
@@ -125,7 +114,7 @@ export function QuoteDetailPage() {
             disabled={updateStatusMutation.isPending}
             className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
           >
-            Mark as {STATUS_LABELS[status]}
+            Mark as {QUOTE_STATUS_LABELS[status]}
           </button>
         ))}
         {quote.status === 'accepted' && (
