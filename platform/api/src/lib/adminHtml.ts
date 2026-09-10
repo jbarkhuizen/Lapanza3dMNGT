@@ -18,7 +18,7 @@ const BADGE_COLORS: Record<string, string> = {
 };
 
 export function badge(label: string): string {
-  const color = BADGE_COLORS[label] ?? '#6a5f54';
+  const color = Object.hasOwn(BADGE_COLORS, label) ? BADGE_COLORS[label] : '#6a5f54';
   return `<span class="badge" style="background:${color}22;color:${color}">${escapeHtml(label)}</span>`;
 }
 
