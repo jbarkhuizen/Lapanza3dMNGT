@@ -107,4 +107,57 @@ describe('FilamentFormPage — edit mode', () => {
     await waitFor(() => expect(screen.getByDisplayValue('eSun')).toBeInTheDocument());
     expect((screen.getByLabelText('Purchase date') as HTMLInputElement).value).toBe('2026-03-15');
   });
+
+  it('sends an explicit null (not an omitted key) when the "Clear" button on a previously-set optional numeric field is used', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      filament: {
+        id: '1', brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, colour: null,
+        costPerSpool: null, costPerKg: 300, spoolWeightGrams: null, remainingWeightGrams: null,
+        supplier: null, purchaseDate: null, notes: null, lowStockThresholdGrams: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true });
+    renderAt('/filaments/1');
+
+    await waitFor(() => expect(screen.getByLabelText('Cost per kg')).toHaveValue(300));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Cost per kg' }));
+    expect(screen.getByLabelText('Cost per kg')).toHaveValue(null);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith('/api/filaments/1', expect.objectContaining({ costPerKg: null })),
+    );
+    // A bare backspace-to-empty (never touching Clear) must still omit the key, not send
+    // null -- that's the pre-existing, intentional "leave it untouched" behaviour for an
+    // in-progress edit. Only the explicit Clear affordance sends null.
+    const [, body] = patchSpy.mock.calls[0];
+    expect(Object.keys(body as Record<string, unknown>)).toContain('costPerKg');
+  });
+
+  it('does not render a "Clear" button for an optional numeric field that has no value set', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      filament: {
+        id: '1', brand: 'eSun', materialType: 'PLA', diameterMm: 1.75, colour: null,
+        costPerSpool: null, costPerKg: null, spoolWeightGrams: null, remainingWeightGrams: null,
+        supplier: null, purchaseDate: null, notes: null, lowStockThresholdGrams: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    renderAt('/filaments/1');
+
+    await waitFor(() => expect(screen.getByDisplayValue('eSun')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Clear Cost per kg' })).not.toBeInTheDocument();
+  });
+});
+
+describe('FilamentFormPage — create mode clear affordance', () => {
+  it('never renders a "Clear" button on the create form (nothing saved yet to clear)', async () => {
+    renderAt('/filaments/new');
+    fireEvent.change(screen.getByLabelText('Cost per kg'), { target: { value: '300' } });
+    expect(screen.queryByRole('button', { name: 'Clear Cost per kg' })).not.toBeInTheDocument();
+  });
 });

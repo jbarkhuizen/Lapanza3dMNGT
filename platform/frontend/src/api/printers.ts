@@ -24,14 +24,15 @@ export interface PrinterFormInput {
   name: string;
   make?: string;
   model?: string;
-  buildVolumeXMm?: number;
-  buildVolumeYMm?: number;
-  buildVolumeZMm?: number;
+  // number to set, null to explicitly clear (edit mode only), undefined to leave unset/untouched.
+  buildVolumeXMm?: number | null;
+  buildVolumeYMm?: number | null;
+  buildVolumeZMm?: number | null;
   purchaseDate?: string;
-  purchaseCost?: number;
-  powerDrawWatts?: number;
-  electricityRatePerKwh?: number;
-  expectedLifetimeHours?: number;
+  purchaseCost?: number | null;
+  powerDrawWatts?: number | null;
+  electricityRatePerKwh?: number | null;
+  expectedLifetimeHours?: number | null;
   status?: PrinterStatus;
 }
 

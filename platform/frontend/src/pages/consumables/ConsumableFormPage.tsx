@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
+import { NumberField } from '../../components/NumberField.js';
 import { ApiError } from '../../api/client.js';
 import {
   useConsumable,
@@ -67,6 +68,15 @@ export function ConsumableFormPage() {
     set(key, raw ? Number(raw) : undefined);
   }
 
+  // Explicit "clear" affordance for reorderThreshold (edit mode only): sends `null`,
+  // which -- unlike `undefined` -- survives JSON.stringify and tells the PATCH endpoint
+  // to actually clear the stored value instead of leaving it untouched. `currentStock`
+  // has no equivalent: it's a non-nullable column with a DB default, so there's nothing
+  // to clear it to.
+  function clearReorderThreshold() {
+    set('reorderThreshold', null);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -124,7 +134,7 @@ export function ConsumableFormPage() {
         required
       />
       <FormField id="currentStock" label="Current stock" type="number" value={form.currentStock ?? ''} onChange={(e) => setNumber('currentStock', e.target.value)} />
-      <FormField id="reorderThreshold" label="Reorder threshold" type="number" value={form.reorderThreshold ?? ''} onChange={(e) => setNumber('reorderThreshold', e.target.value)} />
+      <NumberField id="reorderThreshold" label="Reorder threshold" value={form.reorderThreshold ?? ''} onChange={(raw) => setNumber('reorderThreshold', raw)} onClear={isEditMode ? clearReorderThreshold : undefined} />
       <FormField id="supplier" label="Supplier" value={form.supplier ?? ''} onChange={(e) => set('supplier', e.target.value)} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button

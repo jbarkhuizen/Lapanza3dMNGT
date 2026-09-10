@@ -8,10 +8,12 @@ import { omitBlankFields } from '../lib/omitBlankFields.js';
 
 type FormState = UpdateCompanyProfileInput;
 
-// Fields the API rejects as invalid when sent as '' (stricter-than-plain-optional
-// validation on the server: `.trim().min(1)` for these three). Every other optional
-// field below accepts '' fine and is sent as-is, so a user can actually clear it.
-const OMIT_WHEN_BLANK: (keyof FormState)[] = ['vatNumber', 'quoteNumberPrefix', 'invoiceNumberPrefix'];
+// `vatNumber`, `quoteNumberPrefix`, and `invoiceNumberPrefix` used to be omitted here
+// because the server used to reject them as invalid when sent as '' -- but the current
+// schema in `platform/api/src/routes/company-profile.ts` uses plain `.trim().optional()`
+// for all three, which accepts '' fine. So this list is empty: every field on this form
+// is sent as-is, blank or not, so a user can actually clear any of them back to blank.
+const OMIT_WHEN_BLANK: (keyof FormState)[] = [];
 
 export function CompanyProfilePage() {
   const { data: profile, isLoading, isError } = useCompanyProfile();

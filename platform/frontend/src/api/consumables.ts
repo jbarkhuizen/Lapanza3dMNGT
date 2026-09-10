@@ -25,7 +25,8 @@ export interface ConsumableFormInput {
   unitOfMeasure: string;
   costPerUnit: number;
   currentStock?: number;
-  reorderThreshold?: number;
+  // number to set, null to explicitly clear (edit mode only), undefined to leave unset/untouched.
+  reorderThreshold?: number | null;
   supplier?: string;
 }
 
