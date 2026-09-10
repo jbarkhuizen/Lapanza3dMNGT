@@ -53,6 +53,46 @@ test('createSubscriptionCheckout gets an access token, creates a plan and a subs
   assert.equal(body.plan_id, 'PLAN-1');
 });
 
+test('createSubscriptionCheckout throws when PayPal\'s subscription response is missing an id', async () => {
+  const makeFetch = (subscriptionId: unknown) => async (url: string) => {
+    if (url.endsWith('/v1/oauth2/token')) {
+      return { ok: true, json: async () => ({ access_token: 'fake-token' }) } as Response;
+    }
+    if (url.endsWith('/v1/catalogs/products')) {
+      return { ok: true, json: async () => ({ id: 'PROD-1' }) } as Response;
+    }
+    if (url.endsWith('/v1/billing/plans')) {
+      return { ok: true, json: async () => ({ id: 'PLAN-1' }) } as Response;
+    }
+    if (url.endsWith('/v1/billing/subscriptions')) {
+      return {
+        ok: true,
+        json: async () => ({
+          id: subscriptionId,
+          links: [{ rel: 'approve', href: 'https://www.sandbox.paypal.com/approve/SUB-1' }],
+        }),
+      } as Response;
+    }
+    throw new Error(`Unexpected URL in test: ${url}`);
+  };
+
+  for (const subscriptionId of [undefined, null, '']) {
+    const provider = createPaypalProvider(config, makeFetch(subscriptionId) as unknown as typeof fetch);
+    await assert.rejects(
+      () =>
+        provider.createSubscriptionCheckout({
+          tenantId: 't1',
+          subscriptionId: 'sub-row-1',
+          plan: { id: 'p1', name: 'Tier 1', monthlyPrice: '25.00' },
+          trialDays: 14,
+          returnUrl: 'https://barkie.co.za/app/billing/complete',
+          webhookUrl: 'https://barkie.co.za/api/webhooks/paypal',
+        }),
+      `expected a rejection when subscription id is ${JSON.stringify(subscriptionId)}`,
+    );
+  }
+});
+
 test('createSubscriptionCheckout throws when any of the token/product/plan/subscription calls fail', async () => {
   const makeFetch = (failOn: string) => async (url: string) => {
     if (url.endsWith('/v1/oauth2/token')) {

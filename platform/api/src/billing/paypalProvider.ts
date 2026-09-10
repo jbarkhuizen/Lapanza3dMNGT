@@ -103,6 +103,9 @@ export function createPaypalProvider(
       if (!approveLink) {
         throw new Error('PayPal subscription response had no approve link');
       }
+      if (typeof subscription.id !== 'string' || subscription.id.length === 0) {
+        throw new Error('PayPal subscription response had no id');
+      }
 
       return { redirectUrl: approveLink.href, providerSubscriptionId: subscription.id };
     },
