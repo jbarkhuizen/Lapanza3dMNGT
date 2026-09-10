@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.js';
 import { apiPost } from '../api/client.js';
 import { useSubscription } from '../api/billing.js';
@@ -38,13 +38,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <nav className="flex w-56 flex-col gap-1 border-r border-slate-200 bg-slate-50 p-4">
         <span className="mb-4 text-lg font-semibold text-slate-900">Barkie</span>
         {NAV_ITEMS.map((item) => (
-          <Link
+          <NavLink
             key={item.to}
             to={item.to}
-            className="rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-200"
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              `rounded px-3 py-2 text-sm hover:bg-slate-200 ${
+                isActive ? 'bg-slate-200 font-medium text-slate-900' : 'text-slate-700'
+              }`
+            }
           >
             {item.label}
-          </Link>
+          </NavLink>
         ))}
       </nav>
       <div className="flex flex-1 flex-col">
