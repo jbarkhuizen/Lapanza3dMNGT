@@ -81,12 +81,24 @@ describe('BillingSettingsPage', () => {
     expect(link).toHaveAttribute('href', '/plans');
   });
 
-  it('renders a link to /plans when the subscription is past_due', async () => {
+  it('renders an "Update payment method" link to /plans?mode=update when the subscription is past_due', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, subscription: pastDueSubscription });
     renderPage();
     await waitFor(() => expect(screen.getByText(/payment past due/i)).toBeInTheDocument());
-    const link = screen.getByRole('link', { name: /choose a plan/i });
+    const link = screen.getByRole('link', { name: /update payment method/i });
     expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/plans');
+    expect(link).toHaveAttribute('href', '/plans?mode=update');
+  });
+
+  it('renders an "Update payment method" link for an active subscription too', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({
+      ok: true,
+      subscription: { ...pastDueSubscription, status: 'active' },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/^active$/i)).toBeInTheDocument());
+    const link = screen.getByRole('link', { name: /update payment method/i });
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/plans?mode=update');
   });
 });

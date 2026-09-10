@@ -67,5 +67,5 @@ export async function requireActiveSubscription(req: Request, res: Response, nex
     await scoped.subscription.updateStatus('lapsed').catch(() => {});
   }
 
-  return res.status(402).json({ ok: false, error: 'Your subscription has lapsed. Update your payment method to continue.' });
+  return res.status(402).json({ ok: false, error: 'Your subscription has lapsed. Choose a plan to continue.' });
 }

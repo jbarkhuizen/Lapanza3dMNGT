@@ -28,6 +28,14 @@ export function BillingSettingsPage() {
         <div className="text-sm text-slate-500">R {subscription.plan.monthlyPrice}/mo</div>
         <div className="mt-2 text-sm">{STATUS_LABELS[subscription.status] ?? subscription.status}</div>
       </div>
+      {(subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'past_due') && (
+        <Link
+          to="/plans?mode=update"
+          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
+        >
+          Update payment method
+        </Link>
+      )}
       {subscription.status !== 'canceled' && (
         <button
           onClick={() => cancelMutation.mutate()}
@@ -37,7 +45,7 @@ export function BillingSettingsPage() {
           Cancel subscription
         </button>
       )}
-      {(subscription.status === 'canceled' || subscription.status === 'lapsed' || subscription.status === 'past_due') && (
+      {(subscription.status === 'canceled' || subscription.status === 'lapsed') && (
         <Link
           to="/plans"
           className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"

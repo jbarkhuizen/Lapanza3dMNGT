@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="bg-red-50 px-6 py-2 text-center text-sm text-red-700">
             {subscription.status === 'lapsed'
               ? 'Your subscription has lapsed — you can view your data but not make changes. '
-              : 'Your last payment failed — please check your payment method. '}
+              : 'Your last payment failed — update your payment method to keep your subscription active. '}
             <Link to="/billing" className="underline">Manage billing</Link>
           </div>
         )}
