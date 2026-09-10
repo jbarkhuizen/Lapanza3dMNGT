@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
+import { NumberField } from '../../components/NumberField.js';
 import { ApiError } from '../../api/client.js';
 import {
   usePrinter,
@@ -33,8 +34,9 @@ const emptyForm: PrinterFormInput = {
 // validation (a date-parse refine that rejects ''), confirmed against `platform/api/src/routes/printers.ts`.
 // `make`/`model` are plain `z.string().optional()` and accept '' fine. `status` is a `<select>`
 // defaulted to 'active', so it's never blank-submitted. Every numeric field is sent as a real
-// number or omitted (never ''), so `.nonnegative()`/`.positive()` refinements on
-// `electricityRatePerKwh`/`expectedLifetimeHours` never see a blank value either.
+// number, `null` (explicit clear, via the NumberField "x" button), or omitted (never '') -- so
+// `.nonnegative()`/`.positive()` refinements on `electricityRatePerKwh`/`expectedLifetimeHours`
+// never see a blank value either.
 const OMIT_WHEN_BLANK: (keyof PrinterFormInput)[] = ['purchaseDate'];
 
 export function PrinterFormPage() {
@@ -86,6 +88,14 @@ export function PrinterFormPage() {
     set(key, raw ? Number(raw) : undefined);
   }
 
+  // Explicit "clear" affordance for optional numeric fields (edit mode only):
+  // sends `null`, which -- unlike `undefined` -- survives JSON.stringify and
+  // tells the PATCH endpoint to actually clear the stored value instead of
+  // leaving it untouched.
+  function clearNumber(key: NumericPrinterField) {
+    set(key, null);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -120,15 +130,15 @@ export function PrinterFormPage() {
         <FormField id="name" label="Name" value={form.name} onChange={(e) => set('name', e.target.value)} required />
         <FormField id="make" label="Make" value={form.make ?? ''} onChange={(e) => set('make', e.target.value)} />
         <FormField id="model" label="Model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value)} />
-        <FormField id="buildVolumeXMm" label="Build volume X (mm)" type="number" value={form.buildVolumeXMm ?? ''} onChange={(e) => setNumber('buildVolumeXMm', e.target.value)} />
-        <FormField id="buildVolumeYMm" label="Build volume Y (mm)" type="number" value={form.buildVolumeYMm ?? ''} onChange={(e) => setNumber('buildVolumeYMm', e.target.value)} />
-        <FormField id="buildVolumeZMm" label="Build volume Z (mm)" type="number" value={form.buildVolumeZMm ?? ''} onChange={(e) => setNumber('buildVolumeZMm', e.target.value)} />
+        <NumberField id="buildVolumeXMm" label="Build volume X (mm)" value={form.buildVolumeXMm ?? ''} onChange={(raw) => setNumber('buildVolumeXMm', raw)} onClear={isEditMode ? () => clearNumber('buildVolumeXMm') : undefined} />
+        <NumberField id="buildVolumeYMm" label="Build volume Y (mm)" value={form.buildVolumeYMm ?? ''} onChange={(raw) => setNumber('buildVolumeYMm', raw)} onClear={isEditMode ? () => clearNumber('buildVolumeYMm') : undefined} />
+        <NumberField id="buildVolumeZMm" label="Build volume Z (mm)" value={form.buildVolumeZMm ?? ''} onChange={(raw) => setNumber('buildVolumeZMm', raw)} onClear={isEditMode ? () => clearNumber('buildVolumeZMm') : undefined} />
         <FormField id="purchaseDate" label="Purchase date" type="date" value={form.purchaseDate ?? ''} onChange={(e) => set('purchaseDate', e.target.value)} />
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Required for job costing</p>
-        <FormField id="purchaseCost" label="Purchase cost" type="number" value={form.purchaseCost ?? ''} onChange={(e) => setNumber('purchaseCost', e.target.value)} />
-        <FormField id="powerDrawWatts" label="Power draw (W)" type="number" value={form.powerDrawWatts ?? ''} onChange={(e) => setNumber('powerDrawWatts', e.target.value)} />
-        <FormField id="electricityRatePerKwh" label="Electricity rate per kWh" type="number" value={form.electricityRatePerKwh ?? ''} onChange={(e) => setNumber('electricityRatePerKwh', e.target.value)} />
-        <FormField id="expectedLifetimeHours" label="Expected lifetime (hours)" type="number" value={form.expectedLifetimeHours ?? ''} onChange={(e) => setNumber('expectedLifetimeHours', e.target.value)} />
+        <NumberField id="purchaseCost" label="Purchase cost" value={form.purchaseCost ?? ''} onChange={(raw) => setNumber('purchaseCost', raw)} onClear={isEditMode ? () => clearNumber('purchaseCost') : undefined} />
+        <NumberField id="powerDrawWatts" label="Power draw (W)" value={form.powerDrawWatts ?? ''} onChange={(raw) => setNumber('powerDrawWatts', raw)} onClear={isEditMode ? () => clearNumber('powerDrawWatts') : undefined} />
+        <NumberField id="electricityRatePerKwh" label="Electricity rate per kWh" min="0" value={form.electricityRatePerKwh ?? ''} onChange={(raw) => setNumber('electricityRatePerKwh', raw)} onClear={isEditMode ? () => clearNumber('electricityRatePerKwh') : undefined} />
+        <NumberField id="expectedLifetimeHours" label="Expected lifetime (hours)" min="0.01" value={form.expectedLifetimeHours ?? ''} onChange={(raw) => setNumber('expectedLifetimeHours', raw)} onClear={isEditMode ? () => clearNumber('expectedLifetimeHours') : undefined} />
         <div className="flex flex-col gap-1">
           <label htmlFor="status" className="text-sm font-medium text-slate-700">Status</label>
           <select

@@ -101,7 +101,7 @@ export function CostingTemplateCreatePage() {
         </select>
       </div>
 
-      <FormField id="weightGrams" label="Weight (g)" type="number" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} required />
+      <FormField id="weightGrams" label="Weight (g)" type="number" min="0.01" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} required />
 
       <div className="flex flex-col gap-1">
         <label htmlFor="printerId" className="text-sm font-medium text-slate-700">Printer</label>
@@ -120,8 +120,8 @@ export function CostingTemplateCreatePage() {
         </select>
       </div>
 
-      <FormField id="printTimeHours" label="Print time (hours)" type="number" value={printTimeHours} onChange={(e) => setPrintTimeHours(e.target.value)} required />
-      <FormField id="markupPercent" label="Markup (%)" type="number" value={markupPercent} onChange={(e) => setMarkupPercent(e.target.value)} required />
+      <FormField id="printTimeHours" label="Print time (hours)" type="number" min="0.01" value={printTimeHours} onChange={(e) => setPrintTimeHours(e.target.value)} required />
+      <FormField id="markupPercent" label="Markup (%)" type="number" min="0" max="9999.99" value={markupPercent} onChange={(e) => setMarkupPercent(e.target.value)} required />
 
       <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between">
@@ -139,6 +139,7 @@ export function CostingTemplateCreatePage() {
               <label htmlFor={`labourStep-${i}`} className="text-sm font-medium text-slate-700">Labour step</label>
               <select
                 id={`labourStep-${i}`}
+                aria-label={`Labour step (line ${i + 1})`}
                 value={line.labourStepId}
                 onChange={(e) => updateLabourLine(i, { labourStepId: e.target.value })}
                 className="rounded border border-slate-300 px-3 py-2 text-sm"
@@ -148,7 +149,16 @@ export function CostingTemplateCreatePage() {
                 ))}
               </select>
             </div>
-            <FormField id={`labourHours-${i}`} label="Hours" type="number" value={line.hours} onChange={(e) => updateLabourLine(i, { hours: e.target.value })} required />
+            <FormField
+              id={`labourHours-${i}`}
+              label="Hours"
+              type="number"
+              min="0.01"
+              aria-label={`Hours (labour line ${i + 1})`}
+              value={line.hours}
+              onChange={(e) => updateLabourLine(i, { hours: e.target.value })}
+              required
+            />
             <button type="button" onClick={() => removeLabourLine(i)} className="text-sm text-red-600">Remove</button>
           </div>
         ))}
@@ -170,6 +180,7 @@ export function CostingTemplateCreatePage() {
               <label htmlFor={`consumable-${i}`} className="text-sm font-medium text-slate-700">Consumable</label>
               <select
                 id={`consumable-${i}`}
+                aria-label={`Consumable (line ${i + 1})`}
                 value={line.consumableId}
                 onChange={(e) => updateConsumableLine(i, { consumableId: e.target.value })}
                 className="rounded border border-slate-300 px-3 py-2 text-sm"
@@ -179,7 +190,16 @@ export function CostingTemplateCreatePage() {
                 ))}
               </select>
             </div>
-            <FormField id={`consumableQuantity-${i}`} label="Quantity" type="number" value={line.quantity} onChange={(e) => updateConsumableLine(i, { quantity: e.target.value })} required />
+            <FormField
+              id={`consumableQuantity-${i}`}
+              label="Quantity"
+              type="number"
+              min="0.01"
+              aria-label={`Quantity (consumable line ${i + 1})`}
+              value={line.quantity}
+              onChange={(e) => updateConsumableLine(i, { quantity: e.target.value })}
+              required
+            />
             <button type="button" onClick={() => removeConsumableLine(i)} className="text-sm text-red-600">Remove</button>
           </div>
         ))}

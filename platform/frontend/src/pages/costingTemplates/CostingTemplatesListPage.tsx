@@ -2,6 +2,10 @@ import { Link } from 'react-router-dom';
 import { useCostingTemplates } from '../../api/costingTemplates.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString();
+}
+
 export function CostingTemplatesListPage() {
   const { data: costingTemplates, isLoading, isError } = useCostingTemplates();
 
@@ -27,6 +31,7 @@ export function CostingTemplatesListPage() {
               <th className="py-2">Printer</th>
               <th className="py-2">Total cost</th>
               <th className="py-2">Suggested price</th>
+              <th className="py-2">Created</th>
               <th className="py-2"></th>
             </tr>
           </thead>
@@ -38,6 +43,7 @@ export function CostingTemplatesListPage() {
                 <td className="py-2">{template.printerSnapshotName ?? '—'}</td>
                 <td className="py-2">{formatCurrency(template.totalCost)}</td>
                 <td className="py-2">{formatCurrency(template.suggestedPrice)}</td>
+                <td className="py-2">{formatDate(template.createdAt)}</td>
                 <td className="py-2 text-right">
                   <Link to={`/costing-templates/${template.id}`} className="text-slate-600 underline">
                     View

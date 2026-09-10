@@ -115,7 +115,10 @@ describe('CompanyProfilePage', () => {
     expect(payload.city).toBe('');
   });
 
-  it('omits a blank vatNumber from the PATCH payload instead of sending it as an empty string', async () => {
+  it('sends a blank vatNumber as an empty string instead of omitting it, so it can actually be cleared', async () => {
+    // The server's zod schema uses plain `.trim().optional()` for vatNumber (confirmed
+    // against `platform/api/src/routes/company-profile.ts`), which accepts '' fine — so
+    // unlike the old, buggy behaviour, blanking this field must not silently no-op.
     vi.spyOn(client, 'apiGet').mockResolvedValue({
       ok: true,
       companyProfile: { ...baseProfile, vatNumber: 'VAT123' },
@@ -129,7 +132,23 @@ describe('CompanyProfilePage', () => {
 
     await waitFor(() => expect(patchSpy).toHaveBeenCalled());
     const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
-    expect(payload).not.toHaveProperty('vatNumber');
+    expect(payload.vatNumber).toBe('');
+  });
+
+  it('sends blank quoteNumberPrefix/invoiceNumberPrefix as empty strings instead of omitting them, so they can actually be cleared', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByDisplayValue('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Quote number prefix'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Invoice number prefix'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalled());
+    const [, payload] = patchSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload.quoteNumberPrefix).toBe('');
+    expect(payload.invoiceNumberPrefix).toBe('');
   });
 
   it('does not send a blank optional field as an empty string when saving', async () => {

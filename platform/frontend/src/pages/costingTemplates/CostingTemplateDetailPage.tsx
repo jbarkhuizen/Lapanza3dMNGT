@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useCostingTemplate } from '../../api/costingTemplates.js';
 import { ApiError } from '../../api/client.js';
 import { formatCurrency as money } from '../../lib/formatCurrency.js';
@@ -20,6 +20,9 @@ export function CostingTemplateDetailPage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
+      <Link to="/costing-templates" className="text-sm text-slate-600 underline">
+        ← Back to Costing Templates
+      </Link>
       <h1 className="text-2xl font-semibold text-slate-900">{template.name}</h1>
 
       <section className="grid grid-cols-2 gap-4 text-sm">

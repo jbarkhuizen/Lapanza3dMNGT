@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
+import { NumberField } from '../../components/NumberField.js';
 import { TextareaField } from '../../components/TextareaField.js';
 import { ApiError } from '../../api/client.js';
 import {
@@ -73,6 +74,14 @@ export function FilamentFormPage() {
     set(key, raw ? Number(raw) : undefined);
   }
 
+  // Explicit "clear" affordance for optional numeric fields (edit mode only):
+  // sends `null`, which -- unlike `undefined` -- survives JSON.stringify and
+  // tells the PATCH endpoint to actually clear the stored value instead of
+  // leaving it untouched.
+  function clearNumber(key: NumericFilamentField) {
+    set(key, null);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -118,11 +127,11 @@ export function FilamentFormPage() {
         </select>
       </div>
       <FormField id="colour" label="Colour" value={form.colour ?? ''} onChange={(e) => set('colour', e.target.value)} />
-      <FormField id="costPerSpool" label="Cost per spool" type="number" value={form.costPerSpool ?? ''} onChange={(e) => setNumber('costPerSpool', e.target.value)} />
-      <FormField id="costPerKg" label="Cost per kg" type="number" value={form.costPerKg ?? ''} onChange={(e) => setNumber('costPerKg', e.target.value)} />
-      <FormField id="spoolWeightGrams" label="Spool weight (g)" type="number" value={form.spoolWeightGrams ?? ''} onChange={(e) => setNumber('spoolWeightGrams', e.target.value)} />
-      <FormField id="remainingWeightGrams" label="Remaining weight (g)" type="number" value={form.remainingWeightGrams ?? ''} onChange={(e) => setNumber('remainingWeightGrams', e.target.value)} />
-      <FormField id="lowStockThresholdGrams" label="Low stock threshold (g)" type="number" value={form.lowStockThresholdGrams ?? ''} onChange={(e) => setNumber('lowStockThresholdGrams', e.target.value)} />
+      <NumberField id="costPerSpool" label="Cost per spool" value={form.costPerSpool ?? ''} onChange={(raw) => setNumber('costPerSpool', raw)} onClear={isEditMode ? () => clearNumber('costPerSpool') : undefined} />
+      <NumberField id="costPerKg" label="Cost per kg" value={form.costPerKg ?? ''} onChange={(raw) => setNumber('costPerKg', raw)} onClear={isEditMode ? () => clearNumber('costPerKg') : undefined} />
+      <NumberField id="spoolWeightGrams" label="Spool weight (g)" value={form.spoolWeightGrams ?? ''} onChange={(raw) => setNumber('spoolWeightGrams', raw)} onClear={isEditMode ? () => clearNumber('spoolWeightGrams') : undefined} />
+      <NumberField id="remainingWeightGrams" label="Remaining weight (g)" value={form.remainingWeightGrams ?? ''} onChange={(raw) => setNumber('remainingWeightGrams', raw)} onClear={isEditMode ? () => clearNumber('remainingWeightGrams') : undefined} />
+      <NumberField id="lowStockThresholdGrams" label="Low stock threshold (g)" value={form.lowStockThresholdGrams ?? ''} onChange={(raw) => setNumber('lowStockThresholdGrams', raw)} onClear={isEditMode ? () => clearNumber('lowStockThresholdGrams') : undefined} />
       <FormField id="supplier" label="Supplier" value={form.supplier ?? ''} onChange={(e) => set('supplier', e.target.value)} />
       <FormField id="purchaseDate" label="Purchase date" type="date" value={form.purchaseDate ?? ''} onChange={(e) => set('purchaseDate', e.target.value)} />
       <TextareaField id="notes" label="Notes" value={form.notes ?? ''} onChange={(value) => set('notes', value)} />

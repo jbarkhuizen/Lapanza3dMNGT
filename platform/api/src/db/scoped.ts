@@ -41,15 +41,17 @@ export interface UpdatePrinterInput {
   name?: string;
   make?: string;
   model?: string;
-  buildVolumeXMm?: number;
-  buildVolumeYMm?: number;
-  buildVolumeZMm?: number;
+  // number to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  buildVolumeXMm?: number | null;
+  buildVolumeYMm?: number | null;
+  buildVolumeZMm?: number | null;
   // string to set, null to explicitly clear, omitted (key absent) to leave untouched.
   purchaseDate?: string | null;
-  purchaseCost?: number;
-  powerDrawWatts?: number;
-  electricityRatePerKwh?: number;
-  expectedLifetimeHours?: number;
+  // number to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  purchaseCost?: number | null;
+  powerDrawWatts?: number | null;
+  electricityRatePerKwh?: number | null;
+  expectedLifetimeHours?: number | null;
   status?: string;
 }
 
@@ -102,15 +104,17 @@ export interface UpdateFilamentInput {
   materialType?: string;
   diameterMm?: number;
   colour?: string;
-  costPerSpool?: number;
-  costPerKg?: number;
-  spoolWeightGrams?: number;
-  remainingWeightGrams?: number;
+  // number to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  costPerSpool?: number | null;
+  costPerKg?: number | null;
+  spoolWeightGrams?: number | null;
+  remainingWeightGrams?: number | null;
   supplier?: string;
   // string to set, null to explicitly clear, omitted (key absent) to leave untouched.
   purchaseDate?: string | null;
   notes?: string;
-  lowStockThresholdGrams?: number;
+  // number to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  lowStockThresholdGrams?: number | null;
 }
 
 export interface CreateLabourStepInput {
@@ -141,7 +145,9 @@ export interface UpdateConsumableInput {
   unitOfMeasure?: string;
   costPerUnit?: number;
   currentStock?: number;
-  reorderThreshold?: number;
+  // number to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  // (currentStock has no null variant: the column is non-nullable with a DB default.)
+  reorderThreshold?: number | null;
   supplier?: string;
 }
 
@@ -346,6 +352,16 @@ export function tenantScope(tenantId: string) {
             purchaseDate: 'purchaseDate' in data
               ? (data.purchaseDate ? new Date(data.purchaseDate) : null)
               : undefined,
+            // Same three-state pattern as purchaseDate above, applied to every
+            // optional numeric field so an explicit `null` clears it instead of
+            // being silently dropped by JSON.stringify on the client.
+            buildVolumeXMm: 'buildVolumeXMm' in data ? (data.buildVolumeXMm ?? null) : undefined,
+            buildVolumeYMm: 'buildVolumeYMm' in data ? (data.buildVolumeYMm ?? null) : undefined,
+            buildVolumeZMm: 'buildVolumeZMm' in data ? (data.buildVolumeZMm ?? null) : undefined,
+            purchaseCost: 'purchaseCost' in data ? (data.purchaseCost ?? null) : undefined,
+            powerDrawWatts: 'powerDrawWatts' in data ? (data.powerDrawWatts ?? null) : undefined,
+            electricityRatePerKwh: 'electricityRatePerKwh' in data ? (data.electricityRatePerKwh ?? null) : undefined,
+            expectedLifetimeHours: 'expectedLifetimeHours' in data ? (data.expectedLifetimeHours ?? null) : undefined,
             tenantId: undefined,
           },
         }),
@@ -406,6 +422,14 @@ export function tenantScope(tenantId: string) {
             purchaseDate: 'purchaseDate' in data
               ? (data.purchaseDate ? new Date(data.purchaseDate) : null)
               : undefined,
+            // Same three-state pattern as purchaseDate above, applied to every
+            // optional numeric field so an explicit `null` clears it instead of
+            // being silently dropped by JSON.stringify on the client.
+            costPerSpool: 'costPerSpool' in data ? (data.costPerSpool ?? null) : undefined,
+            costPerKg: 'costPerKg' in data ? (data.costPerKg ?? null) : undefined,
+            spoolWeightGrams: 'spoolWeightGrams' in data ? (data.spoolWeightGrams ?? null) : undefined,
+            remainingWeightGrams: 'remainingWeightGrams' in data ? (data.remainingWeightGrams ?? null) : undefined,
+            lowStockThresholdGrams: 'lowStockThresholdGrams' in data ? (data.lowStockThresholdGrams ?? null) : undefined,
             tenantId: undefined,
           },
         }),
@@ -432,7 +456,17 @@ export function tenantScope(tenantId: string) {
         prisma.consumable.create({ data: { ...data, tenantId } }),
 
       update: (id: string, data: UpdateConsumableInput) =>
-        prisma.consumable.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+        prisma.consumable.updateMany({
+          where: { id, tenantId },
+          data: {
+            ...data,
+            // 'reorderThreshold' in data distinguishes "key omitted" (undefined
+            // here -> don't touch it) from "explicitly null" (clear it) --
+            // `data.reorderThreshold ?? undefined` couldn't tell those apart.
+            reorderThreshold: 'reorderThreshold' in data ? (data.reorderThreshold ?? null) : undefined,
+            tenantId: undefined,
+          },
+        }),
     },
 
     costingTemplates: {

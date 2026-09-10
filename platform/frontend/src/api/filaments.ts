@@ -23,14 +23,15 @@ export interface FilamentFormInput {
   materialType: string;
   diameterMm: 1.75 | 2.85;
   colour?: string;
-  costPerSpool?: number;
-  costPerKg?: number;
-  spoolWeightGrams?: number;
-  remainingWeightGrams?: number;
+  // number to set, null to explicitly clear (edit mode only), undefined to leave unset/untouched.
+  costPerSpool?: number | null;
+  costPerKg?: number | null;
+  spoolWeightGrams?: number | null;
+  remainingWeightGrams?: number | null;
   supplier?: string;
   purchaseDate?: string;
   notes?: string;
-  lowStockThresholdGrams?: number;
+  lowStockThresholdGrams?: number | null;
 }
 
 const FILAMENTS_QUERY_KEY = ['filaments'] as const;

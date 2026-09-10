@@ -20,7 +20,14 @@ const createConsumableSchema = z.object({
   supplier: z.string().optional(),
 });
 
-const updateConsumableSchema = createConsumableSchema.partial();
+const updateConsumableSchema = createConsumableSchema.partial().extend({
+  // Unlike create, PATCH must be able to explicitly clear reorderThreshold
+  // back to null -- omitting the key still leaves it untouched (see
+  // .partial() above), but an explicit `null` is now accepted rather than
+  // rejected. `currentStock` has no null variant: the column is non-nullable
+  // with a DB default, so it stays a plain optional number.
+  reorderThreshold: z.number().nullable().optional(),
+});
 
 consumablesRouter.get('/api/consumables', async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
