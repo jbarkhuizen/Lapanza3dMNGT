@@ -63,10 +63,11 @@ test('update only affects the owning tenant\'s row', async () => {
   const created = await scopedA.customers.create({ name: 'Alice Customer', billingAddress: '1 Main Rd' });
 
   const otherTenantResult = await scopedB.customers.update(created.id, { notes: 'hijacked' });
-  assert.equal(otherTenantResult.count, 0);
+  assert.equal(otherTenantResult, null);
 
   const ownerResult = await scopedA.customers.update(created.id, { notes: 'legit update' });
-  assert.equal(ownerResult.count, 1);
+  assert.ok(ownerResult);
+  assert.equal(ownerResult.notes, 'legit update');
 });
 
 test('tenantScope throws when given a falsy tenantId', () => {

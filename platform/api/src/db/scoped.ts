@@ -309,8 +309,16 @@ export function tenantScope(tenantId: string) {
       create: (data: CreateCustomerInput) =>
         prisma.customer.create({ data: { ...data, tenantId } }),
 
-      update: (id: string, data: UpdateCustomerInput) =>
-        prisma.customer.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+      update: async (id: string, data: UpdateCustomerInput) => {
+        const result = await prisma.customer.updateMany({
+          where: { id, tenantId },
+          data: { ...data, tenantId: undefined },
+        });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.customer.findFirst({ where: { id, tenantId } });
+      },
     },
 
     printers: {
