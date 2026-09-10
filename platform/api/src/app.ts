@@ -19,6 +19,7 @@ import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
 import { billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import { adminRouter } from './routes/admin.js';
 
 export function buildApp() {
   const app = express();
@@ -41,6 +42,21 @@ export function buildApp() {
   app.use(healthRouter);
   app.use(publicRouter);
   app.use(createAuthRouter());
+  // Mounted here, before the unpathed-middleware resource routers below, for
+  // the same reason as webhooksRouter/billingRouter just below: adminRouter
+  // applies its own auth gate (requirePlatformAdminAuth) on individual routes,
+  // but that only protects THIS router — it does nothing to protect
+  // adminRouter's own requests from routers mounted BEFORE it that apply
+  // *unpathed* blanket middleware (billingRouter's `router.use(requireTenantAuth)`
+  // with no path, on a router itself mounted at `/`, matches every request
+  // that reaches it — not just billing's own routes). GET/POST /api/admin/login
+  // in particular must be reachable with no session at all, so adminRouter
+  // needs first refusal on its own paths before any such blanket-auth router
+  // gets a chance to short-circuit the request to a 401. (Being "path-scoped"
+  // on the way in — app.use('/api/admin', adminRouter) — only controls which
+  // requests reach adminRouter; it says nothing about what other routers do
+  // to a request before it gets there.)
+  app.use('/api/admin', adminRouter);
   // Mounted here (before the auth-protected routers below) because every one
   // of those routers applies `requireTenantAuth` via an unpathed `router.use`,
   // which — since each router is itself mounted at `/` — intercepts every

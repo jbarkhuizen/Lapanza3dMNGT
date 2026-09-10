@@ -14,7 +14,7 @@ billingRouter.use(requireTenantAuth);
 
 const TRIAL_DAYS = 14;
 
-const providers: Record<string, PaymentProvider> = {
+export const providers: Record<string, PaymentProvider> = {
   payfast: payfastProvider,
   paypal: paypalProvider,
 };
