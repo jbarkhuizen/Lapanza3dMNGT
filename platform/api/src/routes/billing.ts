@@ -125,6 +125,18 @@ billingRouter.post('/api/billing/checkout', async (req, res) => {
     // already dead provider-side) must not block the resubscribe.
     if (existing.providerSubscriptionId) {
       const oldProvider = providers[existing.paymentProvider];
+      if (!oldProvider) {
+        // Should be unreachable: providerSubscriptionId is only ever set by
+        // a genuine payfast/paypal checkout (see providers above), so any
+        // row that reaches here with one set has a real paymentProvider.
+        // Fail loudly rather than let an unrecognized value throw past the
+        // .catch() below — that .catch() only swallows a failed *cancel
+        // call*, not a TypeError from indexing `providers` with a bad key,
+        // so without this guard a bad value here would turn this
+        // "never blocks the resubscribe" best-effort path into an
+        // unhandled 500. Same contract as admin.ts's grant/cancel routes.
+        return res.status(500).json({ ok: false, error: 'Unrecognized payment provider on this subscription.' });
+      }
       await oldProvider.cancelSubscription(existing.providerSubscriptionId).catch((error) => {
         console.error(
           `Failed to cancel previous ${existing.paymentProvider} subscription ${existing.providerSubscriptionId} during resubscribe:`,
