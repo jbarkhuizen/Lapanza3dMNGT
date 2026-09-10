@@ -106,6 +106,42 @@ describe('App routing', () => {
     await waitFor(() => expect(screen.getByText('Log in to Barkie')).toBeInTheDocument());
   });
 
+  it('redirects an unauthenticated visitor at "/filaments" to "/login"', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/filaments']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Log in to Barkie')).toBeInTheDocument());
+  });
+
+  it('redirects an unauthenticated visitor at "/labour-steps" to "/login"', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/labour-steps']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Log in to Barkie')).toBeInTheDocument());
+  });
+
+  it('redirects an unauthenticated visitor at "/consumables" to "/login"', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/consumables']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Log in to Barkie')).toBeInTheDocument());
+  });
+
   it('renders the Customers list page at "/customers" for an authenticated tenant', async () => {
     vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
       if (path === '/api/auth/me') {
