@@ -305,6 +305,47 @@ test('persisted snapshot rates reproduce their persisted costs after rounding', 
   assert.equal(t.consumableLines[0].lineCost, '0.91');
 });
 
+test('POST /api/costing-templates rejects markupPercent at the Decimal(6,2) ceiling with a 400', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const refs = await setUpReferenceData(agent);
+
+  const res = await agent.post('/api/costing-templates').send({
+    name: 'Overflowing markup',
+    filamentId: refs.filamentId,
+    weightGrams: 50,
+    printerId: refs.printerId,
+    printTimeHours: 2,
+    markupPercent: 10000,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 400);
+  assert.equal(
+    res.body.error,
+    'Name, filament, weight, printer, print time, and markup are required.',
+  );
+});
+
+test('POST /api/costing-templates accepts markupPercent just under the Decimal(6,2) ceiling', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const refs = await setUpReferenceData(agent);
+
+  const res = await agent.post('/api/costing-templates').send({
+    name: 'Near-ceiling markup',
+    filamentId: refs.filamentId,
+    weightGrams: 50,
+    printerId: refs.printerId,
+    printTimeHours: 2,
+    markupPercent: 9999.99,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 201);
+  assert.equal(res.body.costingTemplate.markupPercent, '9999.99');
+});
+
 test('GET /api/costing-templates/:id returns 404 for another tenant\'s template', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');
