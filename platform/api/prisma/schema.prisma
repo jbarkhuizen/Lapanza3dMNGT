@@ -66,6 +66,22 @@ model PlatformAdmin {
   @@map("platform_admins")
 }
 
+model BacklogItem {
+  id            String    @id @default(uuid())
+  number        Int       @unique
+  title         String
+  description   String
+  category      String
+  priority      String
+  status        String    @default("Backlog")
+  dateAdded     DateTime  @db.Timestamptz(3)
+  actualFixDate DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@map("backlog_items")
+}
+
 model TenantSequence {
   id       String @id @default(uuid())
   tenantId String

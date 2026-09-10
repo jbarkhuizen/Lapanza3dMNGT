@@ -26,6 +26,7 @@ export async function resetTestDatabase() {
   await prisma.subscription.deleteMany();
   await prisma.tenant.deleteMany();
   await prisma.platformAdmin.deleteMany();
+  await prisma.backlogItem.deleteMany();
   // Plan used to be find-if-missing rather than deleted and recreated
   // like every other table above — meaning any test anywhere in the
   // suite that creates its own ad-hoc plan (for a Subscription fixture)

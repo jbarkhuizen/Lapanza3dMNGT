@@ -445,3 +445,124 @@ test('POST /api/admin/plans/:id/edit with active="on" keeps the plan active', as
   const updated = await prisma.plan.findUniqueOrThrow({ where: { id: plan.id } });
   assert.equal(updated.active, true);
 });
+
+test('GET /api/admin/backlog defaults to open items only, sorted by priority', async () => {
+  await prisma.backlogItem.createMany({
+    data: [
+      { number: 1, title: 'Low priority open item', description: 'desc one', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+      { number: 2, title: 'Critical open item', description: 'desc two', category: 'Bug', priority: 'Critical', status: 'Backlog', dateAdded: new Date() },
+      { number: 3, title: 'Done item, should not show by default', description: 'desc three', category: 'Bug', priority: 'Critical', status: 'Done', dateAdded: new Date(), actualFixDate: new Date() },
+    ],
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/backlog');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Critical open item/);
+  assert.match(res.text, /Low priority open item/);
+  assert.ok(!res.text.includes('Done item, should not show by default'));
+
+  const criticalIndex = res.text.indexOf('Critical open item');
+  const lowIndex = res.text.indexOf('Low priority open item');
+  assert.ok(criticalIndex < lowIndex, 'Critical priority item should render before Low priority item');
+});
+
+test('GET /api/admin/backlog?status=Done shows only done items', async () => {
+  await prisma.backlogItem.createMany({
+    data: [
+      { number: 1, title: 'Open item', description: 'desc', category: 'Bug', priority: 'Medium', status: 'Backlog', dateAdded: new Date() },
+      { number: 2, title: 'Finished item', description: 'desc', category: 'Bug', priority: 'Medium', status: 'Done', dateAdded: new Date(), actualFixDate: new Date() },
+    ],
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/backlog?status=Done');
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Finished item/);
+  assert.ok(!res.text.includes('Open item'));
+});
+
+test('POST /api/admin/backlog creates a new item with the next sequential number and Backlog status', async () => {
+  await prisma.backlogItem.create({
+    data: { number: 5, title: 'Existing', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post('/api/admin/backlog').send({
+    title: 'New feature idea', description: 'A longer description of the idea.', category: 'Feature', priority: 'High',
+  });
+  assert.equal(res.status, 302);
+
+  const created = await prisma.backlogItem.findFirstOrThrow({ where: { title: 'New feature idea' } });
+  assert.equal(created.number, 6);
+  assert.equal(created.status, 'Backlog');
+  assert.equal(created.priority, 'High');
+  assert.equal(created.actualFixDate, null);
+});
+
+test('GET /api/admin/backlog/:id shows the full item with an edit form pre-filled', async () => {
+  const item = await prisma.backlogItem.create({
+    data: { number: 10, title: 'Detail test item', description: 'The full description text.', category: 'Tech Debt', priority: 'Medium', status: 'Backlog', dateAdded: new Date() },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get(`/api/admin/backlog/${item.id}`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /value="Detail test item"/);
+  assert.match(res.text, /The full description text\./);
+});
+
+test('GET /api/admin/backlog/:id 404s for an unknown id', async () => {
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get('/api/admin/backlog/does-not-exist');
+  assert.equal(res.status, 404);
+});
+
+test('POST /api/admin/backlog/:id/edit moving status to Done stamps actualFixDate', async () => {
+  const item = await prisma.backlogItem.create({
+    data: { number: 11, title: 'Item to close', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog', dateAdded: new Date() },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/backlog/${item.id}/edit`).send({
+    title: 'Item to close', description: 'desc', category: 'Bug', priority: 'Low', status: 'Done',
+  });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.backlogItem.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(updated.status, 'Done');
+  assert.ok(updated.actualFixDate !== null);
+});
+
+test('POST /api/admin/backlog/:id/edit reopening a Done item clears actualFixDate', async () => {
+  const item = await prisma.backlogItem.create({
+    data: { number: 12, title: 'Reopened item', description: 'desc', category: 'Bug', priority: 'Low', status: 'Done', dateAdded: new Date(), actualFixDate: new Date() },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/backlog/${item.id}/edit`).send({
+    title: 'Reopened item', description: 'desc', category: 'Bug', priority: 'Low', status: 'Backlog',
+  });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.backlogItem.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(updated.status, 'Backlog');
+  assert.equal(updated.actualFixDate, null);
+});
+
+test('POST /api/admin/backlog/:id/edit does not re-stamp actualFixDate on a no-op Done save', async () => {
+  const originalFixDate = new Date('2026-01-01T00:00:00.000Z');
+  const item = await prisma.backlogItem.create({
+    data: { number: 13, title: 'Already done', description: 'desc', category: 'Bug', priority: 'Low', status: 'Done', dateAdded: new Date(), actualFixDate: originalFixDate },
+  });
+  const agent = await loggedInAdminAgent();
+  const res = await agent.post(`/api/admin/backlog/${item.id}/edit`).send({
+    title: 'Already done (edited title)', description: 'desc', category: 'Bug', priority: 'Low', status: 'Done',
+  });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.backlogItem.findUniqueOrThrow({ where: { id: item.id } });
+  assert.equal(updated.title, 'Already done (edited title)');
+  assert.equal(updated.actualFixDate?.toISOString(), originalFixDate.toISOString());
+});
+
+test('backlog routes require a platform-admin session', async () => {
+  const res1 = await request(app).get('/api/admin/backlog');
+  assert.equal(res1.status, 302);
+  const res2 = await request(app).post('/api/admin/backlog').send({ title: 'x', description: 'y', category: 'Bug', priority: 'Low' });
+  assert.equal(res2.status, 302);
+});

@@ -5,7 +5,7 @@ import { verifyPassword } from '../auth/password.js';
 import { createSession, destroySession } from '../auth/session.js';
 import { env } from '../env.js';
 import { requirePlatformAdminAuth } from '../middleware/requirePlatformAdminAuth.js';
-import { adminPage, escapeHtml } from '../lib/adminHtml.js';
+import { adminPage, badge, escapeHtml } from '../lib/adminHtml.js';
 import { providers } from './billing.js';
 
 export const adminRouter = Router();
@@ -101,6 +101,7 @@ adminRouter.get('/', requirePlatformAdminAuth, (_req, res) => {
     <ul>
       <li><a href="/api/admin/tenants">Tenants</a></li>
       <li><a href="/api/admin/plans">Plans</a></li>
+      <li><a href="/api/admin/backlog">Backlog</a></li>
     </ul>
   `));
 });
@@ -502,3 +503,145 @@ adminRouter.post(
     res.redirect('/api/admin/plans');
   },
 );
+
+const BACKLOG_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
+const BACKLOG_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
+const BACKLOG_STATUSES = ['Backlog', 'Done'];
+const PRIORITY_RANK: Record<string, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
+function truncate(text: string, maxLength: number): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
+adminRouter.get('/backlog', requirePlatformAdminAuth, async (req, res) => {
+  const statusFilter = typeof req.query.status === 'string' ? req.query.status : 'Backlog';
+  const where = statusFilter === 'all' ? {} : { status: statusFilter };
+  const items = await prisma.backlogItem.findMany({ where, orderBy: { number: 'asc' } });
+  items.sort((a, b) => (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9));
+
+  const rows = items.map((item) => `
+    <tr>
+      <td>#${item.number}</td>
+      <td><a href="/api/admin/backlog/${item.id}">${escapeHtml(item.title)}</a><br /><span style="color:#6a5f54;font-size:13px">${escapeHtml(truncate(item.description, 140))}</span></td>
+      <td>${escapeHtml(item.category)}</td>
+      <td>${badge(item.priority)}</td>
+      <td>${badge(item.status)}</td>
+    </tr>`).join('');
+
+  const filterLink = (value: string, label: string) => `<a href="/api/admin/backlog?status=${encodeURIComponent(value)}" ${statusFilter === value ? 'aria-current="page"' : ''}>${label}</a>`;
+
+  res.type('html').send(adminPage('Backlog', `
+    <p>${filterLink('Backlog', 'Open')} &middot; ${filterLink('Done', 'Done')} &middot; ${filterLink('all', 'All')}</p>
+    <table>
+      <thead><tr><th>#</th><th>Item</th><th>Category</th><th>Priority</th><th>Status</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="5">No items.</td></tr>'}</tbody>
+    </table>
+    <div class="card">
+      <h2>New backlog item</h2>
+      <form method="post" action="/api/admin/backlog">
+        <label>Title<br /><input name="title" required style="width:100%" /></label><br /><br />
+        <label>Description<br /><textarea name="description" rows="4" required></textarea></label><br /><br />
+        <label>Category<br />
+          <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}">${c}</option>`).join('')}</select>
+        </label>
+        <label>Priority<br />
+          <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === 'Medium' ? 'selected' : ''}>${p}</option>`).join('')}</select>
+        </label>
+        <br /><br />
+        <button type="submit">Create item</button>
+      </form>
+    </div>
+  `));
+});
+
+adminRouter.post('/backlog', requirePlatformAdminAuth, async (req, res) => {
+  const { title, description, category, priority } = (req.body ?? {}) as Record<string, unknown>;
+  if (
+    typeof title !== 'string' || title.trim() === '' ||
+    typeof description !== 'string' || description.trim() === '' ||
+    typeof category !== 'string' || !BACKLOG_CATEGORIES.includes(category) ||
+    typeof priority !== 'string' || !BACKLOG_PRIORITIES.includes(priority)
+  ) {
+    return res.redirect('/api/admin/backlog');
+  }
+
+  const highest = await prisma.backlogItem.findFirst({ orderBy: { number: 'desc' } });
+  const nextNumber = (highest?.number ?? 0) + 1;
+
+  await prisma.backlogItem.create({
+    data: {
+      number: nextNumber,
+      title,
+      description,
+      category,
+      priority,
+      status: 'Backlog',
+      dateAdded: new Date(),
+    },
+  });
+  res.redirect('/api/admin/backlog');
+});
+
+adminRouter.get('/backlog/:id', requirePlatformAdminAuth, async (req: Request<{ id: string }>, res: Response) => {
+  const item = await prisma.backlogItem.findUnique({ where: { id: req.params.id } });
+  if (!item) {
+    return res.status(404).type('html').send(adminPage('Not found', '<p>No such backlog item.</p>'));
+  }
+
+  res.type('html').send(adminPage(`#${item.number} — ${item.title}`, `
+    <p><a href="/api/admin/backlog">&larr; Back to backlog</a></p>
+    <div class="card" style="max-width:720px">
+      <form method="post" action="/api/admin/backlog/${item.id}/edit">
+        <label>Title<br /><input name="title" value="${escapeHtml(item.title)}" required style="width:100%" /></label><br /><br />
+        <label>Description<br /><textarea name="description" rows="10" required>${escapeHtml(item.description)}</textarea></label><br /><br />
+        <label>Category<br />
+          <select name="category">${BACKLOG_CATEGORIES.map((c) => `<option value="${c}" ${c === item.category ? 'selected' : ''}>${c}</option>`).join('')}</select>
+        </label>
+        <label>Priority<br />
+          <select name="priority">${BACKLOG_PRIORITIES.map((p) => `<option value="${p}" ${p === item.priority ? 'selected' : ''}>${p}</option>`).join('')}</select>
+        </label>
+        <label>Status<br />
+          <select name="status">${BACKLOG_STATUSES.map((s) => `<option value="${s}" ${s === item.status ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        </label>
+        <br /><br />
+        <p style="color:#6a5f54;font-size:13px">Added ${item.dateAdded.toISOString().slice(0, 10)}${item.actualFixDate ? ` &middot; Fixed ${item.actualFixDate.toISOString().slice(0, 10)}` : ''}</p>
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  `));
+});
+
+adminRouter.post('/backlog/:id/edit', requirePlatformAdminAuth, async (req: Request<{ id: string }>, res: Response) => {
+  const { title, description, category, priority, status } = (req.body ?? {}) as Record<string, unknown>;
+  if (
+    typeof title !== 'string' || title.trim() === '' ||
+    typeof description !== 'string' || description.trim() === '' ||
+    typeof category !== 'string' || !BACKLOG_CATEGORIES.includes(category) ||
+    typeof priority !== 'string' || !BACKLOG_PRIORITIES.includes(priority) ||
+    typeof status !== 'string' || !BACKLOG_STATUSES.includes(status)
+  ) {
+    return res.redirect(`/api/admin/backlog/${req.params.id}`);
+  }
+
+  const existing = await prisma.backlogItem.findUnique({ where: { id: req.params.id } });
+  if (!existing) {
+    return res.redirect('/api/admin/backlog');
+  }
+
+  // Stamp actualFixDate the moment a real transition into Done happens,
+  // same "derive from the transition, not from a manually-editable field"
+  // principle as the subscription pastDueSince logic elsewhere in this
+  // file — never overwrite it once set, and clear it if reopened.
+  let actualFixDate = existing.actualFixDate;
+  if (status === 'Done' && existing.status !== 'Done') {
+    actualFixDate = new Date();
+  } else if (status !== 'Done' && existing.status === 'Done') {
+    actualFixDate = null;
+  }
+
+  await prisma.backlogItem.update({
+    where: { id: req.params.id },
+    data: { title, description, category, priority, status, actualFixDate },
+  });
+  res.redirect(`/api/admin/backlog/${req.params.id}`);
+});
