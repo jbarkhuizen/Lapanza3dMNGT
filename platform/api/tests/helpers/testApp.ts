@@ -31,6 +31,10 @@ export async function resetTestDatabase() {
   await prisma.tenant.deleteMany();
   await prisma.platformAdmin.deleteMany();
   await prisma.backlogItem.deleteMany();
+  // Material is a global (non-tenant-scoped) model — see materials.test.ts
+  // and the design spec's "Scope decision" section. Wiped here like every
+  // other table so fixture rows created by one test don't leak into another.
+  await prisma.material.deleteMany();
   // Plan used to be find-if-missing rather than deleted and recreated
   // like every other table above — meaning any test anywhere in the
   // suite that creates its own ad-hoc plan (for a Subscription fixture)

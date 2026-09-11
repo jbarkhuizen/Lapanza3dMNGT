@@ -439,6 +439,32 @@ model Plan {
   @@map("plans")
 }
 
+model Material {
+  id                     String   @id
+  name                   String
+  chemistry              String
+  bestFor                String
+  nozzleTempC            Int
+  bedTempC               Int
+  requiresEnclosure      Boolean  @default(false)
+  requiresHardenedNozzle Boolean  @default(false)
+  requiresDirectDrive    Boolean  @default(false)
+  recommendsDryFilament  Boolean  @default(false)
+  recommendsVentilation  Boolean  @default(false)
+  difficulty             String
+  moisture               String
+  abrasive               Boolean  @default(false)
+  priceZarPerKgLow       Float
+  priceZarPerKgHigh      Float
+  priceEstimated         Boolean  @default(false)
+  whyChooseIt            String
+  avoidWhenText          String
+  tags                   String[] @default([])
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("materials")
+}
+
 model Subscription {
   id                     String    @id @default(uuid())
   tenantId               String    @unique
