@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shop — Barkie</title>
+  <meta name="description" content="A 3D printing shop's public profile, powered by Barkie." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__inner">
+      <span class="wordmark">Barkie</span>
+      <nav aria-label="Primary">
+        <ul class="site-nav">
+          <li><a href="/">Home</a></li>
+          <li><a href="/pricing.html">Pricing</a></li>
+          <li><a href="/materials.html">Materials Guide</a></li>
+        </ul>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost" href="/app/login">Log in</a>
+        <a class="btn btn--primary" href="/app/register">Start free trial</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="page-header wrap" id="shop-header">
+      <!-- js/shop.js fills in the business name, tagline and city -->
+    </div>
+
+    <section class="shop-section wrap" id="shop-services-section" hidden>
+      <h2>Services</h2>
+      <ul class="shop-services" id="shop-services"></ul>
+    </section>
+
+    <section class="shop-section wrap" id="shop-hours-section" hidden>
+      <h2>Opening hours</h2>
+      <p class="shop-hours" id="shop-hours"></p>
+    </section>
+
+    <section class="shop-section wrap" id="shop-gallery-section" hidden>
+      <h2>Gallery</h2>
+      <div class="shop-gallery" id="shop-gallery"></div>
+    </section>
+
+    <section class="shop-section wrap" id="shop-contact-section" hidden>
+      <h2>Contact</h2>
+      <ul class="shop-contact-links" id="shop-contact-links"></ul>
+    </section>
+
+    <div class="wrap" id="shop-not-found" hidden>
+      <div class="compare-empty">
+        <p>We couldn't find that shop. It may have been unpublished or the link may be wrong.</p>
+        <a class="btn btn--primary" href="/">Back to Barkie</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>&copy; <span id="year"></span> Barkie</span>
+      <a href="mailto:hello@barkie.co.za">hello@barkie.co.za</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/materials.html">Materials Guide</a>
+      <span class="site-footer__note">Full Privacy Policy &amp; Terms of Service will be published before checkout goes live.</span>
+    </div>
+  </footer>
+
+  <script type="module" src="/js/shop.js"></script>
+  <script src="/js/shared.js"></script>
+</body>
+</html>

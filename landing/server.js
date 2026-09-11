@@ -27,6 +27,10 @@ const insertSignup = db.prepare(
 
 const app = express();
 app.use(express.json());
+// Registered before express.static below: express.static only serves files
+// that actually exist on disk, and there is no shop.html at a slug-shaped
+// path (/shop/acme-prints), so the dynamic route must be handled first.
+app.get('/shop/:slug', (req, res) => res.sendFile(path.join(__dirname, 'public', 'shop.html')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
