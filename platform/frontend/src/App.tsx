@@ -6,6 +6,7 @@ import { RegisterPage } from './pages/auth/RegisterPage.js';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage.js';
 import { DashboardHomePage } from './pages/DashboardHomePage.js';
 import { CompanyProfilePage } from './pages/CompanyProfilePage.js';
+import { ShopProfilePage } from './pages/ShopProfilePage.js';
 import { CustomersListPage } from './pages/customers/CustomersListPage.js';
 import { CustomerFormPage } from './pages/customers/CustomerFormPage.js';
 import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
@@ -52,6 +53,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CompanyProfilePage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/shop-profile"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ShopProfilePage />
               </AppShell>
             </RequireAuth>
           }

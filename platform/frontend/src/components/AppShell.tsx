@@ -7,6 +7,7 @@ import { useSubscription } from '../api/billing.js';
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard' },
   { to: '/company-profile', label: 'Company Profile' },
+  { to: '/shop-profile', label: 'Shop Profile' },
   { to: '/billing', label: 'Billing' },
   { to: '/customers', label: 'Customers' },
   { to: '/filaments', label: 'Filaments' },
