@@ -175,6 +175,7 @@ export function adminPage(title: string, bodyHtml: string, activeRoute: string =
     line-height: 1.3;
   }
   .nav-btn:hover, .nav-btn.active { background: var(--brand-soft); color: var(--brand); }
+  nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand); }
   .nav-group-label {
     font-size: 0.68rem;
     font-weight: 700;

@@ -691,6 +691,12 @@ test('GET /api/admin/backlog?status=Done shows only done items', async () => {
   assert.equal(res.status, 200);
   assert.match(res.text, /Finished item/);
   assert.ok(!res.text.includes('Open item'));
+
+  // Backlog #69: the currently-active filter link must carry
+  // aria-current="page" and the other two filter links must not.
+  assert.match(res.text, /href="\/api\/admin\/backlog\?status=Done"[^>]*aria-current="page"/);
+  assert.ok(!/href="\/api\/admin\/backlog\?status=Backlog"[^>]*aria-current="page"/.test(res.text));
+  assert.ok(!/href="\/api\/admin\/backlog\?status=all"[^>]*aria-current="page"/.test(res.text));
 });
 
 test('POST /api/admin/backlog creates a new item with the next sequential number and Backlog status', async () => {

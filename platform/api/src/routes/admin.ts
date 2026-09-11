@@ -620,12 +620,12 @@ adminRouter.get('/backlog', requirePlatformAdminAuth, async (req, res) => {
       <td>${badge(item.status)}</td>
     </tr>`).join('');
 
-  const filterLink = (value: string, label: string) => `<a class="nav-btn${statusFilter === value ? ' active' : ''}" style="display:inline-block" href="/api/admin/backlog?status=${encodeURIComponent(value)}">${label}</a>`;
+  const filterLink = (value: string, label: string) => `<a class="nav-btn" style="display:inline-block" href="/api/admin/backlog?status=${encodeURIComponent(value)}"${statusFilter === value ? ' aria-current="page"' : ''}>${label}</a>`;
 
   res.type('html').send(adminPage('Backlog', `
-    <div class="panel" style="padding:0.5rem 0.75rem;display:inline-flex;gap:0.25rem;margin-bottom:1.25rem">
+    <nav class="panel" aria-label="Backlog status filter" style="padding:0.5rem 0.75rem;display:inline-flex;gap:0.25rem;margin-bottom:1.25rem">
       ${filterLink('Backlog', 'Open')}${filterLink('Done', 'Done')}${filterLink('all', 'All')}
-    </div>
+    </nav>
     <div class="panel table-wrap">
       <table class="catalog">
         <thead><tr><th>#</th><th>Item</th><th>Category</th><th>Priority</th><th>Status</th></tr></thead>
