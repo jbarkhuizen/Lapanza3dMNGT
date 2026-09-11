@@ -714,6 +714,31 @@ export function tenantScope(tenantId: string) {
       },
     },
 
+    notifications: {
+      findMany: (unreadOnly?: boolean) =>
+        prisma.notification.findMany({
+          where: { tenantId, ...(unreadOnly ? { readAt: null } : {}) },
+          orderBy: { createdAt: 'desc' },
+        }),
+
+      markRead: async (id: string) => {
+        const result = await prisma.notification.updateMany({
+          where: { id, tenantId },
+          data: { readAt: new Date() },
+        });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.notification.findFirst({ where: { id, tenantId } });
+      },
+
+      markAllRead: () =>
+        prisma.notification.updateMany({
+          where: { tenantId, readAt: null },
+          data: { readAt: new Date() },
+        }),
+    },
+
     subscription: {
       get: () =>
         prisma.subscription.findUnique({ where: { tenantId }, include: { plan: true } }),

@@ -61,6 +61,7 @@ model Tenant {
   invoiceLineItems       InvoiceLineItem[]
   subscription           Subscription?
   jobs                   Job[]
+  notifications          Notification[]
 
   @@map("tenants")
 }
@@ -508,4 +509,20 @@ model Job {
 
   @@index([tenantId])
   @@map("jobs")
+}
+
+model Notification {
+  id                String    @id @default(uuid())
+  tenantId          String
+  type              String
+  message           String
+  relatedEntityType String?
+  relatedEntityId   String?
+  readAt            DateTime? @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("notifications")
 }
