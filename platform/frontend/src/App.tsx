@@ -15,6 +15,8 @@ import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js'
 import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
 import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
 import { ConsumableFormPage } from './pages/consumables/ConsumableFormPage.js';
+import { MaterialsLibraryPage } from './pages/materials/MaterialsLibraryPage.js';
+import { MaterialComparePage } from './pages/materials/MaterialComparePage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
 import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
@@ -193,6 +195,26 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <ConsumableFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/materials"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <MaterialsLibraryPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/materials/compare"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <MaterialComparePage />
               </AppShell>
             </RequireAuth>
           }

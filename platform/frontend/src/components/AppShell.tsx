@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/filaments', label: 'Filaments' },
   { to: '/labour-steps', label: 'Labour Steps' },
   { to: '/consumables', label: 'Consumables' },
+  { to: '/materials', label: 'Materials' },
   { to: '/printers', label: 'Printers' },
   { to: '/costing-templates', label: 'Costing Templates' },
   { to: '/quotes', label: 'Quotes' },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
 import { NumberField } from '../../components/NumberField.js';
 import { TextareaField } from '../../components/TextareaField.js';
@@ -36,10 +36,24 @@ export function FilamentFormPage() {
   const { id } = useParams();
   const isEditMode = id !== undefined;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { data: existingFilament, isLoading: isLoadingFilament, isError: isFilamentError } = useFilament(id);
   const createMutation = useCreateFilament();
   const updateMutation = useUpdateFilament(id ?? '');
-  const [form, setForm] = useState<FilamentFormInput>(emptyForm);
+  // Create-mode-only pre-fill from the Materials Library's "Use this
+  // material" link (?materialType=&costPerKg=) — see the design spec's
+  // FilamentFormPage section. Read once via a lazy initializer so this
+  // never fights with the existingFilament populate effect below, which
+  // already only runs in edit mode.
+  const [form, setForm] = useState<FilamentFormInput>(() =>
+    isEditMode
+      ? emptyForm
+      : {
+          ...emptyForm,
+          materialType: searchParams.get('materialType') ?? '',
+          costPerKg: searchParams.get('costPerKg') ? Number(searchParams.get('costPerKg')) : undefined,
+        },
+  );
   const [error, setError] = useState<string | null>(null);
   const populatedForIdRef = useRef<string | undefined>(undefined);
 

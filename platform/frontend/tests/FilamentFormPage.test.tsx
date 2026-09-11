@@ -218,6 +218,18 @@ describe('FilamentFormPage — edit mode', () => {
   });
 });
 
+describe('FilamentFormPage — create mode, pre-filled from Materials Library', () => {
+  it('pre-fills materialType and costPerKg from query params and leaves the rest at their normal empty defaults', async () => {
+    renderAt('/filaments/new?materialType=PETG&costPerKg=360');
+
+    expect(screen.getByLabelText('Material type')).toHaveValue('PETG');
+    expect(screen.getByLabelText('Cost per kg')).toHaveValue(360);
+    expect(screen.getByLabelText('Brand')).toHaveValue('');
+    expect(screen.getByLabelText('Colour')).toHaveValue('');
+    expect(screen.getByLabelText('Cost per spool')).toHaveValue(null);
+  });
+});
+
 describe('FilamentFormPage — create mode clear affordance', () => {
   it('never renders a "Clear" button on the create form (nothing saved yet to clear)', async () => {
     renderAt('/filaments/new');
