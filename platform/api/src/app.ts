@@ -19,6 +19,7 @@ import { shopProfileRouter } from './routes/shop-profile.js';
 import { materialsRouter } from './routes/materials.js';
 import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
+import { jobsRouter } from './routes/jobs.js';
 import { billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { adminRouter } from './routes/admin.js';
@@ -96,6 +97,7 @@ export function buildApp() {
   app.use(materialsRouter);
   app.use(quotesRouter);
   app.use(invoicesRouter);
+  app.use(jobsRouter);
 
   // Catch-all for anything that fell through every router above without
   // matching a route. Must be mounted after all real routers (so it never

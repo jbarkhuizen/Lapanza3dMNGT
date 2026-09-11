@@ -60,6 +60,7 @@ model Tenant {
   invoices               Invoice[]
   invoiceLineItems       InvoiceLineItem[]
   subscription           Subscription?
+  jobs                   Job[]
 
   @@map("tenants")
 }
@@ -294,6 +295,7 @@ model CostingTemplate {
   consumableLines  CostingConsumableLine[]
   quoteLineItems   QuoteLineItem[]
   invoiceLineItems InvoiceLineItem[]
+  jobs             Job[]
 
   @@index([tenantId])
   @@map("costing_templates")
@@ -488,4 +490,22 @@ model Subscription {
   plan   Plan   @relation(fields: [planId], references: [id])
 
   @@map("subscriptions")
+}
+
+model Job {
+  id                String    @id @default(uuid())
+  tenantId          String
+  costingTemplateId String
+  name              String
+  status            String    @default("backlog")
+  notes             String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  startedAt         DateTime? @db.Timestamptz(3)
+  completedAt       DateTime? @db.Timestamptz(3)
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id])
+  costingTemplate CostingTemplate @relation(fields: [costingTemplateId], references: [id])
+
+  @@index([tenantId])
+  @@map("jobs")
 }
