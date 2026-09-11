@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../db/client.js';
-import { hashPassword, verifyPassword } from '../auth/password.js';
+import { hashPassword, verifyPassword, DUMMY_PASSWORD_HASH } from '../auth/password.js';
 import { sendVerificationEmail } from '../auth/email.js';
 import { createSession, destroySession } from '../auth/session.js';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
@@ -159,7 +159,12 @@ export function createAuthRouter() {
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { email: parsed.data.email } });
-    const valid = tenant ? await verifyPassword(parsed.data.password, tenant.passwordHash) : false;
+    // Always run the bcrypt comparison, even when no tenant was found —
+    // comparing against a precomputed dummy hash in that case — so an
+    // unknown email takes the same wall-clock time as a wrong password
+    // instead of leaking which emails are registered via response timing
+    // (backlog #9).
+    const valid = await verifyPassword(parsed.data.password, tenant?.passwordHash ?? DUMMY_PASSWORD_HASH);
     if (!tenant || !valid) {
       return res.status(401).json({ ok: false, error: 'Incorrect email or password.' });
     }

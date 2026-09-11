@@ -266,6 +266,37 @@ test('POST /api/auth/login rejects the wrong password', async () => {
   assert.equal(res.body.ok, false);
 });
 
+test('POST /api/auth/login runs a real password comparison for both an unknown email and a known email with the wrong password', async () => {
+  // Backlog #9: an unknown email used to skip the bcrypt compare entirely
+  // (fast path), while a known email with a wrong password always ran one
+  // (slow path) — a timing side-channel that let an attacker enumerate
+  // registered emails by response latency. Both paths must now run exactly
+  // one real comparison, proving the two cases do the same amount of work.
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+  const bcrypt = (await import('bcryptjs')).default;
+
+  try {
+    const unknownEmailSpy = mock.method(bcrypt, 'compare');
+    const unknownRes = await request(app).post('/api/auth/login').send({
+      email: 'nobody@acmeprints.co.za',
+      password: 'whatever password',
+    });
+    assert.equal(unknownRes.status, 401);
+    assert.equal(unknownEmailSpy.mock.calls.length, 1, 'an unknown email should still run one real bcrypt compare');
+
+    const wrongPasswordSpy = mock.method(bcrypt, 'compare');
+    const wrongPasswordRes = await request(app).post('/api/auth/login').send({
+      email: 'jane@acmeprints.co.za',
+      password: 'wrong password entirely',
+    });
+    assert.equal(wrongPasswordRes.status, 401);
+    assert.equal(wrongPasswordSpy.mock.calls.length, 1, 'a known email with the wrong password should run exactly one real bcrypt compare');
+  } finally {
+    mock.restoreAll();
+  }
+});
+
 test('GET /api/auth/me returns the tenant when logged in, 401 otherwise', async () => {
   const app = buildApp();
   await registerAndVerify(app, 'jane@acmeprints.co.za');
