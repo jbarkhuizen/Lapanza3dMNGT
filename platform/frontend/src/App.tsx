@@ -28,6 +28,7 @@ import { QuoteCreatePage } from './pages/quotes/QuoteCreatePage.js';
 import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
 import { InvoicesListPage } from './pages/invoices/InvoicesListPage.js';
 import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
+import { ReportsPage } from './pages/reports/ReportsPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
 import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
@@ -336,6 +337,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <InvoiceDetailPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ReportsPage />
               </AppShell>
             </RequireAuth>
           }

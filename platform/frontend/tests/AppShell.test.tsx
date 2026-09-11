@@ -154,4 +154,86 @@ describe('AppShell', () => {
     expect(screen.queryByText(/last payment failed/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/subscription has lapsed/i)).not.toBeInTheDocument();
   });
+
+  const notifications = [
+    {
+      id: 'n1',
+      tenantId: 't1',
+      type: 'low_stock',
+      message: 'eSun PLA is running low: 30g remaining.',
+      relatedEntityType: 'filament',
+      relatedEntityId: 'f1',
+      readAt: null as string | null,
+      createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'n2',
+      tenantId: 't1',
+      type: 'invoice_overdue',
+      message: 'Invoice INV-0001 is overdue.',
+      relatedEntityType: 'invoice',
+      relatedEntityId: 'inv-1',
+      readAt: new Date().toISOString(),
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    },
+  ];
+
+  function renderWithNotifications() {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+        });
+      }
+      if (path === '/api/billing/subscription') {
+        return Promise.resolve({ ok: true, subscription: null });
+      }
+      if (path === '/api/notifications?unreadOnly=true') {
+        return Promise.resolve({ ok: true, notifications: notifications.filter((n) => !n.readAt) });
+      }
+      if (path === '/api/notifications') {
+        return Promise.resolve({ ok: true, notifications });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    const queryClient = createTestQueryClient();
+    return render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <AppShell>
+              <div>page content</div>
+            </AppShell>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('shows the unread notification count on the bell', async () => {
+    renderWithNotifications();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('1')).toBeInTheDocument());
+  });
+
+  it('opens the dropdown and lists recent notifications', async () => {
+    renderWithNotifications();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    await waitFor(() => expect(screen.getByText('eSun PLA is running low: 30g remaining.')).toBeInTheDocument());
+    expect(screen.getByText('Invoice INV-0001 is overdue.')).toBeInTheDocument();
+  });
+
+  it('clicking an unread notification calls the mark-read mutation and navigates to its related entity', async () => {
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, notification: { ...notifications[0], readAt: new Date().toISOString() } });
+    renderWithNotifications();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    await waitFor(() => expect(screen.getByText('eSun PLA is running low: 30g remaining.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('eSun PLA is running low: 30g remaining.'));
+
+    await waitFor(() => expect(patchSpy).toHaveBeenCalledWith('/api/notifications/n1/read'));
+  });
 });
