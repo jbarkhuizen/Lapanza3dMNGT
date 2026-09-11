@@ -1,52 +1,14 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
-import express from 'express';
-import cookieParser from 'cookie-parser';
 import { buildApp } from '../src/app.js';
-import { resetTestDatabase } from './helpers/testApp.js';
-import { prisma } from '../src/db/client.js';
+import { buildMinimalApp, loggedInAgent, resetTestDatabase } from './helpers/testApp.js';
 import { filamentsRouter } from '../src/routes/filaments.js';
 
 beforeEach(resetTestDatabase);
 
-function buildMinimalApp() {
-  const app = express();
-  app.use(express.json());
-  app.use(cookieParser());
-  app.use(filamentsRouter);
-  return app;
-}
-
-async function loggedInAgent(app: ReturnType<typeof buildApp>, email = 'jane@acmeprints.co.za') {
-  await request(app).post('/api/auth/register').send({
-    businessName: 'Acme Prints',
-    contactName: 'Jane Doe',
-    email,
-    password: 'correct horse battery staple',
-  });
-  const tenant = await prisma.tenant.findUnique({ where: { email } });
-  await request(app).post('/api/auth/verify-email').send({ token: tenant?.verificationToken });
-
-  const agent = request.agent(app);
-  await agent.post('/api/auth/login').send({ email, password: 'correct horse battery staple' });
-
-  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
-  await prisma.subscription.create({
-    data: {
-      tenantId: tenant!.id,
-      planId: plan.id,
-      status: 'active',
-      paymentProvider: 'payfast',
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-    },
-  });
-
-  return agent;
-}
-
 test('filament endpoints require auth', async () => {
-  const app = buildMinimalApp();
+  const app = buildMinimalApp(filamentsRouter);
   const res = await request(app).get('/api/filaments');
   assert.equal(res.status, 401);
 });

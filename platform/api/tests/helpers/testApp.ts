@@ -1,3 +1,7 @@
+import express, { Router } from 'express';
+import cookieParser from 'cookie-parser';
+import request from 'supertest';
+import { buildApp } from '../../src/app.js';
 import { prisma } from '../../src/db/client.js';
 
 const SEED_PLANS = [
@@ -40,4 +44,52 @@ export async function resetTestDatabase() {
   for (const plan of SEED_PLANS) {
     await prisma.plan.create({ data: plan });
   }
+}
+
+/**
+ * Builds a minimal Express app wired with just cookie/json middleware and the
+ * given resource router — enough to exercise a router's endpoints directly
+ * without pulling in the full app (auth middleware, other routers, etc.).
+ */
+export function buildMinimalApp(router: Router) {
+  const app = express();
+  app.use(express.json());
+  app.use(cookieParser());
+  app.use(router);
+  return app;
+}
+
+/**
+ * Registers and logs in a tenant against the full app, then attaches an
+ * active subscription so requests pass requireActiveSubscription checks.
+ * Returns a supertest agent authenticated as that tenant.
+ */
+export async function loggedInAgent(
+  app: ReturnType<typeof buildApp>,
+  email = 'jane@acmeprints.co.za',
+) {
+  await request(app).post('/api/auth/register').send({
+    businessName: 'Acme Prints',
+    contactName: 'Jane Doe',
+    email,
+    password: 'correct horse battery staple',
+  });
+  const tenant = await prisma.tenant.findUnique({ where: { email } });
+  await request(app).post('/api/auth/verify-email').send({ token: tenant?.verificationToken });
+
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({ email, password: 'correct horse battery staple' });
+
+  const plan = await prisma.plan.findFirstOrThrow({ where: { name: 'Tier 1' } });
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant!.id,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  return agent;
 }
