@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/materials', label: 'Materials' },
   { to: '/printers', label: 'Printers' },
   { to: '/costing-templates', label: 'Costing Templates' },
+  { to: '/jobs', label: 'Jobs' },
   { to: '/quotes', label: 'Quotes' },
   { to: '/invoices', label: 'Invoices' },
 ];

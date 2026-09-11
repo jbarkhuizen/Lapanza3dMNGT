@@ -22,6 +22,7 @@ import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
 import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
+import { JobsBoardPage } from './pages/jobs/JobsBoardPage.js';
 import { QuotesListPage } from './pages/quotes/QuotesListPage.js';
 import { QuoteCreatePage } from './pages/quotes/QuoteCreatePage.js';
 import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
@@ -275,6 +276,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CostingTemplateDetailPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/jobs"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <JobsBoardPage />
               </AppShell>
             </RequireAuth>
           }

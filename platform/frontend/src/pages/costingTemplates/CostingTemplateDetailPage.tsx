@@ -1,11 +1,30 @@
-import { Link, useParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCostingTemplate } from '../../api/costingTemplates.js';
+import { JOB_STATUS_LABELS, useCreateJob, useJobs } from '../../api/jobs.js';
 import { ApiError } from '../../api/client.js';
 import { formatCurrency as money } from '../../lib/formatCurrency.js';
 
 export function CostingTemplateDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { data: template, isLoading, isError, error } = useCostingTemplate(id);
+  const { data: jobs } = useJobs();
+  const createJobMutation = useCreateJob();
+  const [jobError, setJobError] = useState<string | null>(null);
+
+  async function handleStartJob() {
+    if (!id) {
+      return;
+    }
+    setJobError(null);
+    try {
+      await createJobMutation.mutateAsync({ costingTemplateId: id });
+      navigate('/jobs');
+    } catch (err) {
+      setJobError(err instanceof ApiError ? err.message : "Couldn't start a job for this template.");
+    }
+  }
 
   if (isLoading) {
     return <p className="text-slate-500">Loading…</p>;
@@ -17,6 +36,8 @@ export function CostingTemplateDetailPage() {
       </p>
     );
   }
+
+  const jobsForTemplate = (jobs ?? []).filter((job) => job.costingTemplateId === template.id);
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -88,6 +109,29 @@ export function CostingTemplateDetailPage() {
           ))}
         </section>
       )}
+
+      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Jobs</h2>
+        {jobsForTemplate.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {jobsForTemplate.map((job) => (
+              <li key={job.id}>
+                <Link to="/jobs" className="text-slate-600 underline">
+                  {job.name} — {JOB_STATUS_LABELS[job.status]}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {jobError && <p className="text-red-600">{jobError}</p>}
+        <button
+          onClick={handleStartJob}
+          disabled={createJobMutation.isPending}
+          className="self-start rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Start Job
+        </button>
+      </section>
     </div>
   );
 }
