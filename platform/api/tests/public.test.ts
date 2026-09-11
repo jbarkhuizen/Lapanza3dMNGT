@@ -128,6 +128,93 @@ test('public routes are reachable with no session cookie at all (no 401)', async
   assert.notEqual(plansRes.status, 401);
 });
 
+test('GET /api/public/shop/:slug returns 404 for an unknown slug', async () => {
+  const res = await request(app).get('/api/public/shop/no-such-shop');
+  assert.equal(res.status, 404);
+  assert.deepEqual(res.body, { ok: false, error: 'Shop not found.' });
+});
+
+test('GET /api/public/shop/:slug returns 404 for a real-but-unpublished slug (same message as unknown)', async () => {
+  await prisma.tenant.create({
+    data: {
+      businessName: 'Unpublished Shop',
+      contactName: 'Owner',
+      email: 'unpublished@example.com',
+      passwordHash: 'x',
+      emailVerifiedAt: new Date(),
+      shopSlug: 'unpublished-shop',
+      shopIsPublished: false,
+    },
+  });
+
+  const res = await request(app).get('/api/public/shop/unpublished-shop');
+  assert.equal(res.status, 404);
+  assert.deepEqual(res.body, { ok: false, error: 'Shop not found.' });
+});
+
+test('GET /api/public/shop/:slug returns 200 with the expected shape for a published shop, excluding private fields', async () => {
+  await prisma.tenant.create({
+    data: {
+      businessName: 'Acme Prints',
+      contactName: 'Jane Doe',
+      email: 'jane@acmeprints.co.za',
+      passwordHash: 'x',
+      emailVerifiedAt: new Date(),
+      shopSlug: 'acme-prints',
+      shopIsPublished: true,
+      shopTagline: 'Fast, affordable 3D printing',
+      shopServices: ['Custom prints', 'Prototyping'],
+      shopHoursText: 'Mon-Fri 9am-5pm',
+      shopGalleryUrls: ['https://example.com/a.jpg'],
+      shopContactWhatsapp: '+27821234567',
+      phone: '021 555 1234',
+      website: 'https://acmeprints.co.za',
+      logoUrl: 'https://example.com/logo.png',
+      city: 'Cape Town',
+      vatNumber: 'SECRET-VAT',
+      bankAccountNumber: 'SECRET-ACCOUNT',
+    },
+  });
+
+  const res = await request(app).get('/api/public/shop/acme-prints');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.deepEqual(res.body.shop, {
+    businessName: 'Acme Prints',
+    shopTagline: 'Fast, affordable 3D printing',
+    shopServices: ['Custom prints', 'Prototyping'],
+    shopHoursText: 'Mon-Fri 9am-5pm',
+    shopGalleryUrls: ['https://example.com/a.jpg'],
+    shopContactWhatsapp: '+27821234567',
+    phone: '021 555 1234',
+    email: 'jane@acmeprints.co.za',
+    website: 'https://acmeprints.co.za',
+    logoUrl: 'https://example.com/logo.png',
+    city: 'Cape Town',
+  });
+  // Explicit key assertion so a future accidental widening of the select
+  // (e.g. adding vatNumber or bankAccountNumber to it) is caught here,
+  // not discovered later as a data leak.
+  assert.deepEqual(
+    Object.keys(res.body.shop).sort(),
+    [
+      'businessName',
+      'city',
+      'email',
+      'logoUrl',
+      'phone',
+      'shopContactWhatsapp',
+      'shopGalleryUrls',
+      'shopHoursText',
+      'shopServices',
+      'shopTagline',
+      'website',
+    ].sort(),
+  );
+  assert.equal('vatNumber' in res.body.shop, false);
+  assert.equal('bankAccountNumber' in res.body.shop, false);
+});
+
 test('GET /api/public/stats is rate-limited after repeated requests', async () => {
   // publicLimiter is a module-scope singleton (public.ts), so every
   // buildApp() call shares the same bucket regardless of which `app`

@@ -36,6 +36,13 @@ model Tenant {
   defaultQuoteValidityDays Int?
   quoteNumberPrefix        String    @default("QT")
   invoiceNumberPrefix      String    @default("INV")
+  shopSlug                 String?   @unique
+  shopTagline              String?
+  shopServices             String[]  @default([])
+  shopHoursText            String?
+  shopGalleryUrls          String[]  @default([])
+  shopContactWhatsapp      String?
+  shopIsPublished          Boolean   @default(false)
 
   customers              Customer[]
   printers               Printer[]

@@ -15,6 +15,7 @@ import { labourStepsRouter } from './routes/labour-steps.js';
 import { consumablesRouter } from './routes/consumables.js';
 import { costingTemplatesRouter } from './routes/costing-templates.js';
 import { companyProfileRouter } from './routes/company-profile.js';
+import { shopProfileRouter } from './routes/shop-profile.js';
 import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
 import { billingRouter } from './routes/billing.js';
@@ -90,6 +91,7 @@ export function buildApp() {
   app.use(consumablesRouter);
   app.use(costingTemplatesRouter);
   app.use(companyProfileRouter);
+  app.use(shopProfileRouter);
   app.use(quotesRouter);
   app.use(invoicesRouter);
 

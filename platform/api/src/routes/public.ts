@@ -38,3 +38,28 @@ publicRouter.get('/api/public/plans', publicLimiter, async (_req, res) => {
     })),
   });
 });
+
+publicRouter.get('/api/public/shop/:slug', publicLimiter, async (req, res) => {
+  const shop = await prisma.tenant.findFirst({
+    where: { shopSlug: String(req.params.slug), shopIsPublished: true },
+    select: {
+      businessName: true,
+      shopTagline: true,
+      shopServices: true,
+      shopHoursText: true,
+      shopGalleryUrls: true,
+      shopContactWhatsapp: true,
+      phone: true,
+      email: true,
+      website: true,
+      logoUrl: true,
+      city: true,
+    },
+  });
+  // Same 404 + message whether the slug doesn't exist at all or exists but is
+  // unpublished -- otherwise the response would leak which slugs are taken.
+  if (!shop) {
+    return res.status(404).json({ ok: false, error: 'Shop not found.' });
+  }
+  res.json({ ok: true, shop });
+});
