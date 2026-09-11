@@ -173,23 +173,40 @@ quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, a
     resolvedValidUntil = new Date(Date.now() + profile.defaultQuoteValidityDays * 24 * 60 * 60 * 1000);
   }
 
-  const quote = await scoped.quotes.create({
-    customerId,
-    number,
-    validUntil: resolvedValidUntil,
-    vatApplied: profile.vatRegistered,
-    subtotal: totals.subtotal.toString(),
-    vatAmount: totals.vatAmount.toString(),
-    total: totals.total.toString(),
-    notes: notes ?? null,
-    lineItems: resolvedLines.map((line, i) => ({
-      costingTemplateId: line.costingTemplateId,
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: totals.lineUnitPrices[i].toString(),
-      lineTotal: totals.lineTotals[i].toString(),
-    })),
-  });
+  let quote;
+  try {
+    quote = await scoped.quotes.create({
+      customerId,
+      number,
+      validUntil: resolvedValidUntil,
+      vatApplied: profile.vatRegistered,
+      subtotal: totals.subtotal.toString(),
+      vatAmount: totals.vatAmount.toString(),
+      total: totals.total.toString(),
+      notes: notes ?? null,
+      lineItems: resolvedLines.map((line, i) => ({
+        costingTemplateId: line.costingTemplateId,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: totals.lineUnitPrices[i].toString(),
+        lineTotal: totals.lineTotals[i].toString(),
+      })),
+    });
+  } catch (error) {
+    // @@unique([tenantId, number]) (backlog #35) — reachable whenever
+    // quoteNumberPrefix and invoiceNumberPrefix are set to the same string,
+    // since the two TenantSequence counters advance independently and will
+    // eventually land on the same formatted number. Not a rare race; a
+    // deterministic collision the DB constraint now catches.
+    const isNumberCollision = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+    if (isNumberCollision) {
+      return res.status(400).json({
+        ok: false,
+        error: 'A quote with this number already exists — check your quote number prefix in Company Profile.',
+      });
+    }
+    throw error;
+  }
 
   res.status(201).json({ ok: true, quote: await serializeQuote(quote) });
 });

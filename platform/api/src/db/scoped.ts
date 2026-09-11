@@ -178,6 +178,7 @@ export interface CreateCostingTemplateInput {
   printerSnapshotName: string | null;
   printerSnapshotElectricityRatePerKwh: string | null;
   printerSnapshotDepreciationPerHour: string | null;
+  printerSnapshotPowerDrawWatts: number | null;
   printTimeHours: number;
   markupPercent: string;
   filamentCost: string;
@@ -538,6 +539,7 @@ export function tenantScope(tenantId: string) {
             printerSnapshotName: data.printerSnapshotName,
             printerSnapshotElectricityRatePerKwh: data.printerSnapshotElectricityRatePerKwh,
             printerSnapshotDepreciationPerHour: data.printerSnapshotDepreciationPerHour,
+            printerSnapshotPowerDrawWatts: data.printerSnapshotPowerDrawWatts,
             printTimeHours: data.printTimeHours,
             markupPercent: data.markupPercent,
             filamentCost: data.filamentCost,

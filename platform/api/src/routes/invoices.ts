@@ -161,25 +161,42 @@ invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscriptio
     ? new Date(dueDate)
     : new Date(Date.now() + DEFAULT_DUE_DAYS * 24 * 60 * 60 * 1000);
 
-  const invoice = await scoped.invoices.create({
-    customerId,
-    quoteId: null,
-    number,
-    dueDate: resolvedDueDate,
-    vatApplied: profile.vatRegistered,
-    subtotal: totals.subtotal.toString(),
-    vatAmount: totals.vatAmount.toString(),
-    total: totals.total.toString(),
-    notes: notes ?? null,
-    lineItems: resolvedLines.map((line, i) => ({
-      quoteLineItemId: null,
-      costingTemplateId: line.costingTemplateId,
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: totals.lineUnitPrices[i].toString(),
-      lineTotal: totals.lineTotals[i].toString(),
-    })),
-  });
+  let invoice;
+  try {
+    invoice = await scoped.invoices.create({
+      customerId,
+      quoteId: null,
+      number,
+      dueDate: resolvedDueDate,
+      vatApplied: profile.vatRegistered,
+      subtotal: totals.subtotal.toString(),
+      vatAmount: totals.vatAmount.toString(),
+      total: totals.total.toString(),
+      notes: notes ?? null,
+      lineItems: resolvedLines.map((line, i) => ({
+        quoteLineItemId: null,
+        costingTemplateId: line.costingTemplateId,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: totals.lineUnitPrices[i].toString(),
+        lineTotal: totals.lineTotals[i].toString(),
+      })),
+    });
+  } catch (error) {
+    // @@unique([tenantId, number]) (backlog #35) — reachable whenever
+    // quoteNumberPrefix and invoiceNumberPrefix are set to the same string,
+    // since the two TenantSequence counters advance independently and will
+    // eventually land on the same formatted number. Not a rare race; a
+    // deterministic collision the DB constraint now catches.
+    const isNumberCollision = error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+    if (isNumberCollision) {
+      return res.status(400).json({
+        ok: false,
+        error: 'An invoice with this number already exists — check your invoice number prefix in Company Profile.',
+      });
+    }
+    throw error;
+  }
 
   res.status(201).json({ ok: true, invoice: serializeInvoice(invoice) });
 });

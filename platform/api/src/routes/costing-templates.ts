@@ -34,6 +34,9 @@ function serializeCostingTemplate(template: CostingTemplateWithOptionalLines) {
       template.printerSnapshotDepreciationPerHour != null
         ? template.printerSnapshotDepreciationPerHour.toFixed(4)
         : null,
+    // Plain Float, unlike the two snapshot fields above (Decimal columns) —
+    // no toFixed() normalization needed, matches Printer.powerDrawWatts's own type.
+    printerSnapshotPowerDrawWatts: template.printerSnapshotPowerDrawWatts,
     markupPercent: template.markupPercent.toFixed(2),
     filamentCost: template.filamentCost.toFixed(2),
     electricityCost: template.electricityCost.toFixed(2),
@@ -207,6 +210,7 @@ costingTemplatesRouter.post('/api/costing-templates', requireTenantAuth, require
     printerSnapshotName: printer.name,
     printerSnapshotElectricityRatePerKwh: electricityRatePerKwh.toString(),
     printerSnapshotDepreciationPerHour: result.depreciationPerHour.toString(),
+    printerSnapshotPowerDrawWatts: powerDrawWatts,
     printTimeHours,
     markupPercent: result.markupPercent.toString(),
     filamentCost: result.filamentCost.toString(),

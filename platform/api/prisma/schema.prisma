@@ -126,6 +126,7 @@ model Customer {
   vatNumber        String?
   notes            String?
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
@@ -277,6 +278,7 @@ model CostingTemplate {
   printerSnapshotName                   String?
   printerSnapshotElectricityRatePerKwh  Decimal?  @db.Decimal(10, 4)
   printerSnapshotDepreciationPerHour    Decimal?  @db.Decimal(12, 4)
+  printerSnapshotPowerDrawWatts         Float?
   printTimeHours                        Float
   markupPercent                         Decimal   @db.Decimal(6, 2)
   filamentCost                          Decimal   @db.Decimal(12, 2)
@@ -360,6 +362,7 @@ model Quote {
   lineItems QuoteLineItem[]
   invoice   Invoice?
 
+  @@unique([tenantId, number])
   @@index([tenantId])
   @@map("quotes")
 }
@@ -405,6 +408,7 @@ model Invoice {
 
   lineItems InvoiceLineItem[]
 
+  @@unique([tenantId, number])
   @@index([tenantId])
   @@map("invoices")
 }

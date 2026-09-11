@@ -448,3 +448,39 @@ test('POST /api/invoices/:id/send returns 404 for an invoice belonging to anothe
 
   assert.equal(res.status, 404);
 });
+
+test('POST /api/invoices rejects with 400 (not 500) when the computed number already exists for this tenant', async () => {
+  // Backlog #35: @@unique([tenantId, number]) is defense-in-depth against a
+  // duplicate Invoice.number for the SAME tenant -- the atomic
+  // tenantSequences.next() makes this unreachable through the API's own
+  // create flow (each call gets a strictly higher value), so this test
+  // simulates the only other realistic way a duplicate could exist: a row
+  // inserted by something other than this route (a data-fix script, a
+  // migration, a bug elsewhere) sitting at the exact number the sequence is
+  // about to hand out next.
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.invoice.create({
+    data: {
+      tenantId: tenant.id,
+      customerId,
+      number: 'INV-0001', // matches what tenantSequences.next('invoice') will hand out first
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      vatApplied: false,
+      subtotal: '100.00',
+      vatAmount: '0.00',
+      total: '100.00',
+    },
+  });
+
+  const res = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 1 }],
+  });
+
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /already exists/);
+});

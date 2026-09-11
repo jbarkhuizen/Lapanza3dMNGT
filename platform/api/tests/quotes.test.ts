@@ -315,3 +315,36 @@ test('POST /api/quotes/:id/send returns 404 for a quote belonging to another ten
 
   assert.equal(res.status, 404);
 });
+
+test('POST /api/quotes rejects with 400 (not 500) when the computed number already exists for this tenant', async () => {
+  // Backlog #35: @@unique([tenantId, number]) is defense-in-depth against a
+  // duplicate Quote.number for the SAME tenant -- the atomic
+  // tenantSequences.next() makes this unreachable through the API's own
+  // create flow, so this test simulates the only other realistic way a
+  // duplicate could exist: a row inserted by something other than this
+  // route sitting at the exact number the sequence is about to hand out.
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.quote.create({
+    data: {
+      tenantId: tenant.id,
+      customerId,
+      number: 'QT-0001', // matches what tenantSequences.next('quote') will hand out first
+      vatApplied: false,
+      subtotal: '100.00',
+      vatAmount: '0.00',
+      total: '100.00',
+    },
+  });
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 1 }],
+  });
+
+  assert.equal(res.status, 400);
+  assert.match(res.body.error, /already exists/);
+});

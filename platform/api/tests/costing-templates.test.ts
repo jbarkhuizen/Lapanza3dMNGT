@@ -172,6 +172,9 @@ test('full create -> get -> list cycle computes correct totals', async () => {
   assert.equal(t.consumablesCost, '20.00');
   assert.equal(t.totalCost, '190.00');
   assert.equal(t.suggestedPrice, '285.00');
+  // Snapshotted at creation so electricityCost stays reproducible even if
+  // the live Printer's powerDrawWatts is later edited or the printer deleted.
+  assert.equal(t.printerSnapshotPowerDrawWatts, 200);
   assert.equal(t.labourLines.length, 1);
   assert.equal(t.labourLines[0].lineCost, '150.00');
   assert.equal(t.consumableLines.length, 1);

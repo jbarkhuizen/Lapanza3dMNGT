@@ -53,6 +53,30 @@ test('full create -> list -> get -> update cycle', async () => {
   assert.equal(getAfterUpdate.body.customer.notes, 'Prefers matte finish');
 });
 
+test('updatedAt equals createdAt on creation, then changes after a PATCH', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const createRes = await agent.post('/api/customers').send({
+    name: 'Print Buyer CC',
+    billingAddress: '5 Oak Ave, Centurion',
+  });
+  assert.equal(createRes.status, 201);
+  assert.equal(createRes.body.customer.updatedAt, createRes.body.customer.createdAt);
+
+  // Timestamptz(3) columns are millisecond-precision — without a small delay
+  // a fast PATCH could land in the same millisecond as the create and make
+  // the "changed" assertion below flaky. Same pattern as notifications.test.ts.
+  await new Promise((resolve) => setTimeout(resolve, 5));
+
+  const updateRes = await agent
+    .patch(`/api/customers/${createRes.body.customer.id}`)
+    .send({ notes: 'Prefers matte finish' });
+  assert.equal(updateRes.status, 200);
+  assert.notEqual(updateRes.body.customer.updatedAt, updateRes.body.customer.createdAt);
+  assert.ok(new Date(updateRes.body.customer.updatedAt) > new Date(createRes.body.customer.updatedAt));
+});
+
 test('PATCH /api/customers/:id returns 404 for another tenant\'s customer', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app);

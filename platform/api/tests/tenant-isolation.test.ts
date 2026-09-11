@@ -348,6 +348,7 @@ test('a tenant cannot see another tenant\'s costing templates', async () => {
     printerSnapshotName: null,
     printerSnapshotElectricityRatePerKwh: null,
     printerSnapshotDepreciationPerHour: null,
+    printerSnapshotPowerDrawWatts: null,
     printTimeHours: 1,
     markupPercent: '0',
     filamentCost: '1.00',
