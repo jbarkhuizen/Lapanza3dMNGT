@@ -104,6 +104,11 @@ function escapeHtml(value) {
   ));
 }
 
+function csvField(value) {
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 app.get('/admin/signups', requireAdminAuth, (req, res) => {
   const rows = db.prepare('SELECT id, email, created_at FROM signups ORDER BY created_at DESC').all();
   const tableRows = rows.map((r) => (
@@ -118,6 +123,8 @@ app.get('/admin/signups', requireAdminAuth, (req, res) => {
   body { font-family: ui-sans-serif, system-ui, sans-serif; background: #f7f3eb; color: #1a1612; margin: 0; padding: 32px; }
   h1 { font-size: 20px; }
   p.count { color: #3b322b; }
+  a.export { display: inline-block; margin-top: 12px; padding: 8px 14px; background: #1a1612; color: #f7f3eb; text-decoration: none; border-radius: 6px; font-size: 13px; }
+  a.export:hover { background: #3b322b; }
   table { border-collapse: collapse; width: 100%; max-width: 720px; margin-top: 16px; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e0d8c8; font-size: 14px; }
   th { text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em; color: #3b322b; }
@@ -126,12 +133,22 @@ app.get('/admin/signups', requireAdminAuth, (req, res) => {
 <body>
   <h1>Barkie launch signups</h1>
   <p class="count">${rows.length} signup${rows.length === 1 ? '' : 's'}</p>
+  <a class="export" href="/admin/signups.csv">Download CSV</a>
   <table>
     <thead><tr><th>#</th><th>Email</th><th>Added (UTC)</th></tr></thead>
     <tbody>${tableRows || '<tr><td colspan="3">No signups yet.</td></tr>'}</tbody>
   </table>
 </body>
 </html>`);
+});
+
+app.get('/admin/signups.csv', requireAdminAuth, (req, res) => {
+  const rows = db.prepare('SELECT email, created_at FROM signups ORDER BY created_at DESC').all();
+  const lines = ['email,created_at', ...rows.map((r) => `${csvField(r.email)},${csvField(r.created_at)}`)];
+  res
+    .set('Content-Type', 'text/csv; charset=utf-8')
+    .set('Content-Disposition', 'attachment; filename="barkie-signups.csv"')
+    .send(lines.join('\n'));
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 4100;
