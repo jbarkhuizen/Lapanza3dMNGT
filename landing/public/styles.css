@@ -992,3 +992,155 @@ body {
   flex-wrap: wrap;
   gap: 12px;
 }
+
+.stl-scaler {
+  padding-bottom: 32px;
+}
+
+.stl-dropzone {
+  border: 2px dashed var(--ink);
+  border-radius: 10px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  background: var(--surface-soft);
+}
+
+.stl-dropzone:focus-visible {
+  outline: 3px solid var(--color-terracotta);
+  outline-offset: 2px;
+}
+
+.stl-dropzone--active {
+  border-color: var(--color-terracotta);
+  background: var(--surface);
+}
+
+.stl-dropzone__title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  margin: 0 0 6px;
+}
+
+.stl-dropzone__sub {
+  color: var(--ink-muted);
+  font-size: 14px;
+  margin: 0;
+}
+
+.stl-error {
+  border: 2px solid var(--color-terracotta);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-top: 16px;
+  color: var(--color-terracotta);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.stl-panel {
+  margin-top: 24px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 24px;
+  background: var(--surface-soft);
+}
+
+.stl-panel__file {
+  margin-bottom: 20px;
+}
+
+.stl-panel__dims {
+  color: var(--ink-muted);
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.stl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stl-form__mode {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.stl-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stl-percent-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stl-form__percent label,
+.stl-dim-row label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-bottom: 4px;
+}
+
+.stl-form input[type="number"] {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  width: 140px;
+}
+
+.stl-form__exact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stl-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 220px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stl-toggle-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+}
+
+.stl-dim-row {
+  display: flex;
+  flex-direction: column;
+  max-width: 220px;
+}
+
+.stl-result {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.stl-result p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}

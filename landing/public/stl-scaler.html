@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>STL Scaler — Barkie</title>
+  <meta name="description" content="Resize an STL file by percentage or exact millimetre dimensions, right in your browser. Nothing is ever uploaded — free, no login." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap site-header__inner">
+      <span class="wordmark">Barkie</span>
+      <nav aria-label="Primary">
+        <ul class="site-nav">
+          <li><a href="/">Home</a></li>
+          <li><a href="/pricing.html">Pricing</a></li>
+          <li><a href="/materials.html">Materials Guide</a></li>
+          <li><a href="/stl-scaler.html" aria-current="page">STL Scaler</a></li>
+        </ul>
+      </nav>
+      <div class="site-header__actions">
+        <a class="btn btn--ghost" href="/app/login">Log in</a>
+        <a class="btn btn--primary" href="/app/register">Start free trial</a>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+          <span aria-hidden="true">◐</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-header wrap">
+      <h1>STL Scaler</h1>
+      <p>Resize an STL file by percentage or exact millimetre dimensions, then download the result. Everything runs in your browser — your file is never uploaded anywhere.</p>
+    </section>
+
+    <div class="wrap stl-scaler">
+      <div class="stl-dropzone" id="stl-dropzone" tabindex="0" role="button" aria-label="Choose or drop an STL file">
+        <p class="stl-dropzone__title">Drop an STL file here</p>
+        <p class="stl-dropzone__sub">or click to browse — binary STL only</p>
+        <input type="file" id="stl-file-input" accept=".stl" class="sr-only" />
+      </div>
+
+      <p id="stl-error" class="stl-error" hidden></p>
+
+      <div id="stl-panel" class="stl-panel" hidden>
+        <div class="stl-panel__file">
+          <p><strong id="stl-file-name"></strong></p>
+          <p class="stl-panel__dims" id="stl-original-dims"></p>
+        </div>
+
+        <div class="stl-form">
+          <div class="stl-form__mode">
+            <label class="stl-radio">
+              <input type="radio" name="stl-mode" id="stl-mode-percent" value="percent" checked />
+              Scale by percentage
+            </label>
+            <label class="stl-radio">
+              <input type="radio" name="stl-mode" id="stl-mode-exact" value="exact" />
+              Set exact size (mm)
+            </label>
+          </div>
+
+          <div class="stl-form__percent" id="stl-percent-fields">
+            <label for="stl-percent-input">Scale</label>
+            <div class="stl-percent-row">
+              <input type="number" id="stl-percent-input" value="100" min="1" step="any" />
+              <span>%</span>
+            </div>
+          </div>
+
+          <div class="stl-form__exact" id="stl-exact-fields" hidden>
+            <label class="stl-toggle-row">
+              <span>Keep proportions</span>
+              <input type="checkbox" id="stl-lock-proportions" checked />
+            </label>
+            <div class="stl-dim-row">
+              <label for="stl-width-input">Width (X)</label>
+              <input type="number" id="stl-width-input" min="0" step="any" />
+            </div>
+            <div class="stl-dim-row">
+              <label for="stl-depth-input">Depth (Y)</label>
+              <input type="number" id="stl-depth-input" min="0" step="any" />
+            </div>
+            <div class="stl-dim-row">
+              <label for="stl-height-input">Height (Z)</label>
+              <input type="number" id="stl-height-input" min="0" step="any" />
+            </div>
+          </div>
+
+          <button type="button" id="stl-scale-btn" class="btn btn--primary">Scale &amp; download</button>
+        </div>
+
+        <div class="stl-result" id="stl-result" hidden>
+          <p id="stl-result-dims"></p>
+          <a id="stl-download-link" class="btn btn--ghost" download>Download scaled STL</a>
+        </div>
+      </div>
+    </div>
+
+    <p class="materials-disclaimer wrap">
+      Only binary STL files are supported (the default export format for virtually every slicer and CAD tool). ASCII STL files are detected and rejected with a clear message rather than partially processed. Your file is parsed, scaled and rebuilt entirely in your browser's memory — it is never uploaded, sent to a server, or stored anywhere.
+    </p>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap site-footer__inner">
+      <span>&copy; <span id="year"></span> Barkie</span>
+      <a href="mailto:hello@barkie.co.za">hello@barkie.co.za</a>
+      <a href="/pricing.html">Pricing</a>
+      <a href="/materials.html">Materials Guide</a>
+      <a href="/stl-scaler.html">STL Scaler</a>
+      <span class="site-footer__note">Full Privacy Policy &amp; Terms of Service will be published before checkout goes live.</span>
+    </div>
+  </footer>
+
+  <script type="module" src="/js/stl-scaler.js"></script>
+  <script src="/js/shared.js"></script>
+</body>
+</html>
