@@ -153,6 +153,11 @@ test('GET /api/public/shop/:slug returns 404 for a real-but-unpublished slug (sa
 });
 
 test('GET /api/public/shop/:slug returns 200 with the expected shape for a published shop, excluding private fields', async () => {
+  const tradingHours = {
+    monday: { open: true, start: '08:00', end: '17:00' },
+    saturday: { open: false, start: '09:00', end: '13:00' },
+  };
+
   await prisma.tenant.create({
     data: {
       businessName: 'Acme Prints',
@@ -173,6 +178,24 @@ test('GET /api/public/shop/:slug returns 200 with the expected shape for a publi
       city: 'Cape Town',
       vatNumber: 'SECRET-VAT',
       bankAccountNumber: 'SECRET-ACCOUNT',
+      shopAboutText: 'We are a small print farm.',
+      shopAvailability: 'Currently accepting new orders',
+      shopGoogleReviewsUrl: 'https://g.page/r/acme-prints/review',
+      shopTradingHours: tradingHours,
+      shopFacebookUrl: 'https://facebook.com/acmeprints',
+      shopInstagramUrl: 'https://instagram.com/acmeprints',
+      shopTwitterUrl: 'https://x.com/acmeprints',
+      shopTiktokUrl: 'https://tiktok.com/@acmeprints',
+      shopYoutubeUrl: 'https://youtube.com/@acmeprints',
+      shopLinkedinUrl: 'https://linkedin.com/company/acmeprints',
+      shopDiscordUrl: 'https://discord.gg/acmeprints',
+      shopCults3dUrl: 'https://cults3d.com/en/users/acmeprints',
+      shopPrintablesUrl: 'https://printables.com/@acmeprints',
+      shopThingiverseUrl: 'https://thingiverse.com/acmeprints',
+      shopMakerworldUrl: 'https://makerworld.com/@acmeprints',
+      shopThangsUrl: 'https://thangs.com/designer/acmeprints',
+      shopCrealityCloudUrl: 'https://crealitycloud.com/user/acmeprints',
+      shopGrabcadUrl: 'https://grabcad.com/acmeprints',
     },
   });
 
@@ -191,6 +214,24 @@ test('GET /api/public/shop/:slug returns 200 with the expected shape for a publi
     website: 'https://acmeprints.co.za',
     logoUrl: 'https://example.com/logo.png',
     city: 'Cape Town',
+    shopAboutText: 'We are a small print farm.',
+    shopAvailability: 'Currently accepting new orders',
+    shopGoogleReviewsUrl: 'https://g.page/r/acme-prints/review',
+    shopTradingHours: tradingHours,
+    shopFacebookUrl: 'https://facebook.com/acmeprints',
+    shopInstagramUrl: 'https://instagram.com/acmeprints',
+    shopTwitterUrl: 'https://x.com/acmeprints',
+    shopTiktokUrl: 'https://tiktok.com/@acmeprints',
+    shopYoutubeUrl: 'https://youtube.com/@acmeprints',
+    shopLinkedinUrl: 'https://linkedin.com/company/acmeprints',
+    shopDiscordUrl: 'https://discord.gg/acmeprints',
+    shopCults3dUrl: 'https://cults3d.com/en/users/acmeprints',
+    shopPrintablesUrl: 'https://printables.com/@acmeprints',
+    shopThingiverseUrl: 'https://thingiverse.com/acmeprints',
+    shopMakerworldUrl: 'https://makerworld.com/@acmeprints',
+    shopThangsUrl: 'https://thangs.com/designer/acmeprints',
+    shopCrealityCloudUrl: 'https://crealitycloud.com/user/acmeprints',
+    shopGrabcadUrl: 'https://grabcad.com/acmeprints',
   });
   // Explicit key assertion so a future accidental widening of the select
   // (e.g. adding vatNumber or bankAccountNumber to it) is caught here,
@@ -209,6 +250,24 @@ test('GET /api/public/shop/:slug returns 200 with the expected shape for a publi
       'shopServices',
       'shopTagline',
       'website',
+      'shopAboutText',
+      'shopAvailability',
+      'shopGoogleReviewsUrl',
+      'shopTradingHours',
+      'shopFacebookUrl',
+      'shopInstagramUrl',
+      'shopTwitterUrl',
+      'shopTiktokUrl',
+      'shopYoutubeUrl',
+      'shopLinkedinUrl',
+      'shopDiscordUrl',
+      'shopCults3dUrl',
+      'shopPrintablesUrl',
+      'shopThingiverseUrl',
+      'shopMakerworldUrl',
+      'shopThangsUrl',
+      'shopCrealityCloudUrl',
+      'shopGrabcadUrl',
     ].sort(),
   );
   assert.equal('vatNumber' in res.body.shop, false);

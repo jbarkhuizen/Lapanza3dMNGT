@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from './client.js';
 
 export interface CreateCustomerInput {
@@ -258,6 +259,19 @@ export interface UpdateCompanyProfileInput {
   invoiceNumberPrefix?: string;
 }
 
+// Shape of shopTradingHours -- see updateShopProfileSchema in
+// src/routes/shop-profile.ts for the zod validation that enforces this.
+export interface TradingHoursDay {
+  open: boolean;
+  start: string;
+  end: string;
+}
+
+export type TradingHours = Partial<Record<
+  'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday',
+  TradingHoursDay
+>>;
+
 export interface UpdateShopProfileInput {
   shopSlug?: string;
   shopTagline?: string;
@@ -266,6 +280,24 @@ export interface UpdateShopProfileInput {
   shopGalleryUrls?: string[];
   shopContactWhatsapp?: string;
   shopIsPublished?: boolean;
+  shopAboutText?: string;
+  shopAvailability?: string;
+  shopGoogleReviewsUrl?: string;
+  shopTradingHours?: TradingHours;
+  shopFacebookUrl?: string;
+  shopInstagramUrl?: string;
+  shopTwitterUrl?: string;
+  shopTiktokUrl?: string;
+  shopYoutubeUrl?: string;
+  shopLinkedinUrl?: string;
+  shopDiscordUrl?: string;
+  shopCults3dUrl?: string;
+  shopPrintablesUrl?: string;
+  shopThingiverseUrl?: string;
+  shopMakerworldUrl?: string;
+  shopThangsUrl?: string;
+  shopCrealityCloudUrl?: string;
+  shopGrabcadUrl?: string;
 }
 
 export interface CreateJobInput {
@@ -335,6 +367,24 @@ const shopProfileSelect = {
   shopGalleryUrls: true,
   shopContactWhatsapp: true,
   shopIsPublished: true,
+  shopAboutText: true,
+  shopAvailability: true,
+  shopGoogleReviewsUrl: true,
+  shopTradingHours: true,
+  shopFacebookUrl: true,
+  shopInstagramUrl: true,
+  shopTwitterUrl: true,
+  shopTiktokUrl: true,
+  shopYoutubeUrl: true,
+  shopLinkedinUrl: true,
+  shopDiscordUrl: true,
+  shopCults3dUrl: true,
+  shopPrintablesUrl: true,
+  shopThingiverseUrl: true,
+  shopMakerworldUrl: true,
+  shopThangsUrl: true,
+  shopCrealityCloudUrl: true,
+  shopGrabcadUrl: true,
 } as const;
 
 export function tenantScope(tenantId: string) {
@@ -584,8 +634,20 @@ export function tenantScope(tenantId: string) {
     shopProfile: {
       get: () => prisma.tenant.findUnique({ where: { id: tenantId }, select: shopProfileSelect }),
 
+      // shopTradingHours is cast to Prisma's Json input type here rather than
+      // widened on TradingHoursDay itself -- the plain, precisely-shaped
+      // TradingHoursDay is what the route's zod schema and the frontend both
+      // work with, and Prisma's InputJsonValue only needs to be satisfied at
+      // this one boundary where the value is actually handed to the client.
       update: (data: UpdateShopProfileInput) =>
-        prisma.tenant.update({ where: { id: tenantId }, data, select: shopProfileSelect }),
+        prisma.tenant.update({
+          where: { id: tenantId },
+          data: {
+            ...data,
+            shopTradingHours: data.shopTradingHours as Prisma.InputJsonValue | undefined,
+          },
+          select: shopProfileSelect,
+        }),
     },
 
     quotes: {

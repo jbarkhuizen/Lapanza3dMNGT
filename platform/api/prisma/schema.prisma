@@ -43,6 +43,24 @@ model Tenant {
   shopGalleryUrls          String[]  @default([])
   shopContactWhatsapp      String?
   shopIsPublished          Boolean   @default(false)
+  shopAboutText            String?
+  shopAvailability         String?
+  shopGoogleReviewsUrl     String?
+  shopTradingHours         Json?
+  shopFacebookUrl          String?
+  shopInstagramUrl         String?
+  shopTwitterUrl           String?
+  shopTiktokUrl            String?
+  shopYoutubeUrl           String?
+  shopLinkedinUrl          String?
+  shopDiscordUrl           String?
+  shopCults3dUrl           String?
+  shopPrintablesUrl        String?
+  shopThingiverseUrl       String?
+  shopMakerworldUrl        String?
+  shopThangsUrl            String?
+  shopCrealityCloudUrl     String?
+  shopGrabcadUrl           String?
 
   customers              Customer[]
   printers               Printer[]

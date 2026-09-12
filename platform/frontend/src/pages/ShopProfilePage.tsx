@@ -3,7 +3,14 @@ import { FormField } from '../components/FormField.js';
 import { Checkbox } from '../components/Checkbox.js';
 import { TextareaField } from '../components/TextareaField.js';
 import { ApiError } from '../api/client.js';
-import { useShopProfile, useUpdateShopProfile, type UpdateShopProfileInput } from '../api/shopProfile.js';
+import {
+  useShopProfile,
+  useUpdateShopProfile,
+  DAYS_OF_WEEK,
+  type DayOfWeek,
+  type TradingHours,
+  type UpdateShopProfileInput,
+} from '../api/shopProfile.js';
 import { omitBlankFields } from '../lib/omitBlankFields.js';
 
 // shopServices/shopGalleryUrls are edited as one textarea each (one entry per
@@ -18,12 +25,33 @@ interface FormState {
   shopGalleryUrlsText: string;
   shopContactWhatsapp: string;
   shopIsPublished: boolean;
+  shopAboutText: string;
+  shopAvailability: string;
+  shopGoogleReviewsUrl: string;
+  shopTradingHours: TradingHours;
+  shopFacebookUrl: string;
+  shopInstagramUrl: string;
+  shopTwitterUrl: string;
+  shopTiktokUrl: string;
+  shopYoutubeUrl: string;
+  shopLinkedinUrl: string;
+  shopDiscordUrl: string;
+  shopCults3dUrl: string;
+  shopPrintablesUrl: string;
+  shopThingiverseUrl: string;
+  shopMakerworldUrl: string;
+  shopThangsUrl: string;
+  shopCrealityCloudUrl: string;
+  shopGrabcadUrl: string;
 }
 
 // shopSlug's server schema (`.min(3).regex(...).optional()`) rejects '' outright,
 // unlike shopTagline/shopHoursText/shopContactWhatsapp which use plain
 // `.trim().optional()` and accept '' fine -- same reasoning as
-// CompanyProfilePage's OMIT_WHEN_BLANK list.
+// CompanyProfilePage's OMIT_WHEN_BLANK list. The 14 social/marketplace URL
+// fields and shopGoogleReviewsUrl use `.url().optional().or(z.literal(''))`,
+// which accepts '' too (that's how a link gets cleared), so none of them need
+// to be listed here either.
 const OMIT_WHEN_BLANK: (keyof UpdateShopProfileInput)[] = ['shopSlug'];
 
 function linesToArray(text: string): string[] {
@@ -31,6 +59,34 @@ function linesToArray(text: string): string[] {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+}
+
+function defaultTradingHours(): TradingHours {
+  const result = {} as TradingHours;
+  for (const day of DAYS_OF_WEEK) {
+    result[day] = { open: false, start: '09:00', end: '17:00' };
+  }
+  return result;
+}
+
+// Fills in any day missing from the loaded profile (e.g. a shop that never
+// set trading hours at all, or set only some days) so the form always has a
+// complete 7-day object to render and submit.
+function normalizeTradingHours(loaded: Partial<TradingHours> | null | undefined): TradingHours {
+  const result = defaultTradingHours();
+  if (loaded) {
+    for (const day of DAYS_OF_WEEK) {
+      const value = loaded[day];
+      if (value) {
+        result[day] = value;
+      }
+    }
+  }
+  return result;
+}
+
+function dayLabel(day: DayOfWeek): string {
+  return day.charAt(0).toUpperCase() + day.slice(1);
 }
 
 export function ShopProfilePage() {
@@ -50,12 +106,45 @@ export function ShopProfilePage() {
         shopGalleryUrlsText: profile.shopGalleryUrls.join('\n'),
         shopContactWhatsapp: profile.shopContactWhatsapp ?? '',
         shopIsPublished: profile.shopIsPublished,
+        shopAboutText: profile.shopAboutText ?? '',
+        shopAvailability: profile.shopAvailability ?? '',
+        shopGoogleReviewsUrl: profile.shopGoogleReviewsUrl ?? '',
+        shopTradingHours: normalizeTradingHours(profile.shopTradingHours),
+        shopFacebookUrl: profile.shopFacebookUrl ?? '',
+        shopInstagramUrl: profile.shopInstagramUrl ?? '',
+        shopTwitterUrl: profile.shopTwitterUrl ?? '',
+        shopTiktokUrl: profile.shopTiktokUrl ?? '',
+        shopYoutubeUrl: profile.shopYoutubeUrl ?? '',
+        shopLinkedinUrl: profile.shopLinkedinUrl ?? '',
+        shopDiscordUrl: profile.shopDiscordUrl ?? '',
+        shopCults3dUrl: profile.shopCults3dUrl ?? '',
+        shopPrintablesUrl: profile.shopPrintablesUrl ?? '',
+        shopThingiverseUrl: profile.shopThingiverseUrl ?? '',
+        shopMakerworldUrl: profile.shopMakerworldUrl ?? '',
+        shopThangsUrl: profile.shopThangsUrl ?? '',
+        shopCrealityCloudUrl: profile.shopCrealityCloudUrl ?? '',
+        shopGrabcadUrl: profile.shopGrabcadUrl ?? '',
       });
     }
   }, [profile, form]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => (prev ? { ...prev, [key]: value } : prev));
+    setSaved(false);
+  }
+
+  function setTradingHoursDay(day: DayOfWeek, patch: Partial<TradingHours[DayOfWeek]>) {
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            shopTradingHours: {
+              ...prev.shopTradingHours,
+              [day]: { ...prev.shopTradingHours[day], ...patch },
+            },
+          }
+        : prev,
+    );
     setSaved(false);
   }
 
@@ -72,6 +161,24 @@ export function ShopProfilePage() {
       shopGalleryUrls: linesToArray(form.shopGalleryUrlsText),
       shopContactWhatsapp: form.shopContactWhatsapp,
       shopIsPublished: form.shopIsPublished,
+      shopAboutText: form.shopAboutText,
+      shopAvailability: form.shopAvailability,
+      shopGoogleReviewsUrl: form.shopGoogleReviewsUrl,
+      shopTradingHours: form.shopTradingHours,
+      shopFacebookUrl: form.shopFacebookUrl,
+      shopInstagramUrl: form.shopInstagramUrl,
+      shopTwitterUrl: form.shopTwitterUrl,
+      shopTiktokUrl: form.shopTiktokUrl,
+      shopYoutubeUrl: form.shopYoutubeUrl,
+      shopLinkedinUrl: form.shopLinkedinUrl,
+      shopDiscordUrl: form.shopDiscordUrl,
+      shopCults3dUrl: form.shopCults3dUrl,
+      shopPrintablesUrl: form.shopPrintablesUrl,
+      shopThingiverseUrl: form.shopThingiverseUrl,
+      shopMakerworldUrl: form.shopMakerworldUrl,
+      shopThangsUrl: form.shopThangsUrl,
+      shopCrealityCloudUrl: form.shopCrealityCloudUrl,
+      shopGrabcadUrl: form.shopGrabcadUrl,
     };
     try {
       await updateMutation.mutateAsync(omitBlankFields(payload, OMIT_WHEN_BLANK));
@@ -121,6 +228,18 @@ export function ShopProfilePage() {
           onChange={(e) => set('shopTagline', e.target.value)}
         />
         <TextareaField
+          id="shopAboutText"
+          label="About your shop"
+          value={form.shopAboutText}
+          onChange={(value) => set('shopAboutText', value)}
+        />
+        <FormField
+          id="shopAvailability"
+          label="Availability"
+          value={form.shopAvailability}
+          onChange={(e) => set('shopAvailability', e.target.value)}
+        />
+        <TextareaField
           id="shopServicesText"
           label="Services (one per line)"
           value={form.shopServicesText}
@@ -132,6 +251,38 @@ export function ShopProfilePage() {
           value={form.shopHoursText}
           onChange={(value) => set('shopHoursText', value)}
         />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trading hours</h2>
+        {DAYS_OF_WEEK.map((day) => {
+          const dayHours = form.shopTradingHours[day];
+          return (
+            <div key={day} className="flex flex-wrap items-center gap-4">
+              <span className="w-24 text-sm font-medium text-slate-700">{dayLabel(day)}</span>
+              <Checkbox
+                id={`shopTradingHours-${day}-open`}
+                label="Open"
+                checked={dayHours.open}
+                onChange={(checked) => setTradingHoursDay(day, { open: checked })}
+              />
+              <FormField
+                id={`shopTradingHours-${day}-start`}
+                label="From"
+                type="time"
+                value={dayHours.start}
+                onChange={(e) => setTradingHoursDay(day, { start: e.target.value })}
+              />
+              <FormField
+                id={`shopTradingHours-${day}-end`}
+                label="To"
+                type="time"
+                value={dayHours.end}
+                onChange={(e) => setTradingHoursDay(day, { end: e.target.value })}
+              />
+            </div>
+          );
+        })}
       </section>
 
       <section className="flex flex-col gap-4">
@@ -147,6 +298,104 @@ export function ShopProfilePage() {
           label="WhatsApp contact"
           value={form.shopContactWhatsapp}
           onChange={(e) => set('shopContactWhatsapp', e.target.value)}
+        />
+        <FormField
+          id="shopGoogleReviewsUrl"
+          label="Google reviews link"
+          value={form.shopGoogleReviewsUrl}
+          onChange={(e) => set('shopGoogleReviewsUrl', e.target.value)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Social media</h2>
+        <FormField
+          id="shopFacebookUrl"
+          label="Facebook"
+          value={form.shopFacebookUrl}
+          onChange={(e) => set('shopFacebookUrl', e.target.value)}
+        />
+        <FormField
+          id="shopInstagramUrl"
+          label="Instagram"
+          value={form.shopInstagramUrl}
+          onChange={(e) => set('shopInstagramUrl', e.target.value)}
+        />
+        <FormField
+          id="shopTwitterUrl"
+          label="X / Twitter"
+          value={form.shopTwitterUrl}
+          onChange={(e) => set('shopTwitterUrl', e.target.value)}
+        />
+        <FormField
+          id="shopTiktokUrl"
+          label="TikTok"
+          value={form.shopTiktokUrl}
+          onChange={(e) => set('shopTiktokUrl', e.target.value)}
+        />
+        <FormField
+          id="shopYoutubeUrl"
+          label="YouTube"
+          value={form.shopYoutubeUrl}
+          onChange={(e) => set('shopYoutubeUrl', e.target.value)}
+        />
+        <FormField
+          id="shopLinkedinUrl"
+          label="LinkedIn"
+          value={form.shopLinkedinUrl}
+          onChange={(e) => set('shopLinkedinUrl', e.target.value)}
+        />
+        <FormField
+          id="shopDiscordUrl"
+          label="Discord"
+          value={form.shopDiscordUrl}
+          onChange={(e) => set('shopDiscordUrl', e.target.value)}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Model marketplaces</h2>
+        <FormField
+          id="shopCults3dUrl"
+          label="Cults3D"
+          value={form.shopCults3dUrl}
+          onChange={(e) => set('shopCults3dUrl', e.target.value)}
+        />
+        <FormField
+          id="shopPrintablesUrl"
+          label="Printables"
+          value={form.shopPrintablesUrl}
+          onChange={(e) => set('shopPrintablesUrl', e.target.value)}
+        />
+        <FormField
+          id="shopThingiverseUrl"
+          label="Thingiverse"
+          value={form.shopThingiverseUrl}
+          onChange={(e) => set('shopThingiverseUrl', e.target.value)}
+        />
+        <FormField
+          id="shopMakerworldUrl"
+          label="MakerWorld"
+          value={form.shopMakerworldUrl}
+          onChange={(e) => set('shopMakerworldUrl', e.target.value)}
+        />
+        <FormField
+          id="shopThangsUrl"
+          label="Thangs"
+          value={form.shopThangsUrl}
+          onChange={(e) => set('shopThangsUrl', e.target.value)}
+        />
+        <FormField
+          id="shopCrealityCloudUrl"
+          label="Creality Cloud"
+          value={form.shopCrealityCloudUrl}
+          onChange={(e) => set('shopCrealityCloudUrl', e.target.value)}
+        />
+        <FormField
+          id="shopGrabcadUrl"
+          label="GrabCAD"
+          value={form.shopGrabcadUrl}
+          onChange={(e) => set('shopGrabcadUrl', e.target.value)}
         />
       </section>
 

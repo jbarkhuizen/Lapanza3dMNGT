@@ -947,3 +947,48 @@ body {
   flex-wrap: wrap;
   gap: 12px;
 }
+
+.shop-availability {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-olive);
+}
+
+.shop-about p {
+  font-size: 15px;
+  color: var(--ink-muted);
+  max-width: 70ch;
+  margin: 0 0 12px;
+}
+
+.shop-trading-hours {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 40ch;
+}
+
+.shop-trading-hours li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.shop-trading-hours .shop-trading-hours__day {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.shop-social-links,
+.shop-marketplace-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}

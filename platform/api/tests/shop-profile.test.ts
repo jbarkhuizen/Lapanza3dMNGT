@@ -25,6 +25,24 @@ test('GET /api/shop-profile returns defaults for a freshly registered tenant', a
   assert.equal(res.body.shopProfile.shopTagline, null);
   assert.equal(res.body.shopProfile.shopHoursText, null);
   assert.equal(res.body.shopProfile.shopContactWhatsapp, null);
+  assert.equal(res.body.shopProfile.shopAboutText, null);
+  assert.equal(res.body.shopProfile.shopAvailability, null);
+  assert.equal(res.body.shopProfile.shopGoogleReviewsUrl, null);
+  assert.equal(res.body.shopProfile.shopTradingHours, null);
+  assert.equal(res.body.shopProfile.shopFacebookUrl, null);
+  assert.equal(res.body.shopProfile.shopInstagramUrl, null);
+  assert.equal(res.body.shopProfile.shopTwitterUrl, null);
+  assert.equal(res.body.shopProfile.shopTiktokUrl, null);
+  assert.equal(res.body.shopProfile.shopYoutubeUrl, null);
+  assert.equal(res.body.shopProfile.shopLinkedinUrl, null);
+  assert.equal(res.body.shopProfile.shopDiscordUrl, null);
+  assert.equal(res.body.shopProfile.shopCults3dUrl, null);
+  assert.equal(res.body.shopProfile.shopPrintablesUrl, null);
+  assert.equal(res.body.shopProfile.shopThingiverseUrl, null);
+  assert.equal(res.body.shopProfile.shopMakerworldUrl, null);
+  assert.equal(res.body.shopProfile.shopThangsUrl, null);
+  assert.equal(res.body.shopProfile.shopCrealityCloudUrl, null);
+  assert.equal(res.body.shopProfile.shopGrabcadUrl, null);
 });
 
 test('PATCH /api/shop-profile updates fields and round-trips', async () => {
@@ -91,6 +109,117 @@ test('PATCH rejects a malformed slug', async () => {
 
   const tooShort = await agent.patch('/api/shop-profile').send({ shopSlug: 'ab' });
   assert.equal(tooShort.status, 400);
+});
+
+test('PATCH accepts and round-trips the new v2 fields (about, availability, reviews, trading hours, social/marketplace links)', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const tradingHours = {
+    monday: { open: true, start: '08:00', end: '17:00' },
+    tuesday: { open: true, start: '08:00', end: '17:00' },
+    wednesday: { open: true, start: '08:00', end: '17:00' },
+    thursday: { open: true, start: '08:00', end: '17:00' },
+    friday: { open: true, start: '08:00', end: '15:00' },
+    saturday: { open: false, start: '09:00', end: '13:00' },
+    sunday: { open: false, start: '09:00', end: '13:00' },
+  };
+
+  const res = await agent.patch('/api/shop-profile').send({
+    shopAboutText: 'We are a small print farm specializing in functional prototypes.\n\nFounded in 2020.',
+    shopAvailability: 'Currently accepting new orders',
+    shopGoogleReviewsUrl: 'https://g.page/r/acme-prints/review',
+    shopTradingHours: tradingHours,
+    shopFacebookUrl: 'https://facebook.com/acmeprints',
+    shopInstagramUrl: 'https://instagram.com/acmeprints',
+    shopTwitterUrl: 'https://x.com/acmeprints',
+    shopTiktokUrl: 'https://tiktok.com/@acmeprints',
+    shopYoutubeUrl: 'https://youtube.com/@acmeprints',
+    shopLinkedinUrl: 'https://linkedin.com/company/acmeprints',
+    shopDiscordUrl: 'https://discord.gg/acmeprints',
+    shopCults3dUrl: 'https://cults3d.com/en/users/acmeprints',
+    shopPrintablesUrl: 'https://printables.com/@acmeprints',
+    shopThingiverseUrl: 'https://thingiverse.com/acmeprints',
+    shopMakerworldUrl: 'https://makerworld.com/@acmeprints',
+    shopThangsUrl: 'https://thangs.com/designer/acmeprints',
+    shopCrealityCloudUrl: 'https://crealitycloud.com/user/acmeprints',
+    shopGrabcadUrl: 'https://grabcad.com/acmeprints',
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.shopProfile.shopAboutText, 'We are a small print farm specializing in functional prototypes.\n\nFounded in 2020.');
+  assert.equal(res.body.shopProfile.shopAvailability, 'Currently accepting new orders');
+  assert.equal(res.body.shopProfile.shopGoogleReviewsUrl, 'https://g.page/r/acme-prints/review');
+  assert.deepEqual(res.body.shopProfile.shopTradingHours, tradingHours);
+  assert.equal(res.body.shopProfile.shopFacebookUrl, 'https://facebook.com/acmeprints');
+  assert.equal(res.body.shopProfile.shopInstagramUrl, 'https://instagram.com/acmeprints');
+  assert.equal(res.body.shopProfile.shopTwitterUrl, 'https://x.com/acmeprints');
+  assert.equal(res.body.shopProfile.shopTiktokUrl, 'https://tiktok.com/@acmeprints');
+  assert.equal(res.body.shopProfile.shopYoutubeUrl, 'https://youtube.com/@acmeprints');
+  assert.equal(res.body.shopProfile.shopLinkedinUrl, 'https://linkedin.com/company/acmeprints');
+  assert.equal(res.body.shopProfile.shopDiscordUrl, 'https://discord.gg/acmeprints');
+  assert.equal(res.body.shopProfile.shopCults3dUrl, 'https://cults3d.com/en/users/acmeprints');
+  assert.equal(res.body.shopProfile.shopPrintablesUrl, 'https://printables.com/@acmeprints');
+  assert.equal(res.body.shopProfile.shopThingiverseUrl, 'https://thingiverse.com/acmeprints');
+  assert.equal(res.body.shopProfile.shopMakerworldUrl, 'https://makerworld.com/@acmeprints');
+  assert.equal(res.body.shopProfile.shopThangsUrl, 'https://thangs.com/designer/acmeprints');
+  assert.equal(res.body.shopProfile.shopCrealityCloudUrl, 'https://crealitycloud.com/user/acmeprints');
+  assert.equal(res.body.shopProfile.shopGrabcadUrl, 'https://grabcad.com/acmeprints');
+
+  const getRes = await agent.get('/api/shop-profile');
+  assert.deepEqual(getRes.body.shopProfile.shopTradingHours, tradingHours);
+  assert.equal(getRes.body.shopProfile.shopAboutText, 'We are a small print farm specializing in functional prototypes.\n\nFounded in 2020.');
+});
+
+test('PATCH rejects a shopTradingHours day missing the end field', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.patch('/api/shop-profile').send({
+    shopTradingHours: { monday: { open: true, start: '08:00' } },
+  });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH rejects a shopTradingHours object with an unknown day key', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.patch('/api/shop-profile').send({
+    shopTradingHours: { funday: { open: true, start: '08:00', end: '17:00' } },
+  });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH rejects a shopTradingHours day with a non-HH:MM time string', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.patch('/api/shop-profile').send({
+    shopTradingHours: { monday: { open: true, start: '8am', end: '17:00' } },
+  });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH rejects a malformed social/marketplace URL field', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const badFacebook = await agent.patch('/api/shop-profile').send({ shopFacebookUrl: 'not-a-url' });
+  assert.equal(badFacebook.status, 400);
+
+  const badGoogleReviews = await agent.patch('/api/shop-profile').send({ shopGoogleReviewsUrl: 'not-a-url' });
+  assert.equal(badGoogleReviews.status, 400);
+
+  const badGrabcad = await agent.patch('/api/shop-profile').send({ shopGrabcadUrl: 'not-a-url' });
+  assert.equal(badGrabcad.status, 400);
+});
+
+test('PATCH allows clearing a social/marketplace URL field back to blank', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/shop-profile').send({ shopFacebookUrl: 'https://facebook.com/acmeprints' });
+
+  const res = await agent.patch('/api/shop-profile').send({ shopFacebookUrl: '' });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.shopProfile.shopFacebookUrl, '');
 });
 
 test('PATCH returns 400 (not 500) on a duplicate slug across two tenants', async () => {
