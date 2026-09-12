@@ -484,3 +484,60 @@ test('POST /api/invoices rejects with 400 (not 500) when the computed number alr
   assert.equal(res.status, 400);
   assert.match(res.body.error, /already exists/);
 });
+
+test('GET /api/invoices/stats returns totalOutstanding, totalPaid, paidCount, unpaidCount, and overdueCount against fixture data', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  // A paid invoice -- contributes to totalPaid/paidCount only.
+  const paidRes = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Paid widget', unitPrice: 300, quantity: 1 }],
+  });
+  await agent.patch(`/api/invoices/${paidRes.body.invoice.id}/status`).send({ status: 'paid', amountPaid: 300 });
+
+  // A partially-paid invoice, not past due -- counts as "unpaid" and contributes its remaining balance to totalOutstanding.
+  const partiallyPaidRes = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Partially paid widget', unitPrice: 200, quantity: 1 }],
+  });
+  await agent.patch(`/api/invoices/${partiallyPaidRes.body.invoice.id}/status`).send({ status: 'partially_paid', amountPaid: 50 });
+
+  // An overdue (past-due, unpaid) invoice -- counts as "unpaid" and "overdue", contributes its full total to totalOutstanding.
+  const pastDueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await agent.post('/api/invoices').send({
+    customerId,
+    dueDate: pastDueDate,
+    lineItems: [{ description: 'Overdue widget', unitPrice: 80, quantity: 1 }],
+  });
+
+  const res = await agent.get('/api/invoices/stats');
+  assert.equal(res.status, 200);
+  // (200 - 50) + (80 - 0) = 230.00
+  assert.equal(res.body.totalOutstanding, '230.00');
+  assert.equal(res.body.totalPaid, '300.00');
+  assert.equal(res.body.paidCount, 1);
+  assert.equal(res.body.unpaidCount, 2);
+  assert.equal(res.body.overdueCount, 1);
+});
+
+test('GET /api/invoices/stats is tenant-isolated', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'stats-a@example.co.za');
+  const customerId = await makeCustomer(agentA);
+  const paidRes = await agentA.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Widget', unitPrice: 100, quantity: 1 }],
+  });
+  await agentA.patch(`/api/invoices/${paidRes.body.invoice.id}/status`).send({ status: 'paid', amountPaid: 100 });
+
+  const agentB = await loggedInAgent(app, 'stats-b@example.co.za');
+  const res = await agentB.get('/api/invoices/stats');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.totalOutstanding, '0.00');
+  assert.equal(res.body.totalPaid, '0.00');
+  assert.equal(res.body.paidCount, 0);
+  assert.equal(res.body.unpaidCount, 0);
+  assert.equal(res.body.overdueCount, 0);
+});

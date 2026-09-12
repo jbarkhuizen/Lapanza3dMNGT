@@ -26,12 +26,26 @@ export interface CustomerFormInput {
   notes?: string;
 }
 
+export interface CustomerStats {
+  totalClients: number;
+  outstanding: string;
+  withOverdue: number;
+}
+
 const CUSTOMERS_QUERY_KEY = ['customers'] as const;
+const CUSTOMER_STATS_QUERY_KEY = [...CUSTOMERS_QUERY_KEY, 'stats'] as const;
 
 export function useCustomers() {
   return useQuery({
     queryKey: CUSTOMERS_QUERY_KEY,
     queryFn: () => apiGet<{ customers: Customer[] }>('/api/customers').then((r) => r.customers),
+  });
+}
+
+export function useCustomerStats() {
+  return useQuery({
+    queryKey: CUSTOMER_STATS_QUERY_KEY,
+    queryFn: () => apiGet<{ ok: true } & CustomerStats>('/api/customers/stats'),
   });
 }
 

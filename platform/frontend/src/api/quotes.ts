@@ -59,12 +59,27 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   expired: 'Expired',
 };
 
+export interface QuoteStats {
+  totalQuotes: number;
+  totalValue: string;
+  expiredCount: number;
+  convertedCount: number;
+}
+
 export const QUOTES_QUERY_KEY = ['quotes'] as const;
+const QUOTE_STATS_QUERY_KEY = [...QUOTES_QUERY_KEY, 'stats'] as const;
 
 export function useQuotes() {
   return useQuery({
     queryKey: QUOTES_QUERY_KEY,
     queryFn: () => apiGet<{ quotes: Quote[] }>('/api/quotes').then((r) => r.quotes),
+  });
+}
+
+export function useQuoteStats() {
+  return useQuery({
+    queryKey: QUOTE_STATS_QUERY_KEY,
+    queryFn: () => apiGet<{ ok: true } & QuoteStats>('/api/quotes/stats'),
   });
 }
 

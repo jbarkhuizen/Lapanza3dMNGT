@@ -132,6 +132,65 @@ test('a lapsed subscription blocks POST /api/customers with 402 but not GET /api
   assert.equal(listRes.status, 200);
 });
 
+test('GET /api/customers/stats returns totalClients, outstanding, and withOverdue against fixture data', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+
+  const customerARes = await agent.post('/api/customers').send({ name: 'Customer A', billingAddress: '1 Main St' });
+  const customerAId = customerARes.body.customer.id;
+  const customerBRes = await agent.post('/api/customers').send({ name: 'Customer B', billingAddress: '2 Main St' });
+  const customerBId = customerBRes.body.customer.id;
+
+  // Customer A: a partially-paid invoice (still counts toward outstanding) and an
+  // overdue invoice -- both invoices belong to the same customer, so withOverdue
+  // must count distinct customers, not invoices.
+  const partiallyPaidRes = await agent.post('/api/invoices').send({
+    customerId: customerAId,
+    lineItems: [{ description: 'Widget', unitPrice: 200, quantity: 1 }],
+  });
+  await agent.patch(`/api/invoices/${partiallyPaidRes.body.invoice.id}/status`).send({ status: 'partially_paid', amountPaid: 50 });
+
+  const pastDueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await agent.post('/api/invoices').send({
+    customerId: customerAId,
+    dueDate: pastDueDate,
+    lineItems: [{ description: 'Overdue widget', unitPrice: 80, quantity: 1 }],
+  });
+
+  // Customer B: a fully paid invoice -- must not contribute to outstanding.
+  const paidRes = await agent.post('/api/invoices').send({
+    customerId: customerBId,
+    lineItems: [{ description: 'Paid widget', unitPrice: 100, quantity: 1 }],
+  });
+  await agent.patch(`/api/invoices/${paidRes.body.invoice.id}/status`).send({ status: 'paid', amountPaid: 100 });
+
+  const res = await agent.get('/api/customers/stats');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.totalClients, 2);
+  // (200 - 50) + (80 - 0) = 230.00
+  assert.equal(res.body.outstanding, '230.00');
+  assert.equal(res.body.withOverdue, 1);
+});
+
+test('GET /api/customers/stats is tenant-isolated', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'stats-a@example.co.za');
+  const customerRes = await agentA.post('/api/customers').send({ name: 'A Co', billingAddress: '1 Main St' });
+  const pastDueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await agentA.post('/api/invoices').send({
+    customerId: customerRes.body.customer.id,
+    dueDate: pastDueDate,
+    lineItems: [{ description: 'Widget', unitPrice: 100, quantity: 1 }],
+  });
+
+  const agentB = await loggedInAgent(app, 'stats-b@example.co.za');
+  const res = await agentB.get('/api/customers/stats');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.totalClients, 0);
+  assert.equal(res.body.outstanding, '0.00');
+  assert.equal(res.body.withOverdue, 0);
+});
+
 test('GET /api/customers/:id returns 404 for another tenant\'s customer', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app);

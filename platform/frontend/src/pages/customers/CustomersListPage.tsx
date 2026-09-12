@@ -1,8 +1,13 @@
 import { Link } from 'react-router-dom';
-import { useCustomers } from '../../api/customers.js';
+import { useCustomers, useCustomerStats } from '../../api/customers.js';
+import { formatCurrency } from '../../lib/formatCurrency.js';
+import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
+import { StatCard } from '../../components/StatCard.js';
 
 export function CustomersListPage() {
   const { data: customers, isLoading, isError } = useCustomers();
+  const { data: stats } = useCustomerStats();
+  const currency = useDisplayCurrency();
 
   return (
     <div className="flex flex-col gap-4">
@@ -12,6 +17,15 @@ export function CustomersListPage() {
           New Customer
         </Link>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard label="Total Clients" value={String(stats.totalClients)} />
+          <StatCard label="Outstanding" value={formatCurrency(stats.outstanding, currency)} />
+          <StatCard label="With Overdue" value={String(stats.withOverdue)} />
+        </div>
+      )}
+
       {isError && <p className="text-red-600">Couldn't load customers. Try refreshing the page.</p>}
       {isLoading && <p className="text-slate-500">Loading…</p>}
       {!isLoading && !isError && customers?.length === 0 && <p className="text-slate-500">No customers yet.</p>}

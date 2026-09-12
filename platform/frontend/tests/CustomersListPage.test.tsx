@@ -33,6 +33,23 @@ describe('CustomersListPage', () => {
     await waitFor(() => expect(screen.getByText('Bob Client')).toBeInTheDocument());
   });
 
+  it('renders the stat row from mocked GET /api/customers/stats', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/customers') {
+        return Promise.resolve({ ok: true, customers: [] });
+      }
+      if (path === '/api/customers/stats') {
+        return Promise.resolve({ ok: true, totalClients: 5, outstanding: '340.50', withOverdue: 2 });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Total Clients')).toBeInTheDocument());
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.getByText('R 340.50')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no customers', async () => {
     vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, customers: [] });
     renderPage();

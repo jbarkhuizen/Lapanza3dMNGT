@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useInvoices, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../api/invoices.js';
+import { useInvoices, useInvoiceStats, INVOICE_STATUS_LABELS, type InvoiceStatus } from '../../api/invoices.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
+import { StatCard } from '../../components/StatCard.js';
 
 const STATUS_OPTIONS: Array<InvoiceStatus | 'all'> = ['all', 'unpaid', 'partially_paid', 'paid', 'overdue'];
 
 export function InvoicesListPage() {
   const { data: invoices, isLoading, isError } = useInvoices();
   const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const { data: stats } = useInvoiceStats();
   const currency = useDisplayCurrency();
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
 
@@ -20,6 +22,16 @@ export function InvoicesListPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Invoices</h1>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <StatCard label="Total Outstanding" value={formatCurrency(stats.totalOutstanding, currency)} />
+          <StatCard label="Total Paid" value={formatCurrency(stats.totalPaid, currency)} />
+          <StatCard label="Paid" value={String(stats.paidCount)} />
+          <StatCard label="Unpaid" value={String(stats.unpaidCount)} />
+          <StatCard label="Overdue" value={String(stats.overdueCount)} />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 text-sm">
         <label htmlFor="status-filter" className="text-slate-500">

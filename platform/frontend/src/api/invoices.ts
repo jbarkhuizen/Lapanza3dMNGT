@@ -50,12 +50,28 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   overdue: 'Overdue',
 };
 
+export interface InvoiceStats {
+  totalOutstanding: string;
+  totalPaid: string;
+  paidCount: number;
+  unpaidCount: number;
+  overdueCount: number;
+}
+
 const INVOICES_QUERY_KEY = ['invoices'] as const;
+const INVOICE_STATS_QUERY_KEY = [...INVOICES_QUERY_KEY, 'stats'] as const;
 
 export function useInvoices() {
   return useQuery({
     queryKey: INVOICES_QUERY_KEY,
     queryFn: () => apiGet<{ invoices: Invoice[] }>('/api/invoices').then((r) => r.invoices),
+  });
+}
+
+export function useInvoiceStats() {
+  return useQuery({
+    queryKey: INVOICE_STATS_QUERY_KEY,
+    queryFn: () => apiGet<{ ok: true } & InvoiceStats>('/api/invoices/stats'),
   });
 }
 

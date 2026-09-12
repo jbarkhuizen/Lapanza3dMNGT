@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
+import { prisma } from '../db/client.js';
+import { overdueInvoiceWhere } from '../notifications/checks.js';
 
 export const customersRouter = Router();
 // Auth/subscription gating is applied per-route (not via a blanket
@@ -40,6 +43,29 @@ customersRouter.post('/api/customers', requireTenantAuth, requireActiveSubscript
   const scoped = tenantScope(req.tenantId!);
   const customer = await scoped.customers.create(parsed.data);
   res.status(201).json({ ok: true, customer });
+});
+
+// Placed before /api/customers/:id so that path doesn't shadow this one.
+customersRouter.get('/api/customers/stats', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const tenantId = req.tenantId!;
+
+  const totalClients = await prisma.customer.count({ where: { tenantId } });
+
+  const nonPaidInvoices = await prisma.invoice.findMany({
+    where: { tenantId, status: { not: 'paid' } },
+    select: { total: true, amountPaid: true },
+  });
+  const outstanding = nonPaidInvoices
+    .reduce((sum, invoice) => sum.plus(invoice.total.minus(invoice.amountPaid)), new Prisma.Decimal(0))
+    .toFixed(2);
+
+  const overdueInvoices = await prisma.invoice.findMany({
+    where: overdueInvoiceWhere(tenantId),
+    select: { customerId: true },
+  });
+  const withOverdue = new Set(overdueInvoices.map((invoice) => invoice.customerId)).size;
+
+  res.json({ ok: true, totalClients, outstanding, withOverdue });
 });
 
 customersRouter.get('/api/customers/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {

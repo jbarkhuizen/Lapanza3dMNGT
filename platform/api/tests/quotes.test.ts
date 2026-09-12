@@ -348,3 +348,56 @@ test('POST /api/quotes rejects with 400 (not 500) when the computed number alrea
   assert.equal(res.status, 400);
   assert.match(res.body.error, /already exists/);
 });
+
+test('GET /api/quotes/stats returns totalQuotes, totalValue, expiredCount, and convertedCount against fixture data', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  // A draft quote (never sent).
+  await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Draft widget', unitPrice: 100, quantity: 1 }],
+  });
+
+  // An expired quote.
+  const expiredRes = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Expired widget', unitPrice: 200, quantity: 1 }],
+  });
+  await agent.patch(`/api/quotes/${expiredRes.body.quote.id}/status`).send({ status: 'sent' });
+  await agent.patch(`/api/quotes/${expiredRes.body.quote.id}/status`).send({ status: 'expired' });
+
+  // An accepted (converted) quote.
+  const acceptedRes = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Accepted widget', unitPrice: 300, quantity: 1 }],
+  });
+  await agent.patch(`/api/quotes/${acceptedRes.body.quote.id}/status`).send({ status: 'sent' });
+  await agent.patch(`/api/quotes/${acceptedRes.body.quote.id}/status`).send({ status: 'accepted' });
+
+  const res = await agent.get('/api/quotes/stats');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.totalQuotes, 3);
+  assert.equal(res.body.totalValue, '600.00');
+  assert.equal(res.body.expiredCount, 1);
+  assert.equal(res.body.convertedCount, 1);
+});
+
+test('GET /api/quotes/stats is tenant-isolated', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'stats-a@example.co.za');
+  const customerId = await makeCustomer(agentA);
+  await agentA.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Widget', unitPrice: 100, quantity: 1 }],
+  });
+
+  const agentB = await loggedInAgent(app, 'stats-b@example.co.za');
+  const res = await agentB.get('/api/quotes/stats');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.totalQuotes, 0);
+  assert.equal(res.body.totalValue, '0.00');
+  assert.equal(res.body.expiredCount, 0);
+  assert.equal(res.body.convertedCount, 0);
+});

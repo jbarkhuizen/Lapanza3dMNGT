@@ -79,3 +79,59 @@ reportsRouter.get('/api/reports/summary', requireTenantAuth, requireActiveSubscr
     jobsInProgress,
   });
 });
+
+reportsRouter.get('/api/reports/dashboard', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const tenantId = req.tenantId!;
+
+  const openInvoicesCount = await prisma.invoice.count({
+    where: { tenantId, status: { in: ['unpaid', 'partially_paid'] } },
+  });
+
+  const openQuotesCount = await prisma.quote.count({
+    where: { tenantId, status: { in: ['draft', 'sent'] } },
+  });
+
+  const paidInvoicesCount = await prisma.invoice.count({
+    where: { tenantId, status: 'paid' },
+  });
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const revenueAgg = await prisma.invoice.aggregate({
+    where: { tenantId, status: 'paid', createdAt: { gte: startOfMonth } },
+    _sum: { total: true },
+  });
+  const revenueThisMonth = revenueAgg._sum.total ? revenueAgg._sum.total.toFixed(2) : '0.00';
+
+  const statusGroups = await prisma.invoice.groupBy({
+    by: ['status'],
+    where: { tenantId },
+    _count: true,
+  });
+  const invoiceStatusCounts = { paid: 0, unpaid: 0, overdue: 0 };
+  for (const group of statusGroups) {
+    if (group.status === 'paid') {
+      invoiceStatusCounts.paid += group._count;
+    } else if (group.status === 'overdue') {
+      invoiceStatusCounts.overdue += group._count;
+    } else {
+      // 'unpaid' and 'partially_paid' roll up into a single "unpaid" bucket --
+      // the reference screenshot only shows three status buckets, not four.
+      invoiceStatusCounts.unpaid += group._count;
+    }
+  }
+
+  const convertedQuotesCount = await prisma.quote.count({
+    where: { tenantId, status: 'accepted' },
+  });
+
+  res.json({
+    ok: true,
+    revenueThisMonth,
+    openInvoicesCount,
+    openQuotesCount,
+    paidInvoicesCount,
+    invoiceStatusCounts,
+    convertedQuotesCount,
+  });
+});

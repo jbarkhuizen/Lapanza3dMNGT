@@ -87,6 +87,32 @@ function renderPage() {
 }
 
 describe('InvoicesListPage', () => {
+  it('renders the stat row from mocked GET /api/invoices/stats', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/invoices') return Promise.resolve({ ok: true, invoices: [] });
+      if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [] });
+      if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile: testCompanyProfile });
+      if (path === '/api/invoices/stats') {
+        return Promise.resolve({
+          ok: true,
+          totalOutstanding: '230.00',
+          totalPaid: '300.00',
+          paidCount: 1,
+          unpaidCount: 2,
+          overdueCount: 3,
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Total Outstanding')).toBeInTheDocument());
+    expect(screen.getByText('R 230.00')).toBeInTheDocument();
+    expect(screen.getByText('R 300.00')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
   it('lists invoices with customer name, status, total, and balance due resolved via useCustomerLookup', async () => {
     mockReferenceData();
     renderPage();

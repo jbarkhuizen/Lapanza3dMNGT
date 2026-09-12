@@ -82,6 +82,24 @@ function renderPage() {
 }
 
 describe('QuotesListPage', () => {
+  it('renders the stat row from mocked GET /api/quotes/stats', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/quotes') return Promise.resolve({ ok: true, quotes: [] });
+      if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [] });
+      if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile: testCompanyProfile });
+      if (path === '/api/quotes/stats') {
+        return Promise.resolve({ ok: true, totalQuotes: 3, totalValue: '600.00', expiredCount: 1, convertedCount: 2 });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Total Quotes')).toBeInTheDocument());
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('R 600.00')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+
   it('lists quotes with customer name, status, and total resolved via useCustomerLookup', async () => {
     mockReferenceData();
     renderPage();

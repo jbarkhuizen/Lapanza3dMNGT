@@ -23,9 +23,25 @@ describe('App routing', () => {
   });
 
   it('shows the dashboard at "/" for an authenticated tenant', async () => {
-    vi.spyOn(client, 'apiGet').mockResolvedValue({
-      ok: true,
-      tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+        });
+      }
+      if (path === '/api/reports/dashboard') {
+        return Promise.resolve({
+          ok: true,
+          revenueThisMonth: '0.00',
+          openInvoicesCount: 0,
+          openQuotesCount: 0,
+          paidInvoicesCount: 0,
+          invoiceStatusCounts: { paid: 0, unpaid: 0, overdue: 0 },
+          convertedQuotesCount: 0,
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
     });
     render(
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/']}>
@@ -34,7 +50,7 @@ describe('App routing', () => {
         </AppProviders>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText(/Welcome, Acme Prints/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Welcome back, Acme Prints/)).toBeInTheDocument());
   });
 
   it('renders the register page at "/register" without requiring auth', async () => {

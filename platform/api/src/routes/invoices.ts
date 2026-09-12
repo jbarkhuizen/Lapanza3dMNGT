@@ -6,6 +6,8 @@ import type { Invoice, InvoiceLineItem } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
+import { prisma } from '../db/client.js';
+import { overdueInvoiceWhere } from '../notifications/checks.js';
 import { calculateQuoteTotals, MAX_MONEY_VALUE } from '../quoting/calculate.js';
 import { formatDocumentNumber } from '../lib/numbering.js';
 import { generateDocumentPdf } from '../documents/generateDocumentPdf.js';
@@ -78,6 +80,35 @@ invoicesRouter.get('/api/invoices', requireTenantAuth, requireActiveSubscription
   const scoped = tenantScope(req.tenantId!);
   const invoices = await scoped.invoices.findMany();
   res.json({ ok: true, invoices: invoices.map(serializeInvoice) });
+});
+
+// Placed before /api/invoices/:id so that path doesn't shadow this one.
+invoicesRouter.get('/api/invoices/stats', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const tenantId = req.tenantId!;
+
+  const nonPaidInvoices = await prisma.invoice.findMany({
+    where: { tenantId, status: { not: 'paid' } },
+    select: { total: true, amountPaid: true },
+  });
+  const totalOutstanding = nonPaidInvoices
+    .reduce((sum, invoice) => sum.plus(invoice.total.minus(invoice.amountPaid)), new Prisma.Decimal(0))
+    .toFixed(2);
+
+  const paidAgg = await prisma.invoice.aggregate({
+    where: { tenantId, status: 'paid' },
+    _sum: { total: true },
+    _count: true,
+  });
+  const totalPaid = paidAgg._sum.total ? paidAgg._sum.total.toFixed(2) : '0.00';
+  const paidCount = paidAgg._count;
+
+  const unpaidCount = await prisma.invoice.count({
+    where: { tenantId, status: { in: ['unpaid', 'partially_paid'] } },
+  });
+
+  const overdueCount = await prisma.invoice.count({ where: overdueInvoiceWhere(tenantId) });
+
+  res.json({ ok: true, totalOutstanding, totalPaid, paidCount, unpaidCount, overdueCount });
 });
 
 invoicesRouter.get('/api/invoices/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {

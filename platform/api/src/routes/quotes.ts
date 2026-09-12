@@ -88,6 +88,24 @@ quotesRouter.get('/api/quotes', requireTenantAuth, requireActiveSubscription, as
   res.json({ ok: true, quotes: await Promise.all(quotes.map(serializeQuote)) });
 });
 
+// Placed before /api/quotes/:id so that path doesn't shadow this one.
+quotesRouter.get('/api/quotes/stats', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const tenantId = req.tenantId!;
+
+  const totalAgg = await prisma.quote.aggregate({
+    where: { tenantId },
+    _sum: { total: true },
+    _count: true,
+  });
+  const totalQuotes = totalAgg._count;
+  const totalValue = totalAgg._sum.total ? totalAgg._sum.total.toFixed(2) : '0.00';
+
+  const expiredCount = await prisma.quote.count({ where: { tenantId, status: 'expired' } });
+  const convertedCount = await prisma.quote.count({ where: { tenantId, status: 'accepted' } });
+
+  res.json({ ok: true, totalQuotes, totalValue, expiredCount, convertedCount });
+});
+
 quotesRouter.get('/api/quotes/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const quote = await scoped.quotes.findById(req.params.id);

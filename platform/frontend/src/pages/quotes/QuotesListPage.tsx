@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuotes, QUOTE_STATUS_LABELS, type QuoteStatus } from '../../api/quotes.js';
+import { useQuotes, useQuoteStats, QUOTE_STATUS_LABELS, type QuoteStatus } from '../../api/quotes.js';
 import { useCustomerLookup } from '../../api/customers.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
+import { StatCard } from '../../components/StatCard.js';
 
 const STATUS_OPTIONS: Array<QuoteStatus | 'all'> = ['all', 'draft', 'sent', 'accepted', 'expired'];
 
 export function QuotesListPage() {
   const { data: quotes, isLoading, isError } = useQuotes();
   const { lookup: customerLookup, isError: isCustomerLookupError } = useCustomerLookup();
+  const { data: stats } = useQuoteStats();
   const currency = useDisplayCurrency();
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | 'all'>('all');
 
@@ -23,6 +25,15 @@ export function QuotesListPage() {
           New Quote
         </Link>
       </div>
+
+      {stats && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <StatCard label="Total Quotes" value={String(stats.totalQuotes)} />
+          <StatCard label="Total Value" value={formatCurrency(stats.totalValue, currency)} />
+          <StatCard label="Expired" value={String(stats.expiredCount)} />
+          <StatCard label="Converted" value={String(stats.convertedCount)} />
+        </div>
+      )}
 
       <div className="flex items-center gap-2 text-sm">
         <label htmlFor="status-filter" className="text-slate-500">

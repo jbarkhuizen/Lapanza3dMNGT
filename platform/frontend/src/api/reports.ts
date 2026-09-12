@@ -33,3 +33,25 @@ export function useReportsSummary() {
     queryFn: () => apiGet<{ ok: true } & ReportsSummary>('/api/reports/summary'),
   });
 }
+
+export interface InvoiceStatusCounts {
+  paid: number;
+  unpaid: number;
+  overdue: number;
+}
+
+export interface DashboardSummary {
+  revenueThisMonth: string;
+  openInvoicesCount: number;
+  openQuotesCount: number;
+  paidInvoicesCount: number;
+  invoiceStatusCounts: InvoiceStatusCounts;
+  convertedQuotesCount: number;
+}
+
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: ['reports', 'dashboard'],
+    queryFn: () => apiGet<{ ok: true } & DashboardSummary>('/api/reports/dashboard'),
+  });
+}
