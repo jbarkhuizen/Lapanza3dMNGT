@@ -21,6 +21,7 @@ import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
 import { jobsRouter } from './routes/jobs.js';
 import { notificationsRouter } from './routes/notifications.js';
+import { featureRequestsRouter } from './routes/feature-requests.js';
 import { reportsRouter } from './routes/reports.js';
 import { billingRouter } from './routes/billing.js';
 import { webhooksRouter } from './routes/webhooks.js';
@@ -101,6 +102,7 @@ export function buildApp() {
   app.use(invoicesRouter);
   app.use(jobsRouter);
   app.use(notificationsRouter);
+  app.use(featureRequestsRouter);
   app.use(reportsRouter);
 
   // Catch-all for anything that fell through every router above without

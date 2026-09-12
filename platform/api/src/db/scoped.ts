@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from './client.js';
 
 export interface CreateCustomerInput {
@@ -345,6 +345,29 @@ export interface UpdateNotificationPreferenceInput {
   subscriptionCancelledInApp?: boolean;
   paymentFailedInApp?: boolean;
 }
+
+export interface CreateFeatureRequestInput {
+  category: string;
+  title: string;
+  description: string;
+}
+
+// One request from the shared community list. Deliberately has no
+// `tenantId` (or any other field identifying the submitter) -- see
+// `featureRequests.findAll` below for why.
+export interface CommunityFeatureRequest {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  status: string;
+  createdAt: Date;
+  voteCount: number;
+  hasVoted: boolean;
+}
+
+export type FeatureRequestVoteResult = { status: 'created' } | { status: 'already_voted' };
+
 
 const companyProfileSelect = {
   businessName: true,
@@ -813,6 +836,92 @@ export function tenantScope(tenantId: string) {
           where: { tenantId, readAt: null },
           data: { readAt: new Date() },
         }),
+    },
+
+    featureRequests: {
+      // This tenant's own submissions -- genuinely tenant-scoped, same as
+      // every other accessor in this file.
+      findMyRequests: () =>
+        prisma.featureRequest.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+
+      // DELIBERATELY NOT TENANT-SCOPED. Feature requests are a shared,
+      // cross-tenant community roadmap (see the design spec's "Scope
+      // decision" section) -- every tenant's requests are visible to every
+      // other tenant, which is the entire point of a "Community requests"
+      // list. This is the one accessor in this file whose query doesn't
+      // filter by `tenantId`; it still lives under `tenantScope()` for
+      // consistency with every other accessor here (and because it still
+      // needs `tenantId` below, to compute THIS tenant's own `hasVoted`
+      // flag), not because it forgot to scope. Do not "fix" this to filter
+      // by tenantId -- that would break the community list.
+      //
+      // The `select` below also intentionally omits `tenantId` (and
+      // anything else that could identify the submitter) from every
+      // returned row, so the submitting tenant's identity can never leak
+      // through this response, however this list is later serialized.
+      findAll: async (sort: 'votes' | 'recent'): Promise<CommunityFeatureRequest[]> => {
+        const requests = await prisma.featureRequest.findMany({
+          select: {
+            id: true,
+            category: true,
+            title: true,
+            description: true,
+            status: true,
+            createdAt: true,
+            _count: { select: { votes: true } },
+          },
+          orderBy:
+            sort === 'votes'
+              ? [{ votes: { _count: 'desc' } }, { createdAt: 'desc' }]
+              : { createdAt: 'desc' },
+        });
+
+        // A single extra query for which of these requests THIS tenant has
+        // voted on, rather than a per-row lookup -- this is the "current
+        // tenant's own vote state", not the submitter identity, so it's safe
+        // to compute from `tenantId` here.
+        const myVotes = await prisma.featureRequestVote.findMany({
+          where: { tenantId, featureRequestId: { in: requests.map((r) => r.id) } },
+          select: { featureRequestId: true },
+        });
+        const votedIds = new Set(myVotes.map((v) => v.featureRequestId));
+
+        return requests.map((r) => ({
+          id: r.id,
+          category: r.category,
+          title: r.title,
+          description: r.description,
+          status: r.status,
+          createdAt: r.createdAt,
+          voteCount: r._count.votes,
+          hasVoted: votedIds.has(r.id),
+        }));
+      },
+
+      create: (data: CreateFeatureRequestInput) =>
+        prisma.featureRequest.create({ data: { ...data, tenantId } }),
+
+      // Creates this tenant's vote row. Relies on the `@@unique([featureRequestId,
+      // tenantId])` constraint on FeatureRequestVote to prevent a double vote --
+      // catches its P2002 and reports "already voted" rather than pre-checking
+      // then inserting, so this stays correct under concurrent double-clicks.
+      vote: async (featureRequestId: string): Promise<FeatureRequestVoteResult> => {
+        try {
+          await prisma.featureRequestVote.create({ data: { featureRequestId, tenantId } });
+          return { status: 'created' };
+        } catch (error) {
+          if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return { status: 'already_voted' };
+          }
+          throw error;
+        }
+      },
+
+      unvote: (featureRequestId: string) =>
+        prisma.featureRequestVote.deleteMany({ where: { featureRequestId, tenantId } }),
+
+      voteCount: (featureRequestId: string) =>
+        prisma.featureRequestVote.count({ where: { featureRequestId } }),
     },
 
     subscription: {

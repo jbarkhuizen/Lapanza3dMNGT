@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/quotes', label: 'Quotes' },
   { to: '/invoices', label: 'Invoices' },
   { to: '/reports', label: 'Reports' },
+  { to: '/feature-requests', label: 'Feature Requests' },
 ];
 
 const RELATED_ENTITY_ROUTES: Record<string, string> = {

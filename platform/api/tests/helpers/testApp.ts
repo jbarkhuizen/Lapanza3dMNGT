@@ -12,6 +12,8 @@ const SEED_PLANS = [
 
 export async function resetTestDatabase() {
   await prisma.notificationPreference.deleteMany();
+  await prisma.featureRequestVote.deleteMany();
+  await prisma.featureRequest.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.job.deleteMany();
   await prisma.costingLabourLine.deleteMany();

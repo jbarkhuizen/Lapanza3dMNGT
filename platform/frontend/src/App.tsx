@@ -30,6 +30,7 @@ import { InvoicesListPage } from './pages/invoices/InvoicesListPage.js';
 import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
 import { ReportsPage } from './pages/reports/ReportsPage.js';
 import { NotificationSettingsPage } from './pages/notifications/NotificationSettingsPage.js';
+import { FeatureRequestsPage } from './pages/featureRequests/FeatureRequestsPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
 import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
@@ -358,6 +359,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <NotificationSettingsPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/feature-requests"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <FeatureRequestsPage />
               </AppShell>
             </RequireAuth>
           }

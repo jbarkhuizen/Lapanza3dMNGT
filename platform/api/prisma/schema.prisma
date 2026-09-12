@@ -81,6 +81,8 @@ model Tenant {
   jobs                   Job[]
   notifications          Notification[]
   notificationPreference NotificationPreference?
+  featureRequests        FeatureRequest[]
+  featureRequestVotes    FeatureRequestVote[]
 
   @@map("tenants")
 }
@@ -567,4 +569,42 @@ model NotificationPreference {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("notification_preferences")
+}
+
+// category: 'new_feature' | 'workflow' | 'bug' (see feature-requests.ts's zod
+// schema for the enforced closed set — a small constrained set rather than
+// free text, matching how category-like fields are handled elsewhere in this
+// schema). status: 'new' | 'planned' | 'in_progress' | 'done' | 'declined',
+// set directly by a platform admin (no in-app triage UI in this pass — see
+// the design spec's "Scope decision" section).
+model FeatureRequest {
+  id          String   @id @default(uuid())
+  tenantId    String
+  category    String
+  title       String
+  description String
+  status      String   @default("new")
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id])
+  votes  FeatureRequestVote[]
+
+  @@index([tenantId])
+  @@map("feature_requests")
+}
+
+model FeatureRequestVote {
+  id               String   @id @default(uuid())
+  featureRequestId String
+  tenantId         String
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+
+  featureRequest FeatureRequest @relation(fields: [featureRequestId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+
+  // Enforces "one vote per tenant per request" at the DB level -- the vote()
+  // accessor in scoped.ts relies on catching this constraint's P2002 rather
+  // than a check-then-insert, so it stays correct under concurrent requests.
+  @@unique([featureRequestId, tenantId])
+  @@map("feature_request_votes")
 }
