@@ -514,3 +514,159 @@ test('a payment_failed event for a subscription already self-healed to lapsed do
     mock.restoreAll();
   }
 });
+
+test('a payment_succeeded event creates a payment_received Notification when paymentReceiptInApp is true (the default)', async () => {
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-1',
+    subscriptionId,
+    type: 'payment_succeeded',
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-1', payment_status: 'COMPLETE' });
+    assert.equal(res.status, 200);
+
+    const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'payment_received' } });
+    assert.equal(notifications.length, 1);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a payment_succeeded event creates no Notification when paymentReceiptInApp is false', async () => {
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  await prisma.notificationPreference.create({ data: { tenantId: tenant.id, paymentReceiptInApp: false } });
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-1',
+    subscriptionId,
+    type: 'payment_succeeded',
+  }));
+
+  try {
+    const app = buildApp();
+    const res = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-1', payment_status: 'COMPLETE' });
+    assert.equal(res.status, 200);
+
+    // The subscription must still be updated as usual -- this is purely
+    // additive, opting out of the notification must not affect billing state.
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'active');
+
+    const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'payment_received' } });
+    assert.equal(notifications.length, 0);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a payment_failed event creates a payment_failed Notification when paymentFailedInApp is true (the default), none when false', async () => {
+  const { tenant: tenantOn, subscriptionId: subOn } = await makeTrialingTenant('failed-on@acmeprints.co.za');
+  const { tenant: tenantOff, subscriptionId: subOff } = await makeTrialingTenant('failed-off@acmeprints.co.za');
+  await prisma.notificationPreference.create({ data: { tenantId: tenantOff.id, paymentFailedInApp: false } });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  try {
+    mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+      providerSubscriptionId: 'pf-sub-on',
+      subscriptionId: subOn,
+      type: 'payment_failed',
+    }));
+    const app = buildApp();
+    const resOn = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-on', payment_status: 'FAILED' });
+    assert.equal(resOn.status, 200);
+    const notificationsOn = await prisma.notification.findMany({ where: { tenantId: tenantOn.id, type: 'payment_failed' } });
+    assert.equal(notificationsOn.length, 1);
+
+    mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+      providerSubscriptionId: 'pf-sub-off',
+      subscriptionId: subOff,
+      type: 'payment_failed',
+    }));
+    const resOff = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-off', payment_status: 'FAILED' });
+    assert.equal(resOff.status, 200);
+    const notificationsOff = await prisma.notification.findMany({ where: { tenantId: tenantOff.id, type: 'payment_failed' } });
+    assert.equal(notificationsOff.length, 0);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('a canceled event creates a subscription_cancelled Notification when subscriptionCancelledInApp is true (the default), none when false', async () => {
+  const { tenant: tenantOn, subscriptionId: subOn } = await makeTrialingTenant('cancel-on@acmeprints.co.za');
+  const { tenant: tenantOff, subscriptionId: subOff } = await makeTrialingTenant('cancel-off@acmeprints.co.za');
+  await prisma.notificationPreference.create({ data: { tenantId: tenantOff.id, subscriptionCancelledInApp: false } });
+
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  try {
+    mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+      providerSubscriptionId: 'pf-sub-cancel-on',
+      subscriptionId: subOn,
+      type: 'canceled' as const,
+    }));
+    const app = buildApp();
+    const resOn = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-cancel-on', payment_status: 'CANCELLED', m_payment_id: `sub_${subOn}` });
+    assert.equal(resOn.status, 200);
+    const notificationsOn = await prisma.notification.findMany({
+      where: { tenantId: tenantOn.id, type: 'subscription_cancelled' },
+    });
+    assert.equal(notificationsOn.length, 1);
+
+    mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+      providerSubscriptionId: 'pf-sub-cancel-off',
+      subscriptionId: subOff,
+      type: 'canceled' as const,
+    }));
+    const resOff = await request(app)
+      .post('/api/webhooks/payfast')
+      .send({ token: 'pf-sub-cancel-off', payment_status: 'CANCELLED', m_payment_id: `sub_${subOff}` });
+    assert.equal(resOff.status, 200);
+    const notificationsOff = await prisma.notification.findMany({
+      where: { tenantId: tenantOff.id, type: 'subscription_cancelled' },
+    });
+    assert.equal(notificationsOff.length, 0);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('the webhook still returns 200 (and still updates the subscription) even when notification creation is forced to throw', async () => {
+  const { tenant, subscriptionId } = await makeTrialingTenant('jane@acmeprints.co.za');
+  mock.method(payfastProvider, 'verifyWebhookSignature', () => true);
+  mock.method(payfastProvider, 'parseWebhookEvent', () => ({
+    providerSubscriptionId: 'pf-sub-1',
+    subscriptionId,
+    type: 'payment_succeeded',
+  }));
+  // Force the additive notification side-effect to blow up, to prove the
+  // try/catch around it really swallows the error rather than letting it
+  // propagate up through the webhook handler and turn a 200 into a 500.
+  // node:test's mock.method() can't wrap Prisma Client's delegate methods
+  // (they're defined via a Proxy, not plain own methods), so this reassigns
+  // and manually restores the function directly instead.
+  const originalUpsert = prisma.notificationPreference.upsert;
+  prisma.notificationPreference.upsert = (() => {
+    throw new Error('forced failure for test');
+  }) as typeof prisma.notificationPreference.upsert;
+
+  try {
+    const app = buildApp();
+    const res = await request(app).post('/api/webhooks/payfast').send({ token: 'pf-sub-1', payment_status: 'COMPLETE' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+
+    const subscription = await prisma.subscription.findUnique({ where: { tenantId: tenant.id } });
+    assert.equal(subscription?.status, 'active', 'the core webhook behaviour must be unaffected by the notification failure');
+
+    const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'payment_received' } });
+    assert.equal(notifications.length, 0, 'no notification should exist since creation was forced to fail');
+  } finally {
+    prisma.notificationPreference.upsert = originalUpsert;
+    mock.restoreAll();
+  }
+});

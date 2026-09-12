@@ -1,8 +1,25 @@
+import type { NotificationPreference } from '@prisma/client';
 import { prisma } from '../db/client.js';
 import { mailer } from '../lib/mailer.js';
 
 const DEDUPE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const TRIAL_ENDING_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * Loads (or lazily creates, all-`true` defaults) the tenant's
+ * NotificationPreference row. This mirrors tenantScope(...).notificationPreference
+ * .getOrCreate() in scoped.ts, but this function iterates every tenant in the
+ * system rather than acting on behalf of one authenticated request, so it
+ * isn't request-scoped and calls prisma directly instead of going through
+ * tenantScope().
+ */
+async function getOrCreateNotificationPreference(tenantId: string): Promise<NotificationPreference> {
+  return prisma.notificationPreference.upsert({
+    where: { tenantId },
+    create: { tenantId },
+    update: {},
+  });
+}
 
 /**
  * Same "overdue" condition the reports summary route uses for its
@@ -55,6 +72,10 @@ async function createNotification(params: {
   message: string;
   relatedEntityType?: string;
   relatedEntityId?: string;
+  // Controls whether this attempts the email send. Defaults to `true` so
+  // any call site that hasn't been updated to do a preference lookup keeps
+  // its original behaviour — there shouldn't be any left after this change.
+  email?: boolean;
 }): Promise<void> {
   await prisma.notification.create({
     data: {
@@ -66,7 +87,7 @@ async function createNotification(params: {
     },
   });
 
-  if (mailer.isConfigured()) {
+  if ((params.email ?? true) && mailer.isConfigured()) {
     try {
       await mailer.sendMail({
         to: params.tenantEmail,
@@ -82,7 +103,15 @@ async function createNotification(params: {
   }
 }
 
-async function checkTrialEnding(tenantId: string, tenantEmail: string): Promise<void> {
+async function checkTrialEnding(
+  tenantId: string,
+  tenantEmail: string,
+  preference: NotificationPreference,
+): Promise<void> {
+  if (!preference.trialEndingInApp) {
+    return;
+  }
+
   const subscription = await prisma.subscription.findFirst({
     where: {
       tenantId,
@@ -103,10 +132,19 @@ async function checkTrialEnding(tenantId: string, tenantEmail: string): Promise<
     tenantEmail,
     type: 'trial_ending',
     message: `Your free trial ends on ${subscription.trialEndsAt.toISOString().slice(0, 10)}. Complete payment setup to keep your subscription active.`,
+    email: preference.trialEndingEmail,
   });
 }
 
-async function checkLowStock(tenantId: string, tenantEmail: string): Promise<void> {
+async function checkLowStock(
+  tenantId: string,
+  tenantEmail: string,
+  preference: NotificationPreference,
+): Promise<void> {
+  if (!preference.lowStockInApp) {
+    return;
+  }
+
   const filaments = await prisma.filament.findMany({
     where: {
       tenantId,
@@ -131,6 +169,7 @@ async function checkLowStock(tenantId: string, tenantEmail: string): Promise<voi
       message: `${filament.brand} ${filament.materialType} is running low: ${filament.remainingWeightGrams}g remaining.`,
       relatedEntityType: 'filament',
       relatedEntityId: filament.id,
+      email: preference.lowStockEmail,
     });
   }
 
@@ -157,11 +196,20 @@ async function checkLowStock(tenantId: string, tenantEmail: string): Promise<voi
       message: `${consumable.name} is running low: ${consumable.currentStock} ${consumable.unitOfMeasure} remaining.`,
       relatedEntityType: 'consumable',
       relatedEntityId: consumable.id,
+      email: preference.lowStockEmail,
     });
   }
 }
 
-async function checkInvoiceOverdue(tenantId: string, tenantEmail: string): Promise<void> {
+async function checkInvoiceOverdue(
+  tenantId: string,
+  tenantEmail: string,
+  preference: NotificationPreference,
+): Promise<void> {
+  if (!preference.invoiceOverdueInApp) {
+    return;
+  }
+
   const overdueInvoices = await prisma.invoice.findMany({
     where: overdueInvoiceWhere(tenantId),
   });
@@ -176,6 +224,7 @@ async function checkInvoiceOverdue(tenantId: string, tenantEmail: string): Promi
       message: `Invoice ${invoice.number} is overdue (was due ${invoice.dueDate.toISOString().slice(0, 10)}).`,
       relatedEntityType: 'invoice',
       relatedEntityId: invoice.id,
+      email: preference.invoiceOverdueEmail,
     });
   }
 }
@@ -183,8 +232,9 @@ async function checkInvoiceOverdue(tenantId: string, tenantEmail: string): Promi
 export async function runNotificationChecks(): Promise<void> {
   const tenants = await prisma.tenant.findMany({ select: { id: true, email: true } });
   for (const tenant of tenants) {
-    await checkTrialEnding(tenant.id, tenant.email);
-    await checkLowStock(tenant.id, tenant.email);
-    await checkInvoiceOverdue(tenant.id, tenant.email);
+    const preference = await getOrCreateNotificationPreference(tenant.id);
+    await checkTrialEnding(tenant.id, tenant.email, preference);
+    await checkLowStock(tenant.id, tenant.email, preference);
+    await checkInvoiceOverdue(tenant.id, tenant.email, preference);
   }
 }

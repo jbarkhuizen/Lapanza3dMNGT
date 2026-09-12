@@ -43,3 +43,40 @@ export function useMarkAllNotificationsRead() {
     },
   });
 }
+
+export interface NotificationPreferences {
+  trialEndingInApp: boolean;
+  trialEndingEmail: boolean;
+  lowStockInApp: boolean;
+  lowStockEmail: boolean;
+  invoiceOverdueInApp: boolean;
+  invoiceOverdueEmail: boolean;
+  paymentReceiptInApp: boolean;
+  subscriptionCancelledInApp: boolean;
+  paymentFailedInApp: boolean;
+}
+
+export type UpdateNotificationPreferencesInput = Partial<NotificationPreferences>;
+
+const NOTIFICATION_PREFERENCES_QUERY_KEY = ['notificationPreferences'] as const;
+
+export function useNotificationPreferences() {
+  return useQuery({
+    queryKey: NOTIFICATION_PREFERENCES_QUERY_KEY,
+    queryFn: () =>
+      apiGet<{ preferences: NotificationPreferences }>('/api/notification-preferences').then((r) => r.preferences),
+  });
+}
+
+export function useUpdateNotificationPreferences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateNotificationPreferencesInput) =>
+      apiPatch<{ preferences: NotificationPreferences }>('/api/notification-preferences', data).then(
+        (r) => r.preferences,
+      ),
+    onSuccess: (preferences) => {
+      queryClient.setQueryData(NOTIFICATION_PREFERENCES_QUERY_KEY, preferences);
+    },
+  });
+}

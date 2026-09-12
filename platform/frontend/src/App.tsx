@@ -29,6 +29,7 @@ import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
 import { InvoicesListPage } from './pages/invoices/InvoicesListPage.js';
 import { InvoiceDetailPage } from './pages/invoices/InvoiceDetailPage.js';
 import { ReportsPage } from './pages/reports/ReportsPage.js';
+import { NotificationSettingsPage } from './pages/notifications/NotificationSettingsPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
 import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
@@ -347,6 +348,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <ReportsPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/notification-settings"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <NotificationSettingsPage />
               </AppShell>
             </RequireAuth>
           }

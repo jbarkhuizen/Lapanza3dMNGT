@@ -334,6 +334,18 @@ export interface UpdateSubscriptionExtra {
   pastDueSince?: Date | null;
 }
 
+export interface UpdateNotificationPreferenceInput {
+  trialEndingInApp?: boolean;
+  trialEndingEmail?: boolean;
+  lowStockInApp?: boolean;
+  lowStockEmail?: boolean;
+  invoiceOverdueInApp?: boolean;
+  invoiceOverdueEmail?: boolean;
+  paymentReceiptInApp?: boolean;
+  subscriptionCancelledInApp?: boolean;
+  paymentFailedInApp?: boolean;
+}
+
 const companyProfileSelect = {
   businessName: true,
   contactName: true,
@@ -814,6 +826,24 @@ export function tenantScope(tenantId: string) {
         prisma.subscription.updateMany({ where: { tenantId }, data: { status, ...extra } }),
 
       delete: () => prisma.subscription.deleteMany({ where: { tenantId } }),
+    },
+
+    notificationPreference: {
+      get: () => prisma.notificationPreference.findUnique({ where: { tenantId } }),
+
+      // All-`true` defaults on first access — mirrors the tenant-row-exists
+      // upsert pattern used for companyProfile/shopProfile elsewhere in this
+      // file (those piggyback on the Tenant row itself; this one is its own
+      // table, so an explicit upsert is needed instead).
+      getOrCreate: () =>
+        prisma.notificationPreference.upsert({
+          where: { tenantId },
+          create: { tenantId },
+          update: {},
+        }),
+
+      update: (data: UpdateNotificationPreferenceInput) =>
+        prisma.notificationPreference.update({ where: { tenantId }, data }),
     },
   };
 }

@@ -112,6 +112,15 @@ function NotificationBell() {
               <NotificationItem key={notification.id} notification={notification} onNavigate={handleNavigate} />
             ))}
           </div>
+          <div className="border-t border-slate-200 p-2">
+            <button
+              type="button"
+              onClick={() => handleNavigate('/notification-settings')}
+              className="w-full rounded px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-100"
+            >
+              Settings
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1,10 +1,47 @@
 import { Router } from 'express';
 import { prisma } from '../db/client.js';
+import { mailer } from '../lib/mailer.js';
 import { payfastProvider } from '../billing/payfastProvider.js';
 import { paypalProvider } from '../billing/paypalProvider.js';
 import type { PaymentProvider, NormalizedSubscriptionEvent } from '../billing/types.js';
 
 export const webhooksRouter = Router();
+
+// Purely additive notification side-effect for the three billing events
+// below. Deliberately swallows every error itself (never throws) so it can
+// never turn a currently-working webhook into a 500 — this function's real
+// job is to keep the payment provider's webhook contract intact (a fast 200
+// response), regardless of what happens here. Per the design spec's scope
+// decision, billing categories have no separate *Email opt-out column: the
+// single *InApp preference flag gates both the Notification row and the
+// (always-sent-when-enabled) email in one go.
+async function notifyBillingEvent(params: {
+  tenantId: string;
+  type: 'payment_received' | 'payment_failed' | 'subscription_cancelled';
+  message: string;
+  inAppField: 'paymentReceiptInApp' | 'paymentFailedInApp' | 'subscriptionCancelledInApp';
+}): Promise<void> {
+  try {
+    const preference = await prisma.notificationPreference.upsert({
+      where: { tenantId: params.tenantId },
+      create: { tenantId: params.tenantId },
+      update: {},
+    });
+    if (!preference[params.inAppField]) return;
+
+    await prisma.notification.create({
+      data: { tenantId: params.tenantId, type: params.type, message: params.message },
+    });
+    if (mailer.isConfigured()) {
+      const tenant = await prisma.tenant.findUnique({ where: { id: params.tenantId }, select: { email: true } });
+      if (tenant) {
+        await mailer.sendMail({ to: tenant.email, subject: 'Barkie notification', text: params.message });
+      }
+    }
+  } catch (err) {
+    console.error('billing notification failed', err);
+  }
+}
 
 async function applyEvent(event: NormalizedSubscriptionEvent, providerName: string): Promise<void> {
   if (!event.providerSubscriptionId) return;
@@ -76,6 +113,12 @@ async function applyEvent(event: NormalizedSubscriptionEvent, providerName: stri
         ...providerIdPatch,
       },
     });
+    await notifyBillingEvent({
+      tenantId: subscription.tenantId,
+      type: 'payment_received',
+      message: 'Your payment was received. Thank you!',
+      inAppField: 'paymentReceiptInApp',
+    });
   } else if (event.type === 'payment_failed') {
     await prisma.subscription.update({
       where: { id: subscription.id },
@@ -98,10 +141,22 @@ async function applyEvent(event: NormalizedSubscriptionEvent, providerName: stri
         ...providerIdPatch,
       },
     });
+    await notifyBillingEvent({
+      tenantId: subscription.tenantId,
+      type: 'payment_failed',
+      message: 'Your last payment failed. Please update your payment method to keep your subscription active.',
+      inAppField: 'paymentFailedInApp',
+    });
   } else if (event.type === 'canceled') {
     await prisma.subscription.update({
       where: { id: subscription.id },
       data: { status: 'canceled', ...providerIdPatch },
+    });
+    await notifyBillingEvent({
+      tenantId: subscription.tenantId,
+      type: 'subscription_cancelled',
+      message: 'Your subscription has been cancelled.',
+      inAppField: 'subscriptionCancelledInApp',
     });
   }
 }

@@ -1,4 +1,4 @@
-import { test, beforeEach } from 'node:test';
+import { test, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { buildApp } from '../src/app.js';
@@ -6,6 +6,7 @@ import { buildMinimalApp, loggedInAgent, resetTestDatabase } from './helpers/tes
 import { notificationsRouter } from '../src/routes/notifications.js';
 import { runNotificationChecks } from '../src/notifications/checks.js';
 import { prisma } from '../src/db/client.js';
+import { mailer } from '../src/lib/mailer.js';
 
 beforeEach(resetTestDatabase);
 
@@ -195,4 +196,173 @@ test('POST /api/notifications/mark-all-read marks all unread notifications for t
 
   const stillUnreadForB = await prisma.notification.count({ where: { tenantId: tenantB.id, readAt: null } });
   assert.equal(stillUnreadForB, 1);
+});
+
+test('notification preference endpoints require auth', async () => {
+  const app = buildMinimalApp(notificationsRouter);
+  const getRes = await request(app).get('/api/notification-preferences');
+  assert.equal(getRes.status, 401);
+  const patchRes = await request(app).patch('/api/notification-preferences');
+  assert.equal(patchRes.status, 401);
+});
+
+test('GET /api/notification-preferences creates and returns all-true defaults on first access, and PATCH round-trips a change', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'jane@acmeprints.co.za' } });
+
+  const getRes = await agent.get('/api/notification-preferences');
+  assert.equal(getRes.status, 200);
+  assert.equal(getRes.body.preferences.tenantId, tenant.id);
+  assert.equal(getRes.body.preferences.trialEndingInApp, true);
+  assert.equal(getRes.body.preferences.trialEndingEmail, true);
+  assert.equal(getRes.body.preferences.lowStockInApp, true);
+  assert.equal(getRes.body.preferences.lowStockEmail, true);
+  assert.equal(getRes.body.preferences.invoiceOverdueInApp, true);
+  assert.equal(getRes.body.preferences.invoiceOverdueEmail, true);
+  assert.equal(getRes.body.preferences.paymentReceiptInApp, true);
+  assert.equal(getRes.body.preferences.subscriptionCancelledInApp, true);
+  assert.equal(getRes.body.preferences.paymentFailedInApp, true);
+
+  const patchRes = await agent.patch('/api/notification-preferences').send({
+    trialEndingInApp: false,
+    lowStockEmail: false,
+  });
+  assert.equal(patchRes.status, 200);
+  assert.equal(patchRes.body.preferences.trialEndingInApp, false);
+  assert.equal(patchRes.body.preferences.lowStockEmail, false);
+  // Untouched fields stay at their previous value.
+  assert.equal(patchRes.body.preferences.lowStockInApp, true);
+
+  const persisted = await prisma.notificationPreference.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(persisted.trialEndingInApp, false);
+  assert.equal(persisted.lowStockEmail, false);
+});
+
+test('PATCH /api/notification-preferences is tenant-isolated', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'prefs-a@example.co.za');
+  const tenantA = await prisma.tenant.findUniqueOrThrow({ where: { email: 'prefs-a@example.co.za' } });
+  const agentB = await loggedInAgent(app, 'prefs-b@example.co.za');
+  const tenantB = await prisma.tenant.findUniqueOrThrow({ where: { email: 'prefs-b@example.co.za' } });
+
+  await agentA.patch('/api/notification-preferences').send({ trialEndingInApp: false });
+  await agentB.patch('/api/notification-preferences').send({ trialEndingInApp: true });
+
+  const prefA = await prisma.notificationPreference.findUniqueOrThrow({ where: { tenantId: tenantA.id } });
+  const prefB = await prisma.notificationPreference.findUniqueOrThrow({ where: { tenantId: tenantB.id } });
+  assert.equal(prefA.trialEndingInApp, false);
+  assert.equal(prefB.trialEndingInApp, true);
+});
+
+test('runNotificationChecks skips creating a trial_ending notification entirely when trialEndingInApp is false', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app, 'trial-disabled@example.co.za');
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'trial-disabled@example.co.za' } });
+  void agent;
+  await prisma.subscription.update({
+    where: { tenantId: tenant.id },
+    data: { status: 'trialing', trialEndsAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) },
+  });
+  await prisma.notificationPreference.create({ data: { tenantId: tenant.id, trialEndingInApp: false } });
+
+  await runNotificationChecks();
+
+  const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'trial_ending' } });
+  assert.equal(notifications.length, 0);
+});
+
+test('runNotificationChecks skips creating a low_stock notification entirely when lowStockInApp is false', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app, 'lowstock-disabled@example.co.za');
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'lowstock-disabled@example.co.za' } });
+  await prisma.notificationPreference.create({ data: { tenantId: tenant.id, lowStockInApp: false } });
+
+  await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+    remainingWeightGrams: 40,
+    lowStockThresholdGrams: 50,
+  });
+
+  await runNotificationChecks();
+
+  const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'low_stock' } });
+  assert.equal(notifications.length, 0);
+});
+
+test('runNotificationChecks skips creating an invoice_overdue notification entirely when invoiceOverdueInApp is false', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app, 'invoice-disabled@example.co.za');
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'invoice-disabled@example.co.za' } });
+  await prisma.notificationPreference.create({ data: { tenantId: tenant.id, invoiceOverdueInApp: false } });
+
+  const customerRes = await agent.post('/api/customers').send({ name: 'Overdue Co', billingAddress: '1 Main St' });
+  const pastDueDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+  await agent.post('/api/invoices').send({
+    customerId: customerRes.body.customer.id,
+    dueDate: pastDueDate,
+    lineItems: [{ description: 'Widget', unitPrice: 100, quantity: 1 }],
+  });
+
+  await runNotificationChecks();
+
+  const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'invoice_overdue' } });
+  assert.equal(notifications.length, 0);
+});
+
+test('runNotificationChecks creates the notification row but does not call mailer.sendMail when *InApp is true and *Email is false', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app, 'email-disabled@example.co.za');
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'email-disabled@example.co.za' } });
+  await prisma.notificationPreference.create({ data: { tenantId: tenant.id, lowStockEmail: false } });
+
+  await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+    remainingWeightGrams: 40,
+    lowStockThresholdGrams: 50,
+  });
+
+  mock.method(mailer, 'isConfigured', () => true);
+  const sendMailMock = mock.method(mailer, 'sendMail', async () => {});
+
+  try {
+    await runNotificationChecks();
+
+    const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'low_stock' } });
+    assert.equal(notifications.length, 1);
+    assert.equal(sendMailMock.mock.calls.length, 0);
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test('runNotificationChecks creates the notification row AND calls mailer.sendMail when both *InApp and *Email are true', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app, 'email-enabled@example.co.za');
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: 'email-enabled@example.co.za' } });
+
+  await agent.post('/api/filaments').send({
+    brand: 'eSun',
+    materialType: 'PLA',
+    diameterMm: 1.75,
+    remainingWeightGrams: 40,
+    lowStockThresholdGrams: 50,
+  });
+
+  mock.method(mailer, 'isConfigured', () => true);
+  const sendMailMock = mock.method(mailer, 'sendMail', async () => {});
+
+  try {
+    await runNotificationChecks();
+
+    const notifications = await prisma.notification.findMany({ where: { tenantId: tenant.id, type: 'low_stock' } });
+    assert.equal(notifications.length, 1);
+    assert.equal(sendMailMock.mock.calls.length, 1);
+  } finally {
+    mock.restoreAll();
+  }
 });

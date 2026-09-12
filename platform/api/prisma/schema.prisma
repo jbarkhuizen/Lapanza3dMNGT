@@ -80,6 +80,7 @@ model Tenant {
   subscription           Subscription?
   jobs                   Job[]
   notifications          Notification[]
+  notificationPreference NotificationPreference?
 
   @@map("tenants")
 }
@@ -547,4 +548,23 @@ model Notification {
 
   @@index([tenantId])
   @@map("notifications")
+}
+
+model NotificationPreference {
+  id                         String   @id @default(uuid())
+  tenantId                   String   @unique
+  trialEndingInApp           Boolean  @default(true)
+  trialEndingEmail           Boolean  @default(true)
+  lowStockInApp              Boolean  @default(true)
+  lowStockEmail              Boolean  @default(true)
+  invoiceOverdueInApp        Boolean  @default(true)
+  invoiceOverdueEmail        Boolean  @default(true)
+  paymentReceiptInApp        Boolean  @default(true)
+  subscriptionCancelledInApp Boolean  @default(true)
+  paymentFailedInApp         Boolean  @default(true)
+  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("notification_preferences")
 }
