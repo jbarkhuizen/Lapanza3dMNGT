@@ -20,6 +20,7 @@ import { materialsRouter } from './routes/materials.js';
 import { quotesRouter } from './routes/quotes.js';
 import { invoicesRouter } from './routes/invoices.js';
 import { jobsRouter } from './routes/jobs.js';
+import { jobCardsRouter } from './routes/job-cards.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { featureRequestsRouter } from './routes/feature-requests.js';
 import { reportsRouter } from './routes/reports.js';
@@ -101,6 +102,7 @@ export function buildApp() {
   app.use(quotesRouter);
   app.use(invoicesRouter);
   app.use(jobsRouter);
+  app.use(jobCardsRouter);
   app.use(notificationsRouter);
   app.use(featureRequestsRouter);
   app.use(reportsRouter);

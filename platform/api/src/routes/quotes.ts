@@ -40,7 +40,7 @@ const sendQuoteLimiter = rateLimit({
 
 type QuoteWithOptionalLines = Quote & { lineItems?: QuoteLineItem[] };
 
-async function serializeQuote(quote: QuoteWithOptionalLines) {
+export async function serializeQuote(quote: QuoteWithOptionalLines) {
   // A quote carries no direct column pointing at the invoice it was
   // converted into (the pointer lives the other way round, on
   // Invoice.quoteId), so look it up here to give callers a back-reference.

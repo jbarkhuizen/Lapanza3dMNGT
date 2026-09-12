@@ -23,6 +23,8 @@ import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTempla
 import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
 import { JobsBoardPage } from './pages/jobs/JobsBoardPage.js';
+import { JobCardsListPage } from './pages/jobCards/JobCardsListPage.js';
+import { JobCardFormPage } from './pages/jobCards/JobCardFormPage.js';
 import { QuotesListPage } from './pages/quotes/QuotesListPage.js';
 import { QuoteCreatePage } from './pages/quotes/QuoteCreatePage.js';
 import { QuoteDetailPage } from './pages/quotes/QuoteDetailPage.js';
@@ -289,6 +291,36 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <JobsBoardPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/job-cards"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <JobCardsListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/job-cards/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <JobCardFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/job-cards/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <JobCardFormPage />
               </AppShell>
             </RequireAuth>
           }

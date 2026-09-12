@@ -83,6 +83,7 @@ model Tenant {
   notificationPreference NotificationPreference?
   featureRequests        FeatureRequest[]
   featureRequestVotes    FeatureRequestVote[]
+  jobCards               JobCard[]
 
   @@map("tenants")
 }
@@ -153,6 +154,7 @@ model Customer {
 
   quotes   Quote[]
   invoices Invoice[]
+  jobCards JobCard[]
 
   @@index([tenantId])
   @@map("customers")
@@ -382,6 +384,7 @@ model Quote {
 
   lineItems QuoteLineItem[]
   invoice   Invoice?
+  jobCard   JobCard?
 
   @@unique([tenantId, number])
   @@index([tenantId])
@@ -534,6 +537,90 @@ model Job {
 
   @@index([tenantId])
   @@map("jobs")
+}
+
+// Customer-facing service-intake ticket -- what was received, what was
+// agreed, signed off by the customer. Distinct from the Job model above
+// (backlog #23's Kanban board, which tracks a costing-template-derived
+// print job through workflow columns). See
+// docs/superpowers/specs/2026-09-13-job-cards-design.md.
+model JobCard {
+  id           String    @id @default(uuid())
+  tenantId     String
+  number       String
+  cardType     String
+  customerId   String?
+  jobTitle     String
+  status       String    @default("new")
+  priority     String    @default("normal")
+  assignedTo   String?
+  receivedDate DateTime  @db.Timestamptz(3)
+  requiredBy   DateTime? @db.Timestamptz(3)
+  notes        String?
+  terms        String?
+  receivedBy   String?
+  quoteId      String?   @unique
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+
+  // Repair fields
+  equipmentMake          String?
+  equipmentModel         String?
+  equipmentSerial        String?
+  reportedFault          String?
+  receivedWithPowerCord  Boolean  @default(false)
+  receivedWithFilament   Boolean  @default(false)
+  receivedWithBuildPlate Boolean  @default(false)
+  receivedWithSdCard     Boolean  @default(false)
+  receivedWithTools      Boolean  @default(false)
+  receivedWithOther      String?
+  conditionPrintHead     String?
+  conditionPrintBed      String?
+  conditionExistingDamage String?
+  technicianFindings     String?
+
+  // Print fields
+  printFileName       String?
+  printQuantity        Int?
+  printWhatIsPrinted  String?
+  printProcess        String?
+  printMaterial       String?
+  printColour         String?
+  printQuality        String?
+  finishRemoveSupports Boolean @default(false)
+  finishDeburrClean    Boolean @default(false)
+  finishSand           Boolean @default(false)
+  finishPrime          Boolean @default(false)
+  finishPaint          Boolean @default(false)
+  finishPostCure       Boolean @default(false)
+  finishInstallInserts Boolean @default(false)
+  finishAssemble       Boolean @default(false)
+  resultQuantityAccepted Int?
+  resultQuantityRejected Int?
+  resultNotes          String?
+
+  // CAD fields
+  cadDesignType         String?
+  cadWhatModelMustDo    String?
+  cadMaterial           String?
+  cadIntendedProcess    String?
+  cadTolerances         String?
+  cadCriticalDimensions String?
+  deliverableNativeCad  Boolean @default(false)
+  deliverableStep       Boolean @default(false)
+  deliverableStl        Boolean @default(false)
+  deliverable3mf        Boolean @default(false)
+  deliverableDxf        Boolean @default(false)
+  deliverableDrawingPdf Boolean @default(false)
+  deliverableRenderedImages Boolean @default(false)
+  cadApprovedRevision   String?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  quote    Quote?    @relation(fields: [quoteId], references: [id])
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@map("job_cards")
 }
 
 model Notification {

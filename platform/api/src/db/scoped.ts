@@ -1,5 +1,28 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from './client.js';
+import { formatDocumentNumber } from '../lib/numbering.js';
+
+// Job cards aren't given a tenant-configurable prefix (unlike Quote/Invoice's
+// quoteNumberPrefix/invoiceNumberPrefix) -- the design spec introduces a
+// third TenantSequence type ('job_card') but no corresponding Tenant field,
+// so a fixed prefix is used instead.
+const JOB_CARD_NUMBER_PREFIX = 'JC';
+
+// Shared by tenantSequences.next() and jobCards.create() below -- both mint
+// a document number the same way (upsert-then-increment a per-tenant,
+// per-type counter), just for different TenantSequence 'type' values.
+async function nextSequenceValue(tenantId: string, type: string): Promise<number> {
+  await prisma.tenantSequence.upsert({
+    where: { tenantId_type: { tenantId, type } },
+    create: { tenantId, type, value: 0 },
+    update: {},
+  });
+  const updated = await prisma.tenantSequence.update({
+    where: { tenantId_type: { tenantId, type } },
+    data: { value: { increment: 1 } },
+  });
+  return updated.value;
+}
 
 export interface CreateCustomerInput {
   name: string;
@@ -312,6 +335,92 @@ export interface JobStatusTimestamps {
 
 export interface UpdateJobInput {
   notes?: string;
+}
+
+// Fields specific to one of JobCard's three cardType variants. Every field is
+// sparse (nullable/default-false on the model) and only populated for its
+// own cardType -- see the "Data model" section of the design spec for why
+// this mirrors CostingTemplate's filament-vs-printer snapshot approach
+// rather than a JSON blob.
+export interface JobCardTypeFields {
+  // Repair
+  equipmentMake?: string | null;
+  equipmentModel?: string | null;
+  equipmentSerial?: string | null;
+  reportedFault?: string | null;
+  receivedWithPowerCord?: boolean;
+  receivedWithFilament?: boolean;
+  receivedWithBuildPlate?: boolean;
+  receivedWithSdCard?: boolean;
+  receivedWithTools?: boolean;
+  receivedWithOther?: string | null;
+  conditionPrintHead?: string | null;
+  conditionPrintBed?: string | null;
+  conditionExistingDamage?: string | null;
+  technicianFindings?: string | null;
+
+  // Print
+  printFileName?: string | null;
+  printQuantity?: number | null;
+  printWhatIsPrinted?: string | null;
+  printProcess?: string | null;
+  printMaterial?: string | null;
+  printColour?: string | null;
+  printQuality?: string | null;
+  finishRemoveSupports?: boolean;
+  finishDeburrClean?: boolean;
+  finishSand?: boolean;
+  finishPrime?: boolean;
+  finishPaint?: boolean;
+  finishPostCure?: boolean;
+  finishInstallInserts?: boolean;
+  finishAssemble?: boolean;
+  resultQuantityAccepted?: number | null;
+  resultQuantityRejected?: number | null;
+  resultNotes?: string | null;
+
+  // CAD
+  cadDesignType?: string | null;
+  cadWhatModelMustDo?: string | null;
+  cadMaterial?: string | null;
+  cadIntendedProcess?: string | null;
+  cadTolerances?: string | null;
+  cadCriticalDimensions?: string | null;
+  deliverableNativeCad?: boolean;
+  deliverableStep?: boolean;
+  deliverableStl?: boolean;
+  deliverable3mf?: boolean;
+  deliverableDxf?: boolean;
+  deliverableDrawingPdf?: boolean;
+  deliverableRenderedImages?: boolean;
+  cadApprovedRevision?: string | null;
+}
+
+export interface CreateJobCardInput extends JobCardTypeFields {
+  cardType: string;
+  customerId?: string | null;
+  jobTitle: string;
+  status?: string;
+  priority?: string;
+  assignedTo?: string | null;
+  receivedDate: Date;
+  requiredBy?: Date | null;
+  notes?: string | null;
+  terms?: string | null;
+  receivedBy?: string | null;
+}
+
+export interface UpdateJobCardInput extends JobCardTypeFields {
+  customerId?: string | null;
+  jobTitle?: string;
+  status?: string;
+  priority?: string;
+  assignedTo?: string | null;
+  receivedDate?: Date;
+  requiredBy?: Date | null;
+  notes?: string | null;
+  terms?: string | null;
+  receivedBy?: string | null;
 }
 
 export interface CreateSubscriptionInput {
@@ -763,18 +872,7 @@ export function tenantScope(tenantId: string) {
     },
 
     tenantSequences: {
-      next: async (type: 'quote' | 'invoice') => {
-        await prisma.tenantSequence.upsert({
-          where: { tenantId_type: { tenantId, type } },
-          create: { tenantId, type, value: 0 },
-          update: {},
-        });
-        const updated = await prisma.tenantSequence.update({
-          where: { tenantId_type: { tenantId, type } },
-          data: { value: { increment: 1 } },
-        });
-        return updated.value;
-      },
+      next: (type: 'quote' | 'invoice' | 'job_card') => nextSequenceValue(tenantId, type),
     },
 
     jobs: {
@@ -810,6 +908,111 @@ export function tenantScope(tenantId: string) {
           return null;
         }
         return prisma.job.findFirst({ where: { id, tenantId } });
+      },
+    },
+
+    jobCards: {
+      findMany: () => prisma.jobCard.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } }),
+
+      findById: (id: string) => prisma.jobCard.findFirst({ where: { id, tenantId } }),
+
+      create: async (data: CreateJobCardInput) => {
+        // Mints its own document number (unlike quotes/invoices, which have
+        // the calling route pull one via tenantSequences.next() before
+        // calling create) -- see the design spec's Backend section.
+        const sequenceValue = await nextSequenceValue(tenantId, 'job_card');
+        const number = formatDocumentNumber(JOB_CARD_NUMBER_PREFIX, sequenceValue);
+        return prisma.jobCard.create({ data: { ...data, tenantId, number } });
+      },
+
+      update: async (id: string, data: UpdateJobCardInput) => {
+        const result = await prisma.jobCard.updateMany({
+          where: { id, tenantId },
+          data: {
+            jobTitle: data.jobTitle,
+            status: data.status,
+            priority: data.priority,
+            // 'field' in data distinguishes "key omitted" (undefined here ->
+            // don't touch it) from "explicitly null" (clear it) -- same
+            // three-state pattern as Printer/Filament/Job's optional fields.
+            customerId: 'customerId' in data ? (data.customerId ?? null) : undefined,
+            assignedTo: 'assignedTo' in data ? (data.assignedTo ?? null) : undefined,
+            receivedDate: data.receivedDate,
+            requiredBy: 'requiredBy' in data ? (data.requiredBy ?? null) : undefined,
+            notes: 'notes' in data ? (data.notes ?? null) : undefined,
+            terms: 'terms' in data ? (data.terms ?? null) : undefined,
+            receivedBy: 'receivedBy' in data ? (data.receivedBy ?? null) : undefined,
+
+            // Repair
+            equipmentMake: 'equipmentMake' in data ? (data.equipmentMake ?? null) : undefined,
+            equipmentModel: 'equipmentModel' in data ? (data.equipmentModel ?? null) : undefined,
+            equipmentSerial: 'equipmentSerial' in data ? (data.equipmentSerial ?? null) : undefined,
+            reportedFault: 'reportedFault' in data ? (data.reportedFault ?? null) : undefined,
+            receivedWithPowerCord: data.receivedWithPowerCord,
+            receivedWithFilament: data.receivedWithFilament,
+            receivedWithBuildPlate: data.receivedWithBuildPlate,
+            receivedWithSdCard: data.receivedWithSdCard,
+            receivedWithTools: data.receivedWithTools,
+            receivedWithOther: 'receivedWithOther' in data ? (data.receivedWithOther ?? null) : undefined,
+            conditionPrintHead: 'conditionPrintHead' in data ? (data.conditionPrintHead ?? null) : undefined,
+            conditionPrintBed: 'conditionPrintBed' in data ? (data.conditionPrintBed ?? null) : undefined,
+            conditionExistingDamage:
+              'conditionExistingDamage' in data ? (data.conditionExistingDamage ?? null) : undefined,
+            technicianFindings: 'technicianFindings' in data ? (data.technicianFindings ?? null) : undefined,
+
+            // Print
+            printFileName: 'printFileName' in data ? (data.printFileName ?? null) : undefined,
+            printQuantity: 'printQuantity' in data ? (data.printQuantity ?? null) : undefined,
+            printWhatIsPrinted: 'printWhatIsPrinted' in data ? (data.printWhatIsPrinted ?? null) : undefined,
+            printProcess: 'printProcess' in data ? (data.printProcess ?? null) : undefined,
+            printMaterial: 'printMaterial' in data ? (data.printMaterial ?? null) : undefined,
+            printColour: 'printColour' in data ? (data.printColour ?? null) : undefined,
+            printQuality: 'printQuality' in data ? (data.printQuality ?? null) : undefined,
+            finishRemoveSupports: data.finishRemoveSupports,
+            finishDeburrClean: data.finishDeburrClean,
+            finishSand: data.finishSand,
+            finishPrime: data.finishPrime,
+            finishPaint: data.finishPaint,
+            finishPostCure: data.finishPostCure,
+            finishInstallInserts: data.finishInstallInserts,
+            finishAssemble: data.finishAssemble,
+            resultQuantityAccepted:
+              'resultQuantityAccepted' in data ? (data.resultQuantityAccepted ?? null) : undefined,
+            resultQuantityRejected:
+              'resultQuantityRejected' in data ? (data.resultQuantityRejected ?? null) : undefined,
+            resultNotes: 'resultNotes' in data ? (data.resultNotes ?? null) : undefined,
+
+            // CAD
+            cadDesignType: 'cadDesignType' in data ? (data.cadDesignType ?? null) : undefined,
+            cadWhatModelMustDo: 'cadWhatModelMustDo' in data ? (data.cadWhatModelMustDo ?? null) : undefined,
+            cadMaterial: 'cadMaterial' in data ? (data.cadMaterial ?? null) : undefined,
+            cadIntendedProcess: 'cadIntendedProcess' in data ? (data.cadIntendedProcess ?? null) : undefined,
+            cadTolerances: 'cadTolerances' in data ? (data.cadTolerances ?? null) : undefined,
+            cadCriticalDimensions: 'cadCriticalDimensions' in data ? (data.cadCriticalDimensions ?? null) : undefined,
+            deliverableNativeCad: data.deliverableNativeCad,
+            deliverableStep: data.deliverableStep,
+            deliverableStl: data.deliverableStl,
+            deliverable3mf: data.deliverable3mf,
+            deliverableDxf: data.deliverableDxf,
+            deliverableDrawingPdf: data.deliverableDrawingPdf,
+            deliverableRenderedImages: data.deliverableRenderedImages,
+            cadApprovedRevision: 'cadApprovedRevision' in data ? (data.cadApprovedRevision ?? null) : undefined,
+
+            tenantId: undefined,
+          },
+        });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.jobCard.findFirst({ where: { id, tenantId } });
+      },
+
+      linkQuote: async (id: string, quoteId: string) => {
+        const result = await prisma.jobCard.updateMany({ where: { id, tenantId }, data: { quoteId } });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.jobCard.findFirst({ where: { id, tenantId } });
       },
     },
 

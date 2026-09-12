@@ -16,6 +16,9 @@ export async function resetTestDatabase() {
   await prisma.featureRequest.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.job.deleteMany();
+  // JobCard references Quote (and, via Customer/Tenant, both) -- delete
+  // before quotes/customers/tenants below so those FKs aren't blocked.
+  await prisma.jobCard.deleteMany();
   await prisma.costingLabourLine.deleteMany();
   await prisma.costingConsumableLine.deleteMany();
   await prisma.costingTemplate.deleteMany();
