@@ -59,4 +59,13 @@ export const env = {
   paypalClientId: process.env.PAYPAL_CLIENT_ID,
   paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET,
   paypalWebhookId: process.env.PAYPAL_WEBHOOK_ID,
+  // Slicer queue config — see docs/superpowers/specs/2026-09-13-slicer-integration-design.md.
+  // Never required(): every one of these has a sane default so the API
+  // still boots (and the worker still runs, just single-threaded/degraded)
+  // with a bare-bones .env. Raising slicerMaxConcurrency above 1 today does
+  // nothing by itself -- worker.ts's loop only ever runs one job per tick;
+  // a future task would need to add an actual concurrent-slot pool.
+  slicerMaxConcurrency: Number(process.env.SLICER_MAX_CONCURRENCY ?? 1),
+  slicerTimeoutSeconds: Number(process.env.SLICER_TIMEOUT_SECONDS ?? 90),
+  slicerScratchDir: process.env.SLICER_SCRATCH_DIR ?? './slicer-scratch',
 };

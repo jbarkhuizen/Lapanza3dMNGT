@@ -24,6 +24,27 @@ async function nextSequenceValue(tenantId: string, type: string): Promise<number
   return updated.value;
 }
 
+// DELIBERATELY NOT TENANT-SCOPED -- same reasoning as featureRequests.findAll
+// above. The slicer worker (worker.ts) has no single-tenant context: it pulls
+// the globally oldest queued job across every tenant, FIFO, one at a time
+// (SLICER_MAX_CONCURRENCY=1 by default -- see the design spec). Exported as
+// standalone functions (not inside tenantScope(tenantId), since they take no
+// tenantId) rather than added to the object tenantScope() returns.
+export function findOldestQueuedSliceJobAcrossAllTenants() {
+  return prisma.sliceJob.findFirst({ where: { status: 'queued' }, orderBy: { createdAt: 'asc' } });
+}
+
+// Sweeps any SliceJob stuck in 'processing' for longer than olderThanMs back
+// to 'queued' -- recovers jobs orphaned by a server restart mid-slice (see
+// the design spec's "Crash recovery" section). Also cross-tenant, same
+// reasoning as findOldestQueuedSliceJobAcrossAllTenants above.
+export function sweepStaleProcessingSliceJobs(olderThanMs: number) {
+  return prisma.sliceJob.updateMany({
+    where: { status: 'processing', createdAt: { lt: new Date(Date.now() - olderThanMs) } },
+    data: { status: 'queued' },
+  });
+}
+
 export interface CreateCustomerInput {
   name: string;
   billingAddress: string;
@@ -426,6 +447,20 @@ export interface UpdateShopProfileInput {
   shopThangsUrl?: string;
   shopCrealityCloudUrl?: string;
   shopGrabcadUrl?: string;
+}
+
+export interface CreateSliceJobInput {
+  originFileName: string;
+  printerId?: string | null;
+  printerPresetId?: string | null;
+  filamentId?: string | null;
+}
+
+export interface SliceJobResult {
+  resultWeightGrams: number;
+  resultSupportWeightGrams: number;
+  resultFilamentLengthMm: number;
+  resultPrintTimeHours: number;
 }
 
 export interface CreateJobInput {
@@ -1244,6 +1279,43 @@ export function tenantScope(tenantId: string) {
         }
         return prisma.jobCard.findFirst({ where: { id, tenantId } });
       },
+    },
+
+    sliceJobs: {
+      findById: (id: string) => prisma.sliceJob.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateSliceJobInput) =>
+        prisma.sliceJob.create({
+          data: {
+            tenantId,
+            originFileName: data.originFileName,
+            printerId: data.printerId ?? null,
+            printerPresetId: data.printerPresetId ?? null,
+            filamentId: data.filamentId ?? null,
+          },
+        }),
+
+      markProcessing: (id: string) =>
+        prisma.sliceJob.updateMany({ where: { id, tenantId }, data: { status: 'processing' } }),
+
+      markDone: (id: string, result: SliceJobResult) =>
+        prisma.sliceJob.updateMany({
+          where: { id, tenantId },
+          data: {
+            status: 'done',
+            resultWeightGrams: result.resultWeightGrams,
+            resultSupportWeightGrams: result.resultSupportWeightGrams,
+            resultFilamentLengthMm: result.resultFilamentLengthMm,
+            resultPrintTimeHours: result.resultPrintTimeHours,
+            completedAt: new Date(),
+          },
+        }),
+
+      markFailed: (id: string, errorMessage: string) =>
+        prisma.sliceJob.updateMany({
+          where: { id, tenantId },
+          data: { status: 'failed', errorMessage, completedAt: new Date() },
+        }),
     },
 
     notifications: {

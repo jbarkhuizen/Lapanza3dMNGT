@@ -92,6 +92,7 @@ model Tenant {
   laserMaterials         LaserMaterial[]
   premadeItems           PremadeItem[]
   products               Product[]
+  sliceJobs              SliceJob[]
 
   @@map("tenants")
 }
@@ -207,6 +208,9 @@ model Printer {
   purchaseDate     DateTime? @db.Timestamptz(3)
   purchaseCost     Float?
   powerDrawWatts   Float?
+  // Nullable; treated as 0.4mm when unset (see profileBuilder.ts) -- no
+  // existing printer has this set, so it can't be backfilled from history.
+  nozzleDiameterMm Float?
   electricityRatePerKwh Decimal? @db.Decimal(10, 4)
   expectedLifetimeHours Float?
   status           String    @default("active")
@@ -222,6 +226,7 @@ model Printer {
   printerPresets         PrinterPreset[]
   printerMaintenanceLogs PrinterMaintenanceLog[]
   costingTemplates       CostingTemplate[]
+  sliceJobs              SliceJob[]
 
   @@index([tenantId])
   @@map("printers")
@@ -243,6 +248,8 @@ model PrinterPreset {
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])
   printer Printer @relation(fields: [printerId], references: [id])
+
+  sliceJobs SliceJob[]
 
   @@index([tenantId])
   @@index([printerId])
@@ -287,6 +294,7 @@ model Filament {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   costingTemplates CostingTemplate[]
+  sliceJobs        SliceJob[]
 
   @@index([tenantId])
   @@map("filaments")
@@ -357,6 +365,10 @@ model CostingTemplate {
   premadeItemId                         String?
   premadeItemSnapshotName               String?
   premadeItemQuantity                   Int?
+  // Traceability only, purely for "which slice produced these numbers" --
+  // weightGrams/printTimeHours above already exist and are just filled by
+  // the slice result instead of typed manually. See the slicer design spec.
+  sliceJobId                            String?
   markupPercent                         Decimal   @db.Decimal(6, 2)
   filamentCost                          Decimal   @db.Decimal(12, 2)
   electricityCost                       Decimal   @db.Decimal(12, 2)
@@ -373,6 +385,7 @@ model CostingTemplate {
   scanner       Scanner?       @relation(fields: [scannerId], references: [id], onDelete: SetNull)
   laserMaterial LaserMaterial? @relation(fields: [laserMaterialId], references: [id], onDelete: SetNull)
   premadeItem   PremadeItem?   @relation(fields: [premadeItemId], references: [id], onDelete: SetNull)
+  sliceJob      SliceJob?      @relation(fields: [sliceJobId], references: [id], onDelete: SetNull)
 
   labourLines      CostingLabourLine[]
   consumableLines  CostingConsumableLine[]
@@ -433,6 +446,42 @@ model PremadeItem {
 
   @@index([tenantId])
   @@map("premade_items")
+}
+
+// Tracks one STL-upload-to-slice-result request through the single-worker
+// queue described in docs/superpowers/specs/2026-09-13-slicer-integration-design.md.
+// status: 'queued' | 'processing' | 'done' | 'failed'. The uploaded STL/
+// generated G-code themselves are NEVER persisted here (or anywhere) --
+// they live only on disk for the few seconds a job is being processed (see
+// worker.ts) and the in-process upload buffer is held in a plain in-memory
+// Map, not a DB column -- large binary blobs don't belong in a relational
+// row, and the file only needs to exist between upload and slice.
+model SliceJob {
+  id                       String    @id @default(uuid())
+  tenantId                 String
+  status                   String    @default("queued") // queued | processing | done | failed
+  originFileName           String
+  printerId                String?
+  printerPresetId          String?
+  filamentId               String?
+  resultWeightGrams        Float?
+  resultSupportWeightGrams Float?
+  resultFilamentLengthMm   Float?
+  resultPrintTimeHours     Float?
+  errorMessage             String?
+  createdAt                DateTime  @default(now()) @db.Timestamptz(3)
+  completedAt              DateTime? @db.Timestamptz(3)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  printer       Printer?       @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  printerPreset PrinterPreset? @relation(fields: [printerPresetId], references: [id], onDelete: SetNull)
+  filament      Filament?      @relation(fields: [filamentId], references: [id], onDelete: SetNull)
+
+  costingTemplates CostingTemplate[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("slice_jobs")
 }
 
 model Product {
@@ -714,6 +763,12 @@ model JobCard {
 
   // Print fields
   printFileName       String?
+  sliceJobId               String?
+  stlFileName              String?
+  sliceWeightGrams         Float?
+  sliceSupportWeightGrams  Float?
+  sliceFilamentLengthMm    Float?
+  slicePrintTimeHours      Float?
   printQuantity        Int?
   printWhatIsPrinted  String?
   printProcess        String?

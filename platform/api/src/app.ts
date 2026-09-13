@@ -30,6 +30,7 @@ import { featureRequestsRouter } from './routes/feature-requests.js';
 import { reportsRouter } from './routes/reports.js';
 import { billingRouter } from './routes/billing.js';
 import { teamRouter } from './routes/team.js';
+import { slicerRouter } from './routes/slicer.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { adminRouter } from './routes/admin.js';
 
@@ -116,6 +117,7 @@ export function buildApp() {
   app.use(featureRequestsRouter);
   app.use(reportsRouter);
   app.use(teamRouter);
+  app.use(slicerRouter);
 
   // Catch-all for anything that fell through every router above without
   // matching a route. Must be mounted after all real routers (so it never

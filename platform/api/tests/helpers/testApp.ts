@@ -12,6 +12,12 @@ const SEED_PLANS = [
 
 export async function resetTestDatabase() {
   await prisma.notificationPreference.deleteMany();
+  // SliceJob references Printer/PrinterPreset/Filament/Tenant, and
+  // CostingTemplate references SliceJob back (sliceJobId) -- delete before
+  // all four of those below so neither FK direction is blocked. JobCard's
+  // sliceJobId has no FK constraint (see schema.prisma's comment), so it
+  // doesn't factor into this ordering.
+  await prisma.sliceJob.deleteMany();
   await prisma.featureRequestVote.deleteMany();
   await prisma.featureRequest.deleteMany();
   await prisma.notification.deleteMany();
