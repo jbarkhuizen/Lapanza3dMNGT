@@ -88,6 +88,9 @@ const printerVariantSchema = z
     weightGrams: z.number().positive(),
     printerId: z.string().min(1),
     printTimeHours: z.number().positive(),
+    // Traceability only -- which SliceJob (if any) produced weightGrams/
+    // printTimeHours above. See the slicer design spec.
+    sliceJobId: z.string().min(1).optional(),
   })
   .strict();
 
@@ -298,6 +301,7 @@ costingTemplatesRouter.post('/api/costing-templates', requireTenantAuth, require
       printerSnapshotDepreciationPerHour: result.depreciationPerHour.toString(),
       printerSnapshotPowerDrawWatts: powerDrawWatts,
       printTimeHours: data.printTimeHours,
+      sliceJobId: data.sliceJobId ?? null,
       markupPercent: result.markupPercent.toString(),
       filamentCost: result.filamentCost.toString(),
       electricityCost: result.electricityCost.toString(),

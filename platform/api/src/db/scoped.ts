@@ -297,6 +297,10 @@ export interface CreateCostingTemplateInput {
   premadeItemId?: string | null;
   premadeItemSnapshotName?: string | null;
   premadeItemQuantity?: number | null;
+  // Traceability only, purely for "which slice produced these numbers" --
+  // weightGrams/printTimeHours above already exist and are just filled by
+  // the slice result instead of typed manually. See the slicer design spec.
+  sliceJobId?: string | null;
   markupPercent: string;
   filamentCost: string;
   electricityCost: string;
@@ -501,6 +505,16 @@ export interface JobCardTypeFields {
 
   // Print
   printFileName?: string | null;
+  // Populated by the slicer integration -- see the design spec's "Data
+  // model" section. sliceJobId is traceability only (which SliceJob
+  // produced these numbers); the four slice* fields are the actual result
+  // values, filled either at intake time or later once a file is attached.
+  sliceJobId?: string | null;
+  stlFileName?: string | null;
+  sliceWeightGrams?: number | null;
+  sliceSupportWeightGrams?: number | null;
+  sliceFilamentLengthMm?: number | null;
+  slicePrintTimeHours?: number | null;
   printQuantity?: number | null;
   printWhatIsPrinted?: string | null;
   printProcess?: string | null;
@@ -888,6 +902,7 @@ export function tenantScope(tenantId: string) {
             premadeItemId: data.premadeItemId ?? null,
             premadeItemSnapshotName: data.premadeItemSnapshotName ?? null,
             premadeItemQuantity: data.premadeItemQuantity ?? null,
+            sliceJobId: data.sliceJobId ?? null,
             markupPercent: data.markupPercent,
             filamentCost: data.filamentCost,
             electricityCost: data.electricityCost,
@@ -1227,6 +1242,13 @@ export function tenantScope(tenantId: string) {
 
             // Print
             printFileName: 'printFileName' in data ? (data.printFileName ?? null) : undefined,
+            sliceJobId: 'sliceJobId' in data ? (data.sliceJobId ?? null) : undefined,
+            stlFileName: 'stlFileName' in data ? (data.stlFileName ?? null) : undefined,
+            sliceWeightGrams: 'sliceWeightGrams' in data ? (data.sliceWeightGrams ?? null) : undefined,
+            sliceSupportWeightGrams:
+              'sliceSupportWeightGrams' in data ? (data.sliceSupportWeightGrams ?? null) : undefined,
+            sliceFilamentLengthMm: 'sliceFilamentLengthMm' in data ? (data.sliceFilamentLengthMm ?? null) : undefined,
+            slicePrintTimeHours: 'slicePrintTimeHours' in data ? (data.slicePrintTimeHours ?? null) : undefined,
             printQuantity: 'printQuantity' in data ? (data.printQuantity ?? null) : undefined,
             printWhatIsPrinted: 'printWhatIsPrinted' in data ? (data.printWhatIsPrinted ?? null) : undefined,
             printProcess: 'printProcess' in data ? (data.printProcess ?? null) : undefined,

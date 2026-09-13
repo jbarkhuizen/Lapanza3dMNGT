@@ -87,6 +87,15 @@ const repairUpdateFields = {
 
 const printCreateFields = {
   printFileName: z.string().optional(),
+  // Populated by the slicer integration -- sliceJobId is traceability only
+  // (which SliceJob produced these numbers), the four slice* fields are the
+  // actual result values. See the slicer design spec.
+  sliceJobId: z.string().min(1).optional(),
+  stlFileName: z.string().optional(),
+  sliceWeightGrams: z.number().nonnegative().optional(),
+  sliceSupportWeightGrams: z.number().nonnegative().optional(),
+  sliceFilamentLengthMm: z.number().nonnegative().optional(),
+  slicePrintTimeHours: z.number().nonnegative().optional(),
   printQuantity: z.number().int().positive().optional(),
   printWhatIsPrinted: z.string().optional(),
   printProcess: z.string().optional(),
@@ -108,6 +117,12 @@ const printCreateFields = {
 
 const printUpdateFields = {
   printFileName: z.string().nullable().optional(),
+  sliceJobId: z.string().nullable().optional(),
+  stlFileName: z.string().nullable().optional(),
+  sliceWeightGrams: z.number().nonnegative().nullable().optional(),
+  sliceSupportWeightGrams: z.number().nonnegative().nullable().optional(),
+  sliceFilamentLengthMm: z.number().nonnegative().nullable().optional(),
+  slicePrintTimeHours: z.number().nonnegative().nullable().optional(),
   printQuantity: z.number().int().positive().nullable().optional(),
   printWhatIsPrinted: z.string().nullable().optional(),
   printProcess: z.string().nullable().optional(),
