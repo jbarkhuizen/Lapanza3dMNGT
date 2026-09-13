@@ -40,8 +40,16 @@ export const pendingSliceUploads = new Map<string, Buffer>();
 function spawnSlicer(args: string[]) {
   const binaryPath = slicerBinaryPath();
   if (useSystemdScope()) {
+    // --user is required here: barkie-api runs as an unprivileged systemd
+    // service user (not root), and a SYSTEM-level `systemd-run --scope`
+    // (no --user) needs polkit authorization that user doesn't have --
+    // confirmed live on the production VPS, where the plain form failed
+    // with "Interactive authentication required" on every invocation. A
+    // `--user` scope runs under that user's own systemd user-manager
+    // instance instead, which needs no such elevation and still supports
+    // the same MemoryMax/CPUQuota resource caps via cgroup v2 delegation.
     return spawn('systemd-run', [
-      '--scope', '-p', 'MemoryMax=400M', '-p', 'CPUQuota=85%', '--',
+      '--user', '--scope', '-p', 'MemoryMax=400M', '-p', 'CPUQuota=85%', '--',
       binaryPath, ...args,
     ]);
   }
