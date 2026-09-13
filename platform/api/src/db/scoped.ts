@@ -230,10 +230,25 @@ export interface CreateQuoteInput {
   validUntil: Date | null;
   vatApplied: boolean;
   subtotal: string;
+  // Optional (not just nullable) so existing callers that predate discounts
+  // (e.g. job-cards.ts's quote-from-costing-template flow, and tests that
+  // construct a bare fixture quote) don't have to pass "no discount" through
+  // explicitly -- omitting these has the same effect as passing null.
+  discountPercent?: string | null;
+  discountAppliesTo?: string | null;
+  discountAmount?: string;
   vatAmount: string;
   total: string;
   notes: string | null;
+  paymentTerms?: string | null;
+  termsAndConditionsText?: string | null;
   lineItems: CreateQuoteLineItemInput[];
+}
+
+export interface UpdateQuoteInput {
+  notes?: string | null;
+  paymentTerms?: string | null;
+  termsAndConditionsText?: string | null;
 }
 
 export interface CreateInvoiceLineItemInput {
@@ -252,10 +267,25 @@ export interface CreateInvoiceInput {
   dueDate: Date;
   vatApplied: boolean;
   subtotal: string;
+  // Optional (not just nullable) -- see CreateQuoteInput's matching comment;
+  // existing pre-discount callers can simply omit these.
+  discountPercent?: string | null;
+  discountAppliesTo?: string | null;
+  discountAmount?: string;
   vatAmount: string;
   total: string;
   notes: string | null;
+  paymentTerms?: string | null;
+  termsAndConditionsText?: string | null;
+  paymentLinkUrl?: string | null;
   lineItems: CreateInvoiceLineItemInput[];
+}
+
+export interface UpdateInvoiceInput {
+  notes?: string | null;
+  paymentTerms?: string | null;
+  termsAndConditionsText?: string | null;
+  paymentLinkUrl?: string | null;
 }
 
 export interface UpdateCompanyProfileInput {
@@ -280,6 +310,9 @@ export interface UpdateCompanyProfileInput {
   defaultQuoteValidityDays?: number;
   quoteNumberPrefix?: string;
   invoiceNumberPrefix?: string;
+  pricingNotesText?: string;
+  defaultPaymentTerms?: string;
+  defaultNotes?: string;
 }
 
 // Shape of shopTradingHours -- see updateShopProfileSchema in
@@ -501,6 +534,9 @@ const companyProfileSelect = {
   defaultQuoteValidityDays: true,
   quoteNumberPrefix: true,
   invoiceNumberPrefix: true,
+  pricingNotesText: true,
+  defaultPaymentTerms: true,
+  defaultNotes: true,
 } as const;
 
 const shopProfileSelect = {
@@ -809,9 +845,14 @@ export function tenantScope(tenantId: string) {
             validUntil: data.validUntil,
             vatApplied: data.vatApplied,
             subtotal: data.subtotal,
+            discountPercent: data.discountPercent,
+            discountAppliesTo: data.discountAppliesTo,
+            discountAmount: data.discountAmount,
             vatAmount: data.vatAmount,
             total: data.total,
             notes: data.notes,
+            paymentTerms: data.paymentTerms,
+            termsAndConditionsText: data.termsAndConditionsText,
             lineItems: {
               create: data.lineItems.map((line) => ({
                 tenantId,
@@ -828,6 +869,25 @@ export function tenantScope(tenantId: string) {
 
       updateStatus: (id: string, status: string) =>
         prisma.quote.updateMany({ where: { id, tenantId }, data: { status } }),
+
+      update: async (id: string, data: UpdateQuoteInput) => {
+        const result = await prisma.quote.updateMany({
+          where: { id, tenantId },
+          data: {
+            // 'field' in data distinguishes "key omitted" (undefined here ->
+            // don't touch it) from "explicitly null" (clear it) — same
+            // three-state pattern used elsewhere in this file.
+            notes: 'notes' in data ? (data.notes ?? null) : undefined,
+            paymentTerms: 'paymentTerms' in data ? (data.paymentTerms ?? null) : undefined,
+            termsAndConditionsText:
+              'termsAndConditionsText' in data ? (data.termsAndConditionsText ?? null) : undefined,
+          },
+        });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.quote.findFirst({ where: { id, tenantId }, include: { lineItems: true } });
+      },
     },
 
     invoices: {
@@ -846,9 +906,15 @@ export function tenantScope(tenantId: string) {
             dueDate: data.dueDate,
             vatApplied: data.vatApplied,
             subtotal: data.subtotal,
+            discountPercent: data.discountPercent,
+            discountAppliesTo: data.discountAppliesTo,
+            discountAmount: data.discountAmount,
             vatAmount: data.vatAmount,
             total: data.total,
             notes: data.notes,
+            paymentTerms: data.paymentTerms,
+            termsAndConditionsText: data.termsAndConditionsText,
+            paymentLinkUrl: data.paymentLinkUrl,
             lineItems: {
               create: data.lineItems.map((line) => ({
                 tenantId,
@@ -869,6 +935,26 @@ export function tenantScope(tenantId: string) {
           where: { id, tenantId },
           data: { status, ...(amountPaid !== undefined ? { amountPaid } : {}) },
         }),
+
+      update: async (id: string, data: UpdateInvoiceInput) => {
+        const result = await prisma.invoice.updateMany({
+          where: { id, tenantId },
+          data: {
+            // 'field' in data distinguishes "key omitted" (undefined here ->
+            // don't touch it) from "explicitly null" (clear it) — same
+            // three-state pattern used elsewhere in this file.
+            notes: 'notes' in data ? (data.notes ?? null) : undefined,
+            paymentTerms: 'paymentTerms' in data ? (data.paymentTerms ?? null) : undefined,
+            termsAndConditionsText:
+              'termsAndConditionsText' in data ? (data.termsAndConditionsText ?? null) : undefined,
+            paymentLinkUrl: 'paymentLinkUrl' in data ? (data.paymentLinkUrl ?? null) : undefined,
+          },
+        });
+        if (result.count === 0) {
+          return null;
+        }
+        return prisma.invoice.findFirst({ where: { id, tenantId }, include: { lineItems: true } });
+      },
     },
 
     tenantSequences: {

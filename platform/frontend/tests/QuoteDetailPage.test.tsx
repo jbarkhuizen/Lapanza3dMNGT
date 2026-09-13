@@ -13,7 +13,10 @@ beforeEach(() => {
 
 const draftQuote = {
   id: 'q1', number: 'QT-0001', customerId: 'c1', status: 'draft', validUntil: null,
-  vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', notes: null as string | null,
+  vatApplied: false, subtotal: '100.00',
+  discountPercent: null as string | null, discountAppliesTo: null as 'total' | 'per_line' | null, discountAmount: '0.00',
+  vatAmount: '0.00', total: '100.00', notes: null as string | null,
+  paymentTerms: null as string | null, termsAndConditionsText: null as string | null,
   createdAt: '2026-01-01T00:00:00.000Z',
   lineItems: [{ id: 'li1', costingTemplateId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
 };
@@ -199,6 +202,51 @@ describe('QuoteDetailPage', () => {
     renderAt('/quotes/q1');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'QT-0001' })).toBeInTheDocument());
     expect(screen.getByText("Couldn't load customer")).toBeInTheDocument();
+  });
+
+  it('shows a Discount line between Subtotal and VAT only when discountAmount > 0', async () => {
+    mockData({ ...draftQuote, discountAmount: '15.00' });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByText('Discount')).toBeInTheDocument());
+    expect(screen.getByText('- R 15.00')).toBeInTheDocument();
+  });
+
+  it('does not show a Discount line when discountAmount is 0.00', async () => {
+    mockData();
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'QT-0001' })).toBeInTheDocument());
+    expect(screen.queryByText('Discount')).not.toBeInTheDocument();
+  });
+
+  it('displays paymentTerms and termsAndConditionsText when present', async () => {
+    mockData({ ...draftQuote, paymentTerms: '50% deposit.', termsAndConditionsText: 'Standard terms apply.' });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByText('50% deposit.')).toBeInTheDocument());
+    expect(screen.getByText('Standard terms apply.')).toBeInTheDocument();
+  });
+
+  it('edits notes/paymentTerms/termsAndConditionsText via PATCH /api/quotes/:id', async () => {
+    mockData({ ...draftQuote, notes: 'Old notes.', paymentTerms: 'Old terms.', termsAndConditionsText: 'Old T&Cs.' });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({
+      ok: true,
+      quote: { ...draftQuote, notes: 'New notes.', paymentTerms: 'New terms.', termsAndConditionsText: 'New T&Cs.' },
+    });
+    renderAt('/quotes/q1');
+    await waitFor(() => expect(screen.getByText('Old notes.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'New notes.' } });
+    fireEvent.change(screen.getByLabelText('Payment terms'), { target: { value: 'New terms.' } });
+    fireEvent.change(screen.getByLabelText('Terms & conditions'), { target: { value: 'New T&Cs.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith('/api/quotes/q1', {
+        notes: 'New notes.',
+        paymentTerms: 'New terms.',
+        termsAndConditionsText: 'New T&Cs.',
+      }),
+    );
   });
 
   it('clears a stale send success banner when an unrelated status-changing action runs', async () => {

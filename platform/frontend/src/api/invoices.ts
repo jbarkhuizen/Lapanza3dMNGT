@@ -6,6 +6,8 @@ export type { SendDocumentResponse } from './sendDocument.js';
 
 export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'overdue';
 
+export type DiscountAppliesTo = 'total' | 'per_line';
+
 export interface InvoiceLineItem {
   id: string;
   costingTemplateId: string | null;
@@ -25,13 +27,26 @@ export interface Invoice {
   dueDate: string;
   vatApplied: boolean;
   subtotal: string;
+  discountPercent: string | null;
+  discountAppliesTo: DiscountAppliesTo | null;
+  discountAmount: string;
   vatAmount: string;
   total: string;
   amountPaid: string;
   balanceDue: string;
   notes: string | null;
+  paymentTerms: string | null;
+  termsAndConditionsText: string | null;
+  paymentLinkUrl: string | null;
   createdAt: string;
   lineItems?: InvoiceLineItem[];
+}
+
+export interface UpdateInvoiceInput {
+  notes?: string;
+  paymentTerms?: string;
+  termsAndConditionsText?: string;
+  paymentLinkUrl?: string;
 }
 
 export const VALID_INVOICE_STATUS_TRANSITIONS: Record<string, InvoiceStatus[]> = {
@@ -88,6 +103,17 @@ export function useUpdateInvoiceStatus(id: string) {
   return useMutation({
     mutationFn: ({ status, amountPaid }: { status: InvoiceStatus; amountPaid?: number }) =>
       apiPatch<{ invoice: Invoice }>(`/api/invoices/${id}/status`, { status, amountPaid }).then((r) => r.invoice),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: INVOICES_QUERY_KEY });
+    },
+  });
+}
+
+export function useUpdateInvoice(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateInvoiceInput) =>
+      apiPatch<{ invoice: Invoice }>(`/api/invoices/${id}`, data).then((r) => r.invoice),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: INVOICES_QUERY_KEY });
     },

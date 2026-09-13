@@ -6,6 +6,8 @@ export type { SendDocumentResponse } from './sendDocument.js';
 
 export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'expired';
 
+export type DiscountAppliesTo = 'total' | 'per_line';
+
 export interface QuoteLineItem {
   id: string;
   costingTemplateId: string | null;
@@ -23,9 +25,14 @@ export interface Quote {
   validUntil: string | null;
   vatApplied: boolean;
   subtotal: string;
+  discountPercent: string | null;
+  discountAppliesTo: DiscountAppliesTo | null;
+  discountAmount: string;
   vatAmount: string;
   total: string;
   notes: string | null;
+  paymentTerms: string | null;
+  termsAndConditionsText: string | null;
   createdAt: string;
   lineItems?: QuoteLineItem[];
 }
@@ -41,7 +48,17 @@ export interface QuoteFormInput {
   customerId: string;
   validUntil?: string;
   notes?: string;
+  discountPercent?: number;
+  discountAppliesTo?: DiscountAppliesTo;
+  paymentTerms?: string;
+  termsAndConditionsText?: string;
   lineItems: QuoteLineItemInput[];
+}
+
+export interface UpdateQuoteInput {
+  notes?: string;
+  paymentTerms?: string;
+  termsAndConditionsText?: string;
 }
 
 // Verbatim copy of VALID_STATUS_TRANSITIONS from platform/api/src/routes/quotes.ts.
@@ -119,6 +136,16 @@ export function useConvertQuoteToInvoice(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUOTES_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    },
+  });
+}
+
+export function useUpdateQuote(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdateQuoteInput) => apiPatch<{ quote: Quote }>(`/api/quotes/${id}`, data).then((r) => r.quote),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUOTES_QUERY_KEY });
     },
   });
 }

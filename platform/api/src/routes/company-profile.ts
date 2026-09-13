@@ -33,6 +33,9 @@ const updateCompanyProfileSchema = z
     defaultQuoteValidityDays: z.number().int().positive().optional(),
     quoteNumberPrefix: z.string().trim().optional(),
     invoiceNumberPrefix: z.string().trim().optional(),
+    pricingNotesText: z.string().trim().optional(),
+    defaultPaymentTerms: z.string().trim().optional(),
+    defaultNotes: z.string().trim().optional(),
   })
   .refine((data) => !(data.vatRegistered === true && data.vatNumber === ''), {
     message: 'VAT number is required when VAT-registered.',

@@ -22,8 +22,14 @@ export interface PdfCompanyProfile {
   bankAccountHolder: string | null;
   bankAccountNumber: string | null;
   bankBranchCode: string | null;
+  // Tenant-level default -- no longer read directly by this module (the
+  // document's OWN termsAndConditionsText snapshot, on GenerateDocumentPdfInput
+  // below, is what actually renders), but kept here since callers still pass
+  // the full company-profile select through.
   termsAndConditionsText: string | null;
   defaultCurrency: string;
+  // Small footer caption shown alongside the banking-details block.
+  pricingNotesText: string | null;
 }
 
 export interface PdfCustomer {
@@ -42,12 +48,22 @@ export interface GenerateDocumentPdfInput {
   customer: PdfCustomer;
   lineItems: PdfLineItem[];
   subtotal: string;
+  // Rendered as a "Discount" line between Subtotal and VAT, only when > 0.
+  discountAmount: string;
   vatAmount: string;
   vatApplied: boolean;
   total: string;
   amountPaid?: string;
   balanceDue?: string;
   notes: string | null;
+  // Document-level snapshot fields (see Quote/Invoice.paymentTerms and
+  // .termsAndConditionsText) -- these, not companyProfile.termsAndConditionsText,
+  // are what gets rendered, since each document snapshots the tenant's default
+  // at creation time rather than following it live.
+  paymentTerms: string | null;
+  termsAndConditionsText: string | null;
+  // Invoice only.
+  paymentLinkUrl?: string | null;
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -222,6 +238,9 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
     doc.moveDown(0.75);
 
     drawTotalsLine(doc, 'Subtotal', formatMoney(input.subtotal, currency));
+    if (input.discountAmount && Number(input.discountAmount) > 0) {
+      drawTotalsLine(doc, 'Discount', `- ${formatMoney(input.discountAmount, currency)}`);
+    }
     if (input.vatApplied) {
       drawTotalsLine(doc, 'VAT (15%)', formatMoney(input.vatAmount, currency));
     }
@@ -233,15 +252,32 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
       drawTotalsLine(doc, 'Balance Due', formatMoney(input.balanceDue, currency), true);
     }
 
+    if (input.paymentTerms) {
+      doc.moveDown(1.5);
+      doc.font('Helvetica-Bold').fontSize(11).text('Payment Terms');
+      doc.font('Helvetica').fontSize(9).text(input.paymentTerms);
+    }
+
     if (input.notes) {
       doc.moveDown(1.5);
       doc.font('Helvetica-Bold').fontSize(11).text('Notes');
       doc.font('Helvetica').fontSize(9).text(input.notes);
     }
 
+    if (input.paymentLinkUrl) {
+      doc.moveDown(1.5);
+      doc.font('Helvetica-Bold').fontSize(11).text('Payment Link');
+      doc.font('Helvetica').fontSize(9);
+      // pdfkit renders a text-with-`link` option as a clickable annotation over
+      // that text run; if a future pdfkit version ever dropped link-annotation
+      // support this would still degrade gracefully to plain URL text.
+      doc.fillColor('#1d4ed8').text(input.paymentLinkUrl, { link: input.paymentLinkUrl, underline: true });
+      doc.fillColor('black');
+    }
+
     const hasBanking =
       companyProfile.bankName || companyProfile.bankAccountHolder || companyProfile.bankAccountNumber || companyProfile.bankBranchCode;
-    if (hasBanking) {
+    if (hasBanking || companyProfile.pricingNotesText) {
       doc.moveDown(1.5);
       doc.font('Helvetica-Bold').fontSize(11).text('Banking Details');
       doc.font('Helvetica').fontSize(9);
@@ -249,12 +285,17 @@ export function generateDocumentPdf(input: GenerateDocumentPdfInput): Promise<Bu
       if (companyProfile.bankAccountHolder) doc.text(`Account Holder: ${companyProfile.bankAccountHolder}`);
       if (companyProfile.bankAccountNumber) doc.text(`Account Number: ${companyProfile.bankAccountNumber}`);
       if (companyProfile.bankBranchCode) doc.text(`Branch Code: ${companyProfile.bankBranchCode}`);
+      if (companyProfile.pricingNotesText) {
+        doc.moveDown(0.5);
+        doc.fontSize(8).fillColor('#666666').text(companyProfile.pricingNotesText);
+        doc.fillColor('black').fontSize(9);
+      }
     }
 
-    if (companyProfile.termsAndConditionsText) {
+    if (input.termsAndConditionsText) {
       doc.moveDown(1.5);
       doc.font('Helvetica-Bold').fontSize(11).text('Terms & Conditions');
-      doc.font('Helvetica').fontSize(9).text(companyProfile.termsAndConditionsText);
+      doc.font('Helvetica').fontSize(9).text(input.termsAndConditionsText);
     }
 
     doc.end();

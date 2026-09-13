@@ -13,8 +13,12 @@ beforeEach(() => {
 
 const unpaidInvoice = {
   id: 'inv1', number: 'INV-0001', customerId: 'c1', quoteId: null, status: 'unpaid', dueDate: '2026-02-01T00:00:00.000Z',
-  vatApplied: false, subtotal: '100.00', vatAmount: '0.00', total: '100.00', amountPaid: '0.00', balanceDue: '100.00',
-  notes: null as string | null, createdAt: '2026-01-01T00:00:00.000Z',
+  vatApplied: false, subtotal: '100.00',
+  discountPercent: null as string | null, discountAppliesTo: null as 'total' | 'per_line' | null, discountAmount: '0.00',
+  vatAmount: '0.00', total: '100.00', amountPaid: '0.00', balanceDue: '100.00',
+  notes: null as string | null,
+  paymentTerms: null as string | null, termsAndConditionsText: null as string | null, paymentLinkUrl: null as string | null,
+  createdAt: '2026-01-01T00:00:00.000Z',
   lineItems: [{ id: 'li1', costingTemplateId: null, quoteLineItemId: null, description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
 };
 
@@ -265,6 +269,60 @@ describe('InvoiceDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mark as Overdue' }));
     await waitFor(() => expect(patchSpy).toHaveBeenCalled());
     expect(screen.queryByText(/Emailed to/)).not.toBeInTheDocument();
+  });
+
+  it('shows a Discount line between Subtotal and VAT only when discountAmount > 0', async () => {
+    mockData({ ...unpaidInvoice, discountAmount: '15.00' });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByText('Discount')).toBeInTheDocument());
+    expect(screen.getByText('- R 15.00')).toBeInTheDocument();
+  });
+
+  it('does not show a Discount line when discountAmount is 0.00', async () => {
+    mockData();
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'INV-0001' })).toBeInTheDocument());
+    expect(screen.queryByText('Discount')).not.toBeInTheDocument();
+  });
+
+  it('displays paymentTerms, termsAndConditionsText, and a clickable paymentLinkUrl when present', async () => {
+    mockData({
+      ...unpaidInvoice,
+      paymentTerms: '50% deposit.',
+      termsAndConditionsText: 'Standard terms apply.',
+      paymentLinkUrl: 'https://pay.example.com/inv1',
+    });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByText('50% deposit.')).toBeInTheDocument());
+    expect(screen.getByText('Standard terms apply.')).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'https://pay.example.com/inv1' });
+    expect(link).toHaveAttribute('href', 'https://pay.example.com/inv1');
+  });
+
+  it('edits notes/paymentTerms/termsAndConditionsText/paymentLinkUrl via PATCH /api/invoices/:id', async () => {
+    mockData({ ...unpaidInvoice, notes: 'Old notes.' });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({
+      ok: true,
+      invoice: { ...unpaidInvoice, notes: 'New notes.', paymentLinkUrl: 'https://pay.example.com/new' },
+    });
+    renderAt('/invoices/inv1');
+    await waitFor(() => expect(screen.getByText('Old notes.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'New notes.' } });
+    fireEvent.change(screen.getByLabelText('Payment terms'), { target: { value: 'New terms.' } });
+    fireEvent.change(screen.getByLabelText('Terms & conditions'), { target: { value: 'New T&Cs.' } });
+    fireEvent.change(screen.getByLabelText('Payment link URL'), { target: { value: 'https://pay.example.com/new' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith('/api/invoices/inv1', {
+        notes: 'New notes.',
+        paymentTerms: 'New terms.',
+        termsAndConditionsText: 'New T&Cs.',
+        paymentLinkUrl: 'https://pay.example.com/new',
+      }),
+    );
   });
 
   it('pre-fills the amount-paid input with onFocus-select behaviour to reduce typo risk', async () => {

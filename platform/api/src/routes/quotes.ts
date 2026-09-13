@@ -48,6 +48,8 @@ export async function serializeQuote(quote: QuoteWithOptionalLines) {
   return {
     ...quote,
     subtotal: quote.subtotal.toFixed(2),
+    discountPercent: quote.discountPercent ? quote.discountPercent.toFixed(2) : null,
+    discountAmount: quote.discountAmount.toFixed(2),
     vatAmount: quote.vatAmount.toFixed(2),
     total: quote.total.toFixed(2),
     invoiceId: invoice?.id ?? null,
@@ -74,7 +76,21 @@ const createQuoteSchema = z.object({
   customerId: z.string().min(1),
   validUntil: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.').optional(),
   notes: z.string().optional(),
+  discountPercent: z.number().min(0).max(100).optional(),
+  discountAppliesTo: z.enum(['total', 'per_line']).optional(),
+  paymentTerms: z.string().optional(),
+  termsAndConditionsText: z.string().optional(),
   lineItems: z.array(lineItemSchema).min(1),
+});
+
+// Fields editable on an already-created quote, distinct from the
+// draft/sent/accepted/expired lifecycle handled by PATCH /:id/status below.
+// Plain optional strings (no stricter validation), same style as
+// createQuoteSchema's own notes/paymentTerms/termsAndConditionsText.
+const updateQuoteSchema = z.object({
+  notes: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  termsAndConditionsText: z.string().optional(),
 });
 
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -123,7 +139,8 @@ quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, a
       error: 'A customer and at least one line item are required.',
     });
   }
-  const { customerId, validUntil, notes, lineItems } = parsed.data;
+  const { customerId, validUntil, notes, discountPercent, discountAppliesTo, paymentTerms, termsAndConditionsText, lineItems } =
+    parsed.data;
   const scoped = tenantScope(req.tenantId!);
 
   const customer = await scoped.customers.findById(customerId);
@@ -167,6 +184,8 @@ quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, a
   const totals = calculateQuoteTotals({
     lines: resolvedLines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
     vatApplied: profile.vatRegistered,
+    discountPercent,
+    discountAppliesTo,
   });
 
   // Each line's unitPrice is already capped by the zod schema above, but
@@ -199,9 +218,21 @@ quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, a
       validUntil: resolvedValidUntil,
       vatApplied: profile.vatRegistered,
       subtotal: totals.subtotal.toString(),
+      // Persisted whenever discountAppliesTo was supplied, even if the discount
+      // amounted to nothing (e.g. discountPercent: 0) -- discountAmount (below)
+      // is the source of truth for whether a discount actually reduced the total.
+      discountPercent: discountPercent != null ? String(discountPercent) : null,
+      discountAppliesTo: discountAppliesTo ?? null,
+      discountAmount: totals.discountAmount.toString(),
       vatAmount: totals.vatAmount.toString(),
       total: totals.total.toString(),
-      notes: notes ?? null,
+      // One-time snapshot at creation time -- a request-supplied value wins,
+      // otherwise the tenant's current default is copied in. Editing the
+      // tenant default afterward must not retroactively change this quote,
+      // which is why this is a plain `??`, not a live join/lookup.
+      notes: notes ?? profile.defaultNotes ?? null,
+      paymentTerms: paymentTerms ?? profile.defaultPaymentTerms ?? null,
+      termsAndConditionsText: termsAndConditionsText ?? profile.termsAndConditionsText ?? null,
       lineItems: resolvedLines.map((line, i) => ({
         costingTemplateId: line.costingTemplateId,
         description: line.description,
@@ -227,6 +258,24 @@ quotesRouter.post('/api/quotes', requireTenantAuth, requireActiveSubscription, a
   }
 
   res.status(201).json({ ok: true, quote: await serializeQuote(quote) });
+});
+
+// Edits notes/paymentTerms/termsAndConditionsText on an already-created quote
+// -- distinct from the draft/sent/accepted/expired lifecycle transitions
+// handled by PATCH /:id/status below. There was no existing general-purpose
+// PATCH for these fields on Quote, so this is a new route (see the design
+// spec's Backend section).
+quotesRouter.patch('/api/quotes/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const parsed = updateQuoteSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'Invalid quote fields.' });
+  }
+  const scoped = tenantScope(req.tenantId!);
+  const updated = await scoped.quotes.update(req.params.id, parsed.data);
+  if (!updated) {
+    return res.status(404).json({ ok: false, error: 'Quote not found.' });
+  }
+  res.json({ ok: true, quote: await serializeQuote(updated) });
 });
 
 quotesRouter.patch('/api/quotes/:id/status', requireTenantAuth, requireActiveSubscription, async (req, res) => {
@@ -296,9 +345,16 @@ quotesRouter.post('/api/quotes/:id/convert-to-invoice', requireTenantAuth, requi
           dueDate,
           vatApplied: quote.vatApplied,
           subtotal: quote.subtotal,
+          // Carried over so a discounted quote converts into an identically
+          // discounted invoice, instead of silently losing the discount.
+          discountPercent: quote.discountPercent,
+          discountAppliesTo: quote.discountAppliesTo,
+          discountAmount: quote.discountAmount,
           vatAmount: quote.vatAmount,
           total: quote.total,
           notes: quote.notes,
+          paymentTerms: quote.paymentTerms,
+          termsAndConditionsText: quote.termsAndConditionsText,
           lineItems: {
             create: quote.lineItems.map((line) => ({
               tenantId,
@@ -361,10 +417,13 @@ quotesRouter.post('/api/quotes/:id/send', sendQuoteLimiter, requireTenantAuth, r
       lineTotal: line.lineTotal,
     })),
     subtotal: serialized.subtotal,
+    discountAmount: serialized.discountAmount,
     vatAmount: serialized.vatAmount,
     vatApplied: serialized.vatApplied,
     total: serialized.total,
     notes: serialized.notes,
+    paymentTerms: serialized.paymentTerms,
+    termsAndConditionsText: serialized.termsAndConditionsText,
   });
 
   await sendDocumentEmail(customer.email, 'quote', quote.number, pdfBuffer, profile.businessName, profile.email);

@@ -384,6 +384,166 @@ test('GET /api/quotes/stats returns totalQuotes, totalValue, expiredCount, and c
   assert.equal(res.body.convertedCount, 1);
 });
 
+test('POST /api/quotes with discountAppliesTo "total" persists discountPercent/discountAppliesTo/discountAmount and discounts before VAT', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    discountPercent: 10,
+    discountAppliesTo: 'total',
+    lineItems: [
+      { description: 'Part A', unitPrice: 50, quantity: 3 }, // 150.00
+      { description: 'Part B', unitPrice: 33, quantity: 1 }, // 33.00
+    ],
+  });
+
+  assert.equal(res.status, 201);
+  // subtotal 183.00 -> discountAmount = round(183.00 * 10 / 100, 2) = 18.30
+  // discountedSubtotal = 164.70 -> vatAmount = round(164.70 * 0.15, 2) = 24.71 -> total = 189.41
+  assert.equal(res.body.quote.subtotal, '183.00');
+  assert.equal(res.body.quote.discountPercent, '10.00');
+  assert.equal(res.body.quote.discountAppliesTo, 'total');
+  assert.equal(res.body.quote.discountAmount, '18.30');
+  assert.equal(res.body.quote.vatAmount, '24.71');
+  assert.equal(res.body.quote.total, '189.41');
+  // 'total' mode leaves the persisted per-line totals undiscounted.
+  assert.equal(res.body.quote.lineItems[0].lineTotal, '150.00');
+  assert.equal(res.body.quote.lineItems[1].lineTotal, '33.00');
+});
+
+test('POST /api/quotes with discountAppliesTo "per_line" discounts each persisted line total before summing', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    discountPercent: 10,
+    discountAppliesTo: 'per_line',
+    lineItems: [
+      { description: 'Part A', unitPrice: 50, quantity: 3 }, // 150.00
+      { description: 'Part B', unitPrice: 33, quantity: 1 }, // 33.00
+    ],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.quote.subtotal, '183.00');
+  assert.equal(res.body.quote.discountAppliesTo, 'per_line');
+  // Each persisted line total is discounted 10% before summing.
+  assert.equal(res.body.quote.lineItems[0].lineTotal, '135.00');
+  assert.equal(res.body.quote.lineItems[1].lineTotal, '29.70');
+  assert.equal(res.body.quote.discountAmount, '18.30');
+  assert.equal(res.body.quote.vatAmount, '24.71');
+  assert.equal(res.body.quote.total, '189.41');
+});
+
+test('POST /api/quotes without discount fields persists discountAmount 0.00 and null discountPercent/discountAppliesTo', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.quote.discountPercent, null);
+  assert.equal(res.body.quote.discountAppliesTo, null);
+  assert.equal(res.body.quote.discountAmount, '0.00');
+});
+
+test('POST /api/quotes rejects a discountPercent above 100', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/quotes').send({
+    customerId,
+    discountPercent: 101,
+    discountAppliesTo: 'total',
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(res.status, 400);
+});
+
+test('POST /api/quotes defaults paymentTerms/termsAndConditionsText/notes from the tenant profile only when the request supplies none', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({
+    defaultPaymentTerms: '50% deposit, balance on delivery.',
+    defaultNotes: 'Standard tenant note.',
+    termsAndConditionsText: 'Standard tenant T&Cs.',
+  });
+  const customerId = await makeCustomer(agent);
+
+  const usesDefaults = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(usesDefaults.status, 201);
+  assert.equal(usesDefaults.body.quote.paymentTerms, '50% deposit, balance on delivery.');
+  assert.equal(usesDefaults.body.quote.notes, 'Standard tenant note.');
+  assert.equal(usesDefaults.body.quote.termsAndConditionsText, 'Standard tenant T&Cs.');
+
+  const overridesDefaults = await agent.post('/api/quotes').send({
+    customerId,
+    notes: 'Rush this one.',
+    paymentTerms: 'Payment on collection.',
+    termsAndConditionsText: 'One-off terms for this quote.',
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(overridesDefaults.status, 201);
+  assert.equal(overridesDefaults.body.quote.paymentTerms, 'Payment on collection.');
+  assert.equal(overridesDefaults.body.quote.notes, 'Rush this one.');
+  assert.equal(overridesDefaults.body.quote.termsAndConditionsText, 'One-off terms for this quote.');
+
+  // Editing the tenant default afterward must not retroactively change the already-created quote.
+  await agent.patch('/api/company-profile').send({ defaultPaymentTerms: 'Changed default.' });
+  const reFetched = await agent.get(`/api/quotes/${usesDefaults.body.quote.id}`);
+  assert.equal(reFetched.body.quote.paymentTerms, '50% deposit, balance on delivery.');
+});
+
+test('PATCH /api/quotes/:id edits notes/paymentTerms/termsAndConditionsText on an already-created quote', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  const quoteId = created.body.quote.id as string;
+
+  const res = await agent.patch(`/api/quotes/${quoteId}`).send({
+    notes: 'Updated notes.',
+    paymentTerms: 'Net 15.',
+    termsAndConditionsText: 'Updated terms.',
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.quote.notes, 'Updated notes.');
+  assert.equal(res.body.quote.paymentTerms, 'Net 15.');
+  assert.equal(res.body.quote.termsAndConditionsText, 'Updated terms.');
+});
+
+test('PATCH /api/quotes/:id returns 404 for a quote belonging to another tenant', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');
+  const customerId = await makeCustomer(agentA);
+  const created = await agentA.post('/api/quotes').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+
+  const agentB = await loggedInAgent(app, 'sam@othershop.co.za');
+  const res = await agentB.patch(`/api/quotes/${created.body.quote.id}`).send({ notes: 'nope' });
+  assert.equal(res.status, 404);
+});
+
 test('GET /api/quotes/stats is tenant-isolated', async () => {
   const app = buildApp();
   const agentA = await loggedInAgent(app, 'stats-a@example.co.za');

@@ -65,6 +65,179 @@ test('POST /api/invoices creates a standalone invoice, numbered INV-0001, due in
   assert.ok(res.body.invoice.dueDate);
 });
 
+test('POST /api/invoices with discountAppliesTo "total" persists discountPercent/discountAppliesTo/discountAmount and discounts before VAT', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/invoices').send({
+    customerId,
+    discountPercent: 10,
+    discountAppliesTo: 'total',
+    lineItems: [
+      { description: 'Part A', unitPrice: 50, quantity: 3 }, // 150.00
+      { description: 'Part B', unitPrice: 33, quantity: 1 }, // 33.00
+    ],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.invoice.subtotal, '183.00');
+  assert.equal(res.body.invoice.discountPercent, '10.00');
+  assert.equal(res.body.invoice.discountAppliesTo, 'total');
+  assert.equal(res.body.invoice.discountAmount, '18.30');
+  assert.equal(res.body.invoice.vatAmount, '24.71');
+  assert.equal(res.body.invoice.total, '189.41');
+  assert.equal(res.body.invoice.lineItems[0].lineTotal, '150.00');
+  assert.equal(res.body.invoice.lineItems[1].lineTotal, '33.00');
+});
+
+test('POST /api/invoices with discountAppliesTo "per_line" discounts each persisted line total before summing', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/invoices').send({
+    customerId,
+    discountPercent: 10,
+    discountAppliesTo: 'per_line',
+    lineItems: [
+      { description: 'Part A', unitPrice: 50, quantity: 3 }, // 150.00
+      { description: 'Part B', unitPrice: 33, quantity: 1 }, // 33.00
+    ],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.invoice.subtotal, '183.00');
+  assert.equal(res.body.invoice.lineItems[0].lineTotal, '135.00');
+  assert.equal(res.body.invoice.lineItems[1].lineTotal, '29.70');
+  assert.equal(res.body.invoice.discountAmount, '18.30');
+  assert.equal(res.body.invoice.total, '189.41');
+});
+
+test('POST /api/invoices without discount fields persists discountAmount 0.00 and null discountPercent/discountAppliesTo', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const res = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Custom bracket', unitPrice: 150, quantity: 2 }],
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.invoice.discountPercent, null);
+  assert.equal(res.body.invoice.discountAppliesTo, null);
+  assert.equal(res.body.invoice.discountAmount, '0.00');
+});
+
+test('POST /api/invoices accepts a paymentLinkUrl and persists it, and rejects a malformed one', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+
+  const good = await agent.post('/api/invoices').send({
+    customerId,
+    paymentLinkUrl: 'https://pay.example.com/abc123',
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(good.status, 201);
+  assert.equal(good.body.invoice.paymentLinkUrl, 'https://pay.example.com/abc123');
+
+  const bad = await agent.post('/api/invoices').send({
+    customerId,
+    paymentLinkUrl: 'not-a-url',
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(bad.status, 400);
+
+  const blank = await agent.post('/api/invoices').send({
+    customerId,
+    paymentLinkUrl: '',
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(blank.status, 201);
+  assert.equal(blank.body.invoice.paymentLinkUrl, null);
+});
+
+test('POST /api/invoices defaults paymentTerms/termsAndConditionsText/notes from the tenant profile only when the request supplies none', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({
+    defaultPaymentTerms: '50% deposit, balance on delivery.',
+    defaultNotes: 'Standard tenant note.',
+    termsAndConditionsText: 'Standard tenant T&Cs.',
+  });
+  const customerId = await makeCustomer(agent);
+
+  const usesDefaults = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  assert.equal(usesDefaults.status, 201);
+  assert.equal(usesDefaults.body.invoice.paymentTerms, '50% deposit, balance on delivery.');
+  assert.equal(usesDefaults.body.invoice.notes, 'Standard tenant note.');
+  assert.equal(usesDefaults.body.invoice.termsAndConditionsText, 'Standard tenant T&Cs.');
+
+  // Editing the tenant default afterward must not retroactively change the already-created invoice.
+  await agent.patch('/api/company-profile').send({ defaultPaymentTerms: 'Changed default.' });
+  const reFetched = await agent.get(`/api/invoices/${usesDefaults.body.invoice.id}`);
+  assert.equal(reFetched.body.invoice.paymentTerms, '50% deposit, balance on delivery.');
+});
+
+test('PATCH /api/invoices/:id edits notes/paymentTerms/termsAndConditionsText/paymentLinkUrl on an already-created invoice', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent.patch(`/api/invoices/${invoiceId}`).send({
+    notes: 'Updated notes.',
+    paymentTerms: 'Net 15.',
+    termsAndConditionsText: 'Updated terms.',
+    paymentLinkUrl: 'https://pay.example.com/xyz',
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.invoice.notes, 'Updated notes.');
+  assert.equal(res.body.invoice.paymentTerms, 'Net 15.');
+  assert.equal(res.body.invoice.termsAndConditionsText, 'Updated terms.');
+  assert.equal(res.body.invoice.paymentLinkUrl, 'https://pay.example.com/xyz');
+});
+
+test('PATCH /api/invoices/:id rejects a malformed paymentLinkUrl', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+  const invoiceId = created.body.invoice.id as string;
+
+  const res = await agent.patch(`/api/invoices/${invoiceId}`).send({ paymentLinkUrl: 'not-a-url' });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /api/invoices/:id returns 404 for an invoice belonging to another tenant', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');
+  const customerId = await makeCustomer(agentA);
+  const created = await agentA.post('/api/invoices').send({
+    customerId,
+    lineItems: [{ description: 'Part', unitPrice: 10, quantity: 1 }],
+  });
+
+  const agentB = await loggedInAgent(app, 'sam@othershop.co.za');
+  const res = await agentB.patch(`/api/invoices/${created.body.invoice.id}`).send({ notes: 'nope' });
+  assert.equal(res.status, 404);
+});
+
 test('balanceDue reflects total minus amountPaid at every payment status, computed server-side', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);
@@ -333,6 +506,33 @@ test('POST /api/quotes/:id/convert-to-invoice copies totals and line items from 
 
   const quoteAfterConversion = await agent.get(`/api/quotes/${quoteId}`);
   assert.equal(quoteAfterConversion.body.quote.invoiceId, res.body.invoice.id);
+});
+
+test('POST /api/quotes/:id/convert-to-invoice carries the quote\'s discount and paymentTerms/termsAndConditionsText over to the invoice', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  await agent.patch('/api/company-profile').send({ vatRegistered: true, vatNumber: '4123456789' });
+  const customerId = await makeCustomer(agent);
+  const created = await agent.post('/api/quotes').send({
+    customerId,
+    discountPercent: 10,
+    discountAppliesTo: 'total',
+    paymentTerms: '50% deposit.',
+    termsAndConditionsText: 'Quote-specific terms.',
+    lineItems: [{ description: 'Custom bracket', unitPrice: 100, quantity: 2 }],
+  });
+  const quoteId = created.body.quote.id as string;
+  await agent.patch(`/api/quotes/${quoteId}/status`).send({ status: 'sent' });
+  await agent.patch(`/api/quotes/${quoteId}/status`).send({ status: 'accepted' });
+
+  const res = await agent.post(`/api/quotes/${quoteId}/convert-to-invoice`);
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.invoice.discountPercent, '10.00');
+  assert.equal(res.body.invoice.discountAppliesTo, 'total');
+  assert.equal(res.body.invoice.discountAmount, created.body.quote.discountAmount);
+  assert.equal(res.body.invoice.paymentTerms, '50% deposit.');
+  assert.equal(res.body.invoice.termsAndConditionsText, 'Quote-specific terms.');
 });
 
 test('POST /api/quotes/:id/convert-to-invoice rejects converting the same quote twice', async () => {

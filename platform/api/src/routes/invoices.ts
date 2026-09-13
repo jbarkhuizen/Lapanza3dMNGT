@@ -44,6 +44,8 @@ export function serializeInvoice(invoice: InvoiceWithOptionalLines) {
   return {
     ...invoice,
     subtotal: invoice.subtotal.toFixed(2),
+    discountPercent: invoice.discountPercent ? invoice.discountPercent.toFixed(2) : null,
+    discountAmount: invoice.discountAmount.toFixed(2),
     vatAmount: invoice.vatAmount.toFixed(2),
     total: invoice.total.toFixed(2),
     amountPaid: invoice.amountPaid.toFixed(2),
@@ -71,7 +73,23 @@ const createInvoiceSchema = z.object({
   customerId: z.string().min(1),
   dueDate: z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'Enter a valid date.').optional(),
   notes: z.string().optional(),
+  discountPercent: z.number().min(0).max(100).optional(),
+  discountAppliesTo: z.enum(['total', 'per_line']).optional(),
+  paymentTerms: z.string().optional(),
+  termsAndConditionsText: z.string().optional(),
+  paymentLinkUrl: z.string().trim().url().optional().or(z.literal('')),
   lineItems: z.array(lineItemSchema).min(1),
+});
+
+// Fields editable on an already-created invoice, distinct from the
+// unpaid/partially_paid/paid/overdue lifecycle handled by PATCH /:id/status
+// below. There was no existing general-purpose PATCH for these fields on
+// Invoice, so this is a new route (see the design spec's Backend section).
+const updateInvoiceSchema = z.object({
+  notes: z.string().optional(),
+  paymentTerms: z.string().optional(),
+  termsAndConditionsText: z.string().optional(),
+  paymentLinkUrl: z.string().trim().url().optional().or(z.literal('')),
 });
 
 const DEFAULT_DUE_DAYS = 30;
@@ -128,7 +146,17 @@ invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscriptio
       error: 'A customer and at least one line item are required.',
     });
   }
-  const { customerId, dueDate, notes, lineItems } = parsed.data;
+  const {
+    customerId,
+    dueDate,
+    notes,
+    discountPercent,
+    discountAppliesTo,
+    paymentTerms,
+    termsAndConditionsText,
+    paymentLinkUrl,
+    lineItems,
+  } = parsed.data;
   const scoped = tenantScope(req.tenantId!);
 
   const customer = await scoped.customers.findById(customerId);
@@ -172,6 +200,8 @@ invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscriptio
   const totals = calculateQuoteTotals({
     lines: resolvedLines.map((line) => ({ unitPrice: line.unitPrice, quantity: line.quantity })),
     vatApplied: profile.vatRegistered,
+    discountPercent,
+    discountAppliesTo,
   });
 
   // Each line's unitPrice is already capped by the zod schema above, but
@@ -201,9 +231,22 @@ invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscriptio
       dueDate: resolvedDueDate,
       vatApplied: profile.vatRegistered,
       subtotal: totals.subtotal.toString(),
+      // Persisted whenever discountAppliesTo was supplied, even if the discount
+      // amounted to nothing (e.g. discountPercent: 0) -- discountAmount (below)
+      // is the source of truth for whether a discount actually reduced the total.
+      discountPercent: discountPercent != null ? String(discountPercent) : null,
+      discountAppliesTo: discountAppliesTo ?? null,
+      discountAmount: totals.discountAmount.toString(),
       vatAmount: totals.vatAmount.toString(),
       total: totals.total.toString(),
-      notes: notes ?? null,
+      // One-time snapshot at creation time -- a request-supplied value wins,
+      // otherwise the tenant's current default is copied in. Editing the
+      // tenant default afterward must not retroactively change this invoice,
+      // which is why this is a plain `??`, not a live join/lookup.
+      notes: notes ?? profile.defaultNotes ?? null,
+      paymentTerms: paymentTerms ?? profile.defaultPaymentTerms ?? null,
+      termsAndConditionsText: termsAndConditionsText ?? profile.termsAndConditionsText ?? null,
+      paymentLinkUrl: paymentLinkUrl || null,
       lineItems: resolvedLines.map((line, i) => ({
         quoteLineItemId: null,
         costingTemplateId: line.costingTemplateId,
@@ -230,6 +273,26 @@ invoicesRouter.post('/api/invoices', requireTenantAuth, requireActiveSubscriptio
   }
 
   res.status(201).json({ ok: true, invoice: serializeInvoice(invoice) });
+});
+
+// Edits notes/paymentTerms/termsAndConditionsText/paymentLinkUrl on an
+// already-created invoice -- distinct from the unpaid/partially_paid/paid/
+// overdue lifecycle transitions handled by PATCH /:id/status below.
+invoicesRouter.patch('/api/invoices/:id', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+  const parsed = updateInvoiceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'Invalid invoice fields.' });
+  }
+  const scoped = tenantScope(req.tenantId!);
+  const { paymentLinkUrl, ...rest } = parsed.data;
+  const updated = await scoped.invoices.update(req.params.id, {
+    ...rest,
+    ...(paymentLinkUrl !== undefined ? { paymentLinkUrl: paymentLinkUrl || null } : {}),
+  });
+  if (!updated) {
+    return res.status(404).json({ ok: false, error: 'Invoice not found.' });
+  }
+  res.json({ ok: true, invoice: serializeInvoice(updated) });
 });
 
 const updateInvoiceStatusSchema = z
@@ -324,12 +387,16 @@ invoicesRouter.post('/api/invoices/:id/send', sendInvoiceLimiter, requireTenantA
       lineTotal: line.lineTotal,
     })),
     subtotal: serialized.subtotal,
+    discountAmount: serialized.discountAmount,
     vatAmount: serialized.vatAmount,
     vatApplied: serialized.vatApplied,
     total: serialized.total,
     amountPaid: serialized.amountPaid,
     balanceDue: serialized.balanceDue,
     notes: serialized.notes,
+    paymentTerms: serialized.paymentTerms,
+    termsAndConditionsText: serialized.termsAndConditionsText,
+    paymentLinkUrl: serialized.paymentLinkUrl,
   });
 
   await sendDocumentEmail(customer.email, 'invoice', invoice.number, pdfBuffer, profile.businessName, profile.email);

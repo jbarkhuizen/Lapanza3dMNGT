@@ -1,13 +1,15 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
 import { TextareaField } from '../../components/TextareaField.js';
 import { ApiError } from '../../api/client.js';
-import { useCreateQuote, type QuoteLineItemInput } from '../../api/quotes.js';
+import { useCreateQuote, type DiscountAppliesTo, type QuoteLineItemInput } from '../../api/quotes.js';
 import { useCustomers } from '../../api/customers.js';
 import { useCostingTemplates } from '../../api/costingTemplates.js';
+import { useCompanyProfile } from '../../api/companyProfile.js';
 
 type LineMode = 'adhoc' | 'costingTemplate';
+type DiscountMode = 'none' | DiscountAppliesTo;
 
 interface LineItemDraft {
   mode: LineMode;
@@ -25,13 +27,28 @@ export function QuoteCreatePage() {
   const navigate = useNavigate();
   const { data: customers, isLoading: isLoadingCustomers } = useCustomers();
   const { data: costingTemplates, isLoading: isLoadingCostingTemplates } = useCostingTemplates();
+  const { data: companyProfile } = useCompanyProfile();
   const createMutation = useCreateQuote();
 
   const [customerId, setCustomerId] = useState('');
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState('');
+  const [termsAndConditionsText, setTermsAndConditionsText] = useState('');
+  const [discountMode, setDiscountMode] = useState<DiscountMode>('none');
+  const [discountPercent, setDiscountPercent] = useState('');
   const [lines, setLines] = useState<LineItemDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Pre-fill from the tenant's current defaults once, on load -- a one-time
+  // snapshot for this new quote, same as the server does at creation time.
+  // Only fills blank fields, so it doesn't clobber anything the user already typed.
+  useEffect(() => {
+    if (companyProfile) {
+      setPaymentTerms((prev) => prev || (companyProfile.defaultPaymentTerms ?? ''));
+      setTermsAndConditionsText((prev) => prev || (companyProfile.termsAndConditionsText ?? ''));
+      setNotes((prev) => prev || (companyProfile.defaultNotes ?? ''));
+    }
+  }, [companyProfile]);
 
   function addLine() {
     setLines((prev) => [...prev, blankLine()]);
@@ -56,6 +73,10 @@ export function QuoteCreatePage() {
         customerId,
         validUntil: validUntil || undefined,
         notes: notes || undefined,
+        paymentTerms: paymentTerms || undefined,
+        termsAndConditionsText: termsAndConditionsText || undefined,
+        discountAppliesTo: discountMode === 'none' ? undefined : discountMode,
+        discountPercent: discountMode === 'none' || discountPercent === '' ? undefined : Number(discountPercent),
         lineItems,
       });
       navigate(`/quotes/${created.id}`);
@@ -90,6 +111,45 @@ export function QuoteCreatePage() {
       <FormField id="validUntil" label="Valid until (optional)" type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
 
       <TextareaField id="notes" label="Notes (optional)" value={notes} onChange={setNotes} rows={3} />
+
+      <FormField
+        id="paymentTerms"
+        label="Payment terms (optional)"
+        value={paymentTerms}
+        onChange={(e) => setPaymentTerms(e.target.value)}
+      />
+      <TextareaField
+        id="termsAndConditionsText"
+        label="Terms & conditions (optional)"
+        value={termsAndConditionsText}
+        onChange={setTermsAndConditionsText}
+        rows={3}
+      />
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="discountMode" className="text-sm font-medium text-slate-700">Discount</label>
+        <select
+          id="discountMode"
+          value={discountMode}
+          onChange={(e) => setDiscountMode(e.target.value as DiscountMode)}
+          className="rounded border border-slate-300 px-3 py-2 text-sm"
+        >
+          <option value="none">None</option>
+          <option value="total">Invoice total</option>
+          <option value="per_line">Per line item</option>
+        </select>
+        {discountMode !== 'none' && (
+          <FormField
+            id="discountPercent"
+            label="Discount percent"
+            type="number"
+            min={0}
+            max={100}
+            value={discountPercent}
+            onChange={(e) => setDiscountPercent(e.target.value)}
+          />
+        )}
+      </div>
 
       <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
         <div className="flex items-center justify-between">

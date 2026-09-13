@@ -1,5 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import {
   generateDocumentPdf,
@@ -9,6 +10,36 @@ import {
 } from '../src/documents/generateDocumentPdf.js';
 import { sendDocumentEmail } from '../src/documents/sendDocumentEmail.js';
 import { mailer } from '../src/lib/mailer.js';
+
+// pdfkit compresses page content streams with FlateDecode by default AND
+// renders text as `[<hex> kerningNumber <hex> ...] TJ` glyph-run arrays
+// (WinAnsiEncoding, so each hex byte pair is the plain ASCII/Latin-1 char
+// code) rather than plain `(text) Tj` strings -- so a plain string search on
+// the raw buffer never finds rendered text (only structural PDF syntax and
+// uncompressed objects like link annotations' /URI entries, which is why the
+// page-count/font-metric tests below never needed this). This inflates every
+// FlateDecode stream, then reconstructs the literal rendered text by
+// concatenating every `<hex>` glyph run in document order and hex-decoding
+// each one -- the bare numbers between them are just kerning displacements,
+// not characters, so dropping them and keeping only the hex runs in order
+// reproduces the original text exactly (spaces included, since a run like
+// `<796d656e7420>` decodes to "yment " with its trailing space intact).
+function extractPdfRenderedText(buffer: Buffer): string {
+  const text = buffer.toString('latin1');
+  const streamPattern = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  const decodedStreams: string[] = [];
+  for (const match of text.matchAll(streamPattern)) {
+    const raw = Buffer.from(match[1], 'latin1');
+    try {
+      decodedStreams.push(zlib.inflateSync(raw).toString('latin1'));
+    } catch {
+      // Not a FlateDecode stream (e.g. an uncompressed/binary section) -- skip it.
+    }
+  }
+  const combinedStreams = decodedStreams.join('\n');
+  const hexRuns = combinedStreams.match(/<[0-9a-fA-F]+>/g) ?? [];
+  return hexRuns.map((hex) => Buffer.from(hex.slice(1, -1), 'hex').toString('latin1')).join('');
+}
 
 const baseCompanyProfile = {
   businessName: 'Acme Prints',
@@ -28,6 +59,7 @@ const baseCompanyProfile = {
   bankBranchCode: '250655',
   termsAndConditionsText: 'Payment due within 30 days.',
   defaultCurrency: 'ZAR',
+  pricingNotesText: null,
 };
 
 test('generateDocumentPdf produces a valid PDF buffer with VAT, banking, and notes sections', async () => {
@@ -41,10 +73,13 @@ test('generateDocumentPdf produces a valid PDF buffer with VAT, banking, and not
     customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
     lineItems: [{ description: 'Custom bracket', quantity: 2, unitPrice: '150.00', lineTotal: '300.00' }],
     subtotal: '300.00',
+    discountAmount: '0.00',
     vatAmount: '45.00',
     vatApplied: true,
     total: '345.00',
     notes: 'Rush order.',
+    paymentTerms: null,
+    termsAndConditionsText: null,
   });
 
   assert.ok(Buffer.isBuffer(buffer));
@@ -76,20 +111,98 @@ test('generateDocumentPdf handles a minimal profile with no VAT, no banking, no 
       bankBranchCode: null,
       termsAndConditionsText: null,
       defaultCurrency: 'ZAR',
+      pricingNotesText: null,
     },
     customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
     lineItems: [{ description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
     subtotal: '100.00',
+    discountAmount: '0.00',
     vatAmount: '0.00',
     vatApplied: false,
     total: '100.00',
     amountPaid: '0.00',
     balanceDue: '100.00',
     notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
   });
 
   assert.ok(Buffer.isBuffer(buffer));
   assert.equal(buffer.subarray(0, 4).toString('ascii'), '%PDF');
+});
+
+test('generateDocumentPdf renders a Discount line between Subtotal and VAT only when discountAmount > 0', async () => {
+  const withDiscount = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: 'QT-0010',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Valid until',
+    dateValue: null,
+    companyProfile: baseCompanyProfile,
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: [{ description: 'Custom bracket', quantity: 2, unitPrice: '150.00', lineTotal: '300.00' }],
+    subtotal: '300.00',
+    discountAmount: '30.00',
+    vatAmount: '40.50',
+    vatApplied: true,
+    total: '310.50',
+    notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
+  });
+  assert.match(extractPdfRenderedText(withDiscount), /Discount/);
+
+  const withoutDiscount = await generateDocumentPdf({
+    documentType: 'Quote',
+    number: 'QT-0011',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Valid until',
+    dateValue: null,
+    companyProfile: baseCompanyProfile,
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: [{ description: 'Custom bracket', quantity: 2, unitPrice: '150.00', lineTotal: '300.00' }],
+    subtotal: '300.00',
+    discountAmount: '0.00',
+    vatAmount: '45.00',
+    vatApplied: true,
+    total: '345.00',
+    notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
+  });
+  assert.doesNotMatch(extractPdfRenderedText(withoutDiscount), /Discount/);
+});
+
+test('generateDocumentPdf renders Payment Terms, the document\'s own Terms & Conditions snapshot, an Invoice-only Payment Link, and the tenant pricingNotesText footer', async () => {
+  const buffer = await generateDocumentPdf({
+    documentType: 'Invoice',
+    number: 'INV-0010',
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    dateLabel: 'Due date',
+    dateValue: new Date('2026-02-01T00:00:00.000Z'),
+    companyProfile: { ...baseCompanyProfile, pricingNotesText: 'Prices exclude shipping.' },
+    customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
+    lineItems: [{ description: 'Custom bracket', quantity: 1, unitPrice: '100.00', lineTotal: '100.00' }],
+    subtotal: '100.00',
+    discountAmount: '0.00',
+    vatAmount: '15.00',
+    vatApplied: true,
+    total: '115.00',
+    amountPaid: '0.00',
+    balanceDue: '115.00',
+    notes: null,
+    paymentTerms: '50% deposit, balance on delivery.',
+    termsAndConditionsText: 'This document\'s own snapshot, not the tenant default.',
+    paymentLinkUrl: 'https://pay.example.com/inv-0010',
+  });
+
+  const decodedText = extractPdfRenderedText(buffer);
+  assert.match(decodedText, /Payment Terms/);
+  assert.match(decodedText, /Prices exclude shipping\./);
+  assert.match(decodedText, /Payment Link/);
+  // The link annotation's target URL is stored as a direct (uncompressed) PDF
+  // object, not inside a content stream, so it's checked against the raw buffer.
+  assert.match(buffer.toString('latin1'), /\/URI \(https:\/\/pay\.example\.com\/inv-0010\)/);
 });
 
 test('generateDocumentPdf paginates a long line-item table onto multiple pages without losing rows', async () => {
@@ -109,10 +222,13 @@ test('generateDocumentPdf paginates a long line-item table onto multiple pages w
     customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
     lineItems: manyLines,
     subtotal: '300.00',
+    discountAmount: '0.00',
     vatAmount: '45.00',
     vatApplied: true,
     total: '345.00',
     notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
   });
 
   const pdfText = buffer.toString('latin1');
@@ -162,10 +278,13 @@ test('generateDocumentPdf paginates wrapped multi-line descriptions without a pa
     customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
     lineItems: wrappingLines,
     subtotal: '500.00',
+    discountAmount: '0.00',
     vatAmount: '75.00',
     vatApplied: true,
     total: '575.00',
     notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
   });
 
   const pdfText = buffer.toString('latin1');
@@ -199,12 +318,15 @@ test('generateDocumentPdf keeps the totals block together instead of splitting i
     customer: { name: 'Bob Client', billingAddress: '5 Oak St', vatNumber: null },
     lineItems: lines,
     subtotal: '250.00',
+    discountAmount: '0.00',
     vatAmount: '37.50',
     vatApplied: true,
     total: '287.50',
     amountPaid: '0.00',
     balanceDue: '287.50',
     notes: null,
+    paymentTerms: null,
+    termsAndConditionsText: null,
   });
 
   const pdfText = buffer.toString('latin1');

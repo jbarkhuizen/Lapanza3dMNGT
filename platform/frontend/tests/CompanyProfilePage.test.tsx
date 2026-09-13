@@ -28,6 +28,9 @@ const baseProfile = {
   defaultQuoteValidityDays: null,
   quoteNumberPrefix: 'QT',
   invoiceNumberPrefix: 'INV',
+  pricingNotesText: null,
+  defaultPaymentTerms: null,
+  defaultNotes: null,
 };
 
 // A freshly registered tenant: every optional column is null, exactly as the API returns
@@ -168,6 +171,39 @@ describe('CompanyProfilePage', () => {
     // registrationNumber isn't in the omit list — the server accepts '' for it fine — so
     // it's sent as '' rather than being stripped.
     expect(payload.registrationNumber).toBe('');
+  });
+
+  it('renders the Document footer and Default notes & terms sections', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText('Pricing notes')).toBeInTheDocument());
+    expect(screen.getByLabelText('Payment terms')).toBeInTheDocument();
+    expect(screen.getByLabelText('Notes')).toBeInTheDocument();
+    // Terms & conditions already has an input under VAT / Legal -- must not be duplicated.
+    expect(screen.getAllByLabelText('Terms & conditions')).toHaveLength(1);
+  });
+
+  it('saves pricingNotesText/defaultPaymentTerms/defaultNotes via PATCH', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    const patchSpy = vi.spyOn(client, 'apiPatch').mockResolvedValue({ ok: true, companyProfile: baseProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText('Pricing notes')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Pricing notes'), { target: { value: 'Prices exclude shipping.' } });
+    fireEvent.change(screen.getByLabelText('Payment terms'), { target: { value: '50% deposit.' } });
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'Standard note.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(patchSpy).toHaveBeenCalledWith(
+        '/api/company-profile',
+        expect.objectContaining({
+          pricingNotesText: 'Prices exclude shipping.',
+          defaultPaymentTerms: '50% deposit.',
+          defaultNotes: 'Standard note.',
+        }),
+      ),
+    );
   });
 
   it('toggling "VAT registered" updates the checkbox state', async () => {

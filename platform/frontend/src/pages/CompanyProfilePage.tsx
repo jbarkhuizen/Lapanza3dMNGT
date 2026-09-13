@@ -52,6 +52,9 @@ export function CompanyProfilePage() {
         quoteNumberPrefix: profile.quoteNumberPrefix,
         invoiceNumberPrefix: profile.invoiceNumberPrefix,
         defaultQuoteValidityDays: profile.defaultQuoteValidityDays ?? undefined,
+        pricingNotesText: profile.pricingNotesText ?? '',
+        defaultPaymentTerms: profile.defaultPaymentTerms ?? '',
+        defaultNotes: profile.defaultNotes ?? '',
       });
     }
   }, [profile, form]);
@@ -139,6 +142,34 @@ export function CompanyProfilePage() {
         <FormField id="bankAccountHolder" label="Account holder" value={form.bankAccountHolder ?? ''} onChange={(e) => set('bankAccountHolder', e.target.value)} />
         <FormField id="bankAccountNumber" label="Account number" value={form.bankAccountNumber ?? ''} onChange={(e) => set('bankAccountNumber', e.target.value)} />
         <FormField id="bankBranchCode" label="Branch code" value={form.bankBranchCode ?? ''} onChange={(e) => set('bankBranchCode', e.target.value)} />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Document footer</h2>
+        <TextareaField
+          id="pricingNotesText"
+          label="Pricing notes"
+          value={form.pricingNotesText ?? ''}
+          onChange={(value) => set('pricingNotesText', value)}
+          rows={2}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Default notes & terms</h2>
+        <FormField
+          id="defaultPaymentTerms"
+          label="Payment terms"
+          value={form.defaultPaymentTerms ?? ''}
+          onChange={(e) => set('defaultPaymentTerms', e.target.value)}
+        />
+        <TextareaField
+          id="defaultNotes"
+          label="Notes"
+          value={form.defaultNotes ?? ''}
+          onChange={(value) => set('defaultNotes', value)}
+          rows={3}
+        />
       </section>
 
       <section className="flex flex-col gap-4">

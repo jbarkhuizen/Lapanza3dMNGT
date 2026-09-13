@@ -24,6 +24,9 @@ export interface CompanyProfile {
   defaultQuoteValidityDays: number | null;
   quoteNumberPrefix: string;
   invoiceNumberPrefix: string;
+  pricingNotesText: string | null;
+  defaultPaymentTerms: string | null;
+  defaultNotes: string | null;
 }
 
 export type UpdateCompanyProfileInput = Partial<Omit<CompanyProfile, 'email'>>;

@@ -134,6 +134,30 @@ test('PATCH accepts vatRegistered: true when vatNumber is supplied in the same r
   assert.equal(res.body.companyProfile.vatRegistered, true);
 });
 
+test('PATCH updates pricingNotesText, defaultPaymentTerms, and defaultNotes', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.patch('/api/company-profile').send({
+    pricingNotesText: 'Prices exclude shipping.',
+    defaultPaymentTerms: '50% deposit, balance on delivery.',
+    defaultNotes: 'Standard note for every new document.',
+  });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.companyProfile.pricingNotesText, 'Prices exclude shipping.');
+  assert.equal(res.body.companyProfile.defaultPaymentTerms, '50% deposit, balance on delivery.');
+  assert.equal(res.body.companyProfile.defaultNotes, 'Standard note for every new document.');
+});
+
+test('GET /api/company-profile returns null for pricingNotesText/defaultPaymentTerms/defaultNotes on a freshly registered tenant', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const res = await agent.get('/api/company-profile');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.companyProfile.pricingNotesText, null);
+  assert.equal(res.body.companyProfile.defaultPaymentTerms, null);
+  assert.equal(res.body.companyProfile.defaultNotes, null);
+});
+
 test('PATCH accepts vatRegistered: true relying on a vatNumber set in an earlier request', async () => {
   const app = buildApp();
   const agent = await loggedInAgent(app);
