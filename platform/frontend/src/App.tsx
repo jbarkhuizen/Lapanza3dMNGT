@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { AuthProvider, RequireAuth } from './context/AuthContext.js';
+import { AuthProvider, RequireAuth, RequireAdmin } from './context/AuthContext.js';
 import { AppShell } from './components/AppShell.js';
 import { LoginPage } from './pages/auth/LoginPage.js';
 import { RegisterPage } from './pages/auth/RegisterPage.js';
@@ -37,6 +37,8 @@ import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PlanSelectionPage } from './pages/billing/PlanSelectionPage.js';
 import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
 import { BillingSettingsPage } from './pages/billing/BillingSettingsPage.js';
+import { TeamPage } from './pages/team/TeamPage.js';
+import { SetPasswordPage } from './pages/team/SetPasswordPage.js';
 
 export function App() {
   return (
@@ -45,6 +47,7 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/set-password" element={<SetPasswordPage />} />
         <Route
           path="/"
           element={
@@ -83,6 +86,16 @@ export function App() {
                 <BillingSettingsPage />
               </AppShell>
             </RequireAuth>
+          }
+        />
+        <Route
+          path="/team"
+          element={
+            <RequireAdmin>
+              <AppShell>
+                <TeamPage />
+              </AppShell>
+            </RequireAdmin>
           }
         />
         <Route

@@ -36,6 +36,9 @@ export async function resetTestDatabase() {
   await prisma.session.deleteMany();
   await prisma.tenantSequence.deleteMany();
   await prisma.subscription.deleteMany();
+  // TeamMember references Tenant -- delete before tenants below so that FK
+  // isn't blocked.
+  await prisma.teamMember.deleteMany();
   await prisma.tenant.deleteMany();
   await prisma.platformAdmin.deleteMany();
   await prisma.backlogItem.deleteMany();

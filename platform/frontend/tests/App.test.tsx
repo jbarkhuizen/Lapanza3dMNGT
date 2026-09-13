@@ -498,6 +498,69 @@ describe('App routing', () => {
     await waitFor(() => expect(screen.getByText('Choose a plan')).toBeInTheDocument());
   });
 
+  it('renders the Team page at "/team" for an admin-role authenticated tenant', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+          actorRole: 'admin',
+        });
+      }
+      if (path === '/api/team') {
+        return Promise.resolve({ ok: true, teamMembers: [] });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/team']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Team' })).toBeInTheDocument());
+  });
+
+  it('redirects a sales-role team member away from "/team" to the dashboard', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+          actorRole: 'sales',
+          actorName: 'Sam Sales',
+          actorEmail: 'sam@acmeprints.co.za',
+        });
+      }
+      if (path === '/api/reports/dashboard') {
+        return Promise.reject(new client.ApiError('Only an account admin can do this.', 403));
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/team']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText(/Signed in as Sam Sales/)).toBeInTheDocument());
+    expect(screen.queryByRole('heading', { name: 'Team' })).not.toBeInTheDocument();
+  });
+
+  it('renders the set-password page at "/set-password" without requiring auth', async () => {
+    vi.spyOn(client, 'apiGet').mockRejectedValue(new client.ApiError('Log in to continue.', 401));
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }} initialEntries={['/set-password?token=abc123']}>
+        <AppProviders>
+          <App />
+        </AppProviders>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Set your password')).toBeInTheDocument());
+  });
+
   it('does not redirect a subscription-less tenant away from /billing/complete (no infinite loop)', async () => {
     vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
       if (path === '/api/auth/me') {

@@ -236,4 +236,69 @@ describe('AppShell', () => {
 
     await waitFor(() => expect(patchSpy).toHaveBeenCalledWith('/api/notifications/n1/read'));
   });
+
+  function renderAsActor(actorRole: 'admin' | 'sales', actorName: string | null = null) {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/auth/me') {
+        return Promise.resolve({
+          ok: true,
+          tenant: { id: '1', businessName: 'Acme Prints', email: 'a@b.com', emailVerified: true, hasSubscription: true },
+          actorRole,
+          actorName,
+          actorEmail: actorName ? 'sam@acmeprints.co.za' : null,
+        });
+      }
+      if (path === '/api/billing/subscription') {
+        return Promise.resolve({ ok: true, subscription: null });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    const queryClient = createTestQueryClient();
+    return render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <AppShell>
+              <div>page content</div>
+            </AppShell>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+  }
+
+  it('hides admin-only nav items for a sales-role actor', async () => {
+    renderAsActor('sales', 'Sam Sales');
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Company Profile' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Shop Profile' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Billing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Team' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('link', { name: 'Customers' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Quotes' })).toBeInTheDocument();
+  });
+
+  it('shows every nav item for an admin-role actor (owner or admin team member)', async () => {
+    renderAsActor('admin');
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Team' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Billing' })).toBeInTheDocument();
+  });
+
+  it('shows a "Signed in as" line with the actor\'s name and role when acting as a team member', async () => {
+    renderAsActor('sales', 'Sam Sales');
+    await waitFor(() => expect(screen.getByText(/Signed in as Sam Sales \(Sales\)/)).toBeInTheDocument());
+  });
+
+  it('does not show a "Signed in as" line for the tenant owner', async () => {
+    renderAsActor('admin');
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+    expect(screen.queryByText(/Signed in as/)).not.toBeInTheDocument();
+  });
 });

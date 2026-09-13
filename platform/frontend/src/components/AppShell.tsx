@@ -6,23 +6,28 @@ import { useSubscription } from '../api/billing.js';
 import { useNotifications, useMarkNotificationRead, type Notification } from '../api/notifications.js';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/company-profile', label: 'Company Profile' },
-  { to: '/shop-profile', label: 'Shop Profile' },
-  { to: '/billing', label: 'Billing' },
-  { to: '/customers', label: 'Customers' },
-  { to: '/filaments', label: 'Filaments' },
-  { to: '/labour-steps', label: 'Labour Steps' },
-  { to: '/consumables', label: 'Consumables' },
-  { to: '/materials', label: 'Materials' },
-  { to: '/printers', label: 'Printers' },
-  { to: '/costing-templates', label: 'Costing Templates' },
-  { to: '/jobs', label: 'Jobs' },
-  { to: '/job-cards', label: 'Job Cards (Intake)' },
-  { to: '/quotes', label: 'Quotes' },
-  { to: '/invoices', label: 'Invoices' },
-  { to: '/reports', label: 'Reports' },
-  { to: '/feature-requests', label: 'Feature Requests' },
+  { to: '/', label: 'Dashboard', adminOnly: true },
+  { to: '/company-profile', label: 'Company Profile', adminOnly: true },
+  { to: '/shop-profile', label: 'Shop Profile', adminOnly: true },
+  { to: '/billing', label: 'Billing', adminOnly: true },
+  { to: '/team', label: 'Team', adminOnly: true },
+  { to: '/customers', label: 'Customers', adminOnly: false },
+  { to: '/filaments', label: 'Filaments', adminOnly: false },
+  { to: '/labour-steps', label: 'Labour Steps', adminOnly: false },
+  { to: '/consumables', label: 'Consumables', adminOnly: false },
+  { to: '/materials', label: 'Materials', adminOnly: false },
+  { to: '/printers', label: 'Printers', adminOnly: false },
+  { to: '/costing-templates', label: 'Costing Templates', adminOnly: false },
+  { to: '/jobs', label: 'Jobs', adminOnly: false },
+  { to: '/job-cards', label: 'Job Cards (Intake)', adminOnly: false },
+  { to: '/quotes', label: 'Quotes', adminOnly: false },
+  { to: '/invoices', label: 'Invoices', adminOnly: false },
+  // Backed by GET /api/reports/summary, which is gated to admins alongside
+  // GET /api/reports/dashboard (see the design spec's "Gate the owner-only
+  // areas" section) — hidden here too so a sales actor never lands on a
+  // page that can only ever show an error.
+  { to: '/reports', label: 'Reports', adminOnly: true },
+  { to: '/feature-requests', label: 'Feature Requests', adminOnly: false },
 ];
 
 const RELATED_ENTITY_ROUTES: Record<string, string> = {
@@ -130,9 +135,10 @@ function NotificationBell() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { tenant, refetch } = useAuth();
+  const { tenant, refetch, actorRole, actorName } = useAuth();
   const { data: subscription } = useSubscription();
   const [loggingOut, setLoggingOut] = useState(false);
+  const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || actorRole === 'admin');
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -148,7 +154,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <nav className="flex w-56 flex-col gap-1 border-r border-slate-200 bg-slate-50 p-4">
         <span className="mb-4 text-lg font-semibold text-slate-900">Barkie</span>
-        {NAV_ITEMS.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -165,7 +171,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-3">
-          <span className="text-sm text-slate-600">{tenant?.businessName}</span>
+          <div className="flex flex-col">
+            <span className="text-sm text-slate-600">{tenant?.businessName}</span>
+            {actorName && (
+              <span className="text-xs text-slate-400">
+                Signed in as {actorName} ({actorRole === 'admin' ? 'Admin' : 'Sales'})
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <NotificationBell />
             <button

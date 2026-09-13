@@ -1,6 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import request from 'supertest';
 import { resetTestDatabase } from './helpers/testApp.js';
+import { buildApp } from '../src/app.js';
 import { prisma } from '../src/db/client.js';
 import { hashPassword } from '../src/auth/password.js';
 import { tenantScope } from '../src/db/scoped.js';
@@ -460,4 +462,42 @@ test('a tenant cannot see another tenant\'s invoices', async () => {
 
   const bFindById = await scopedB.invoices.findById(aList[0].id);
   assert.equal(bFindById, null);
+});
+
+test('a team member for tenant A cannot access tenant B\'s data via any route', async () => {
+  const tenantA = await makeTenant('a@example.co.za');
+  const tenantB = await makeTenant('b@example.co.za');
+
+  const scopedA = tenantScope(tenantA.id);
+  const scopedB = tenantScope(tenantB.id);
+  await scopedA.customers.create({ name: 'Tenant A Customer', billingAddress: '1 Main Rd' });
+  await scopedB.customers.create({ name: 'Tenant B Customer', billingAddress: '2 Side St' });
+
+  const teamMemberA = await prisma.teamMember.create({
+    data: {
+      tenantId: tenantA.id,
+      name: 'Sam Sales',
+      email: 'sam@example.co.za',
+      role: 'sales',
+      active: true,
+      passwordHash: await hashPassword('correct horse battery staple'),
+    },
+  });
+
+  const app = buildApp();
+  const agent = request.agent(app);
+  const loginRes = await agent.post('/api/auth/login').send({
+    email: teamMemberA.email,
+    password: 'correct horse battery staple',
+  });
+  assert.equal(loginRes.status, 200);
+
+  // requireTenantAuth resolves this team member's session to tenant A's id
+  // — every existing resource route reads only req.tenantId, so this
+  // request must return exactly tenant A's customer, never tenant B's,
+  // regardless of tenant B's real id being guessable/known.
+  const res = await agent.get('/api/customers');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.customers.length, 1);
+  assert.equal(res.body.customers[0].name, 'Tenant A Customer');
 });

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
+import { requireAdminRole } from '../middleware/requireAdminRole.js';
 import { tenantScope } from '../db/scoped.js';
 import { prisma } from '../db/client.js';
 import { env } from '../env.js';
@@ -53,12 +54,12 @@ function serializeSubscription(
   };
 }
 
-billingRouter.get('/api/plans', requireTenantAuth, async (_req, res) => {
+billingRouter.get('/api/plans', requireTenantAuth, requireAdminRole, async (_req, res) => {
   const plans = await prisma.plan.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } });
   res.json({ ok: true, plans: plans.map(serializePlan) });
 });
 
-billingRouter.get('/api/billing/subscription', requireTenantAuth, async (req, res) => {
+billingRouter.get('/api/billing/subscription', requireTenantAuth, requireAdminRole, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const subscription = await scoped.subscription.get();
   res.json({ ok: true, subscription: serializeSubscription(subscription) });
@@ -69,7 +70,7 @@ const checkoutSchema = z.object({
   provider: z.enum(['payfast', 'paypal']),
 });
 
-billingRouter.post('/api/billing/checkout', requireTenantAuth, async (req, res) => {
+billingRouter.post('/api/billing/checkout', requireTenantAuth, requireAdminRole, async (req, res) => {
   const parsed = checkoutSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'A plan and a payment provider are required.' });
@@ -183,7 +184,7 @@ billingRouter.post('/api/billing/checkout', requireTenantAuth, async (req, res) 
   res.json({ ok: true, redirectUrl });
 });
 
-billingRouter.post('/api/billing/cancel', requireTenantAuth, async (req, res) => {
+billingRouter.post('/api/billing/cancel', requireTenantAuth, requireAdminRole, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const subscription = await scoped.subscription.get();
   if (!subscription) {

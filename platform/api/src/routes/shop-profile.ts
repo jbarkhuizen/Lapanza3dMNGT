@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
+import { requireAdminRole } from '../middleware/requireAdminRole.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const shopProfileRouter = Router();
@@ -63,13 +64,13 @@ const updateShopProfileSchema = z.object({
   shopGrabcadUrl: optionalUrl(),
 });
 
-shopProfileRouter.get('/api/shop-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+shopProfileRouter.get('/api/shop-profile', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const profile = await scoped.shopProfile.get();
   res.json({ ok: true, shopProfile: profile });
 });
 
-shopProfileRouter.patch('/api/shop-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+shopProfileRouter.patch('/api/shop-profile', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const parsed = updateShopProfileSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid shop profile fields.' });

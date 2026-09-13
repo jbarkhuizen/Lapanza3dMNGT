@@ -87,8 +87,36 @@ model Tenant {
   featureRequests        FeatureRequest[]
   featureRequestVotes    FeatureRequestVote[]
   jobCards               JobCard[]
+  teamMembers            TeamMember[]
 
   @@map("tenants")
+}
+
+// See docs/superpowers/specs/2026-09-13-team-accounts-design.md. A team
+// member signs in independently (their own email/password, via the
+// polymorphic Session model's 'team_member' subjectType) and acts on the
+// SAME tenant's data as the owner, gated only by `role` for a small set of
+// owner-only areas (see requireAdminRole.ts). `email` is globally unique —
+// matching Tenant.email's own uniqueness — because login has no
+// "which tenant" context to disambiguate a duplicate. `passwordHash` is
+// nullable: an invited member has no password until they complete the
+// set-password link (mirrors Tenant's own verificationToken pattern).
+model TeamMember {
+  id                      String    @id @default(uuid())
+  tenantId                String
+  name                    String
+  email                   String    @unique
+  passwordHash            String?
+  role                    String    @default("sales")
+  active                  Boolean   @default(true)
+  setPasswordToken        String?
+  setPasswordTokenExpires DateTime? @db.Timestamptz(3)
+  createdAt               DateTime  @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("team_members")
 }
 
 model PlatformAdmin {

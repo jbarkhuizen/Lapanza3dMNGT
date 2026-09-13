@@ -3,7 +3,7 @@ import { prisma } from '../db/client.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export async function createSession(subjectType: 'tenant' | 'platform_admin', subjectId: string) {
+export async function createSession(subjectType: 'tenant' | 'platform_admin' | 'team_member', subjectId: string) {
   const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
   await prisma.session.create({

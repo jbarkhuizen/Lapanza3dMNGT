@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
+import { requireAdminRole } from '../middleware/requireAdminRole.js';
 import { prisma } from '../db/client.js';
 import { overdueInvoiceWhere } from '../notifications/checks.js';
 import { serializeInvoice } from './invoices.js';
@@ -11,7 +12,7 @@ export const reportsRouter = Router();
 // router doesn't get a misleading 401 — it falls through to the next
 // router / app.ts's final 404 handler instead. See backlog #6.
 
-reportsRouter.get('/api/reports/summary', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+reportsRouter.get('/api/reports/summary', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const tenantId = req.tenantId!;
 
   const revenueAgg = await prisma.invoice.aggregate({
@@ -80,7 +81,7 @@ reportsRouter.get('/api/reports/summary', requireTenantAuth, requireActiveSubscr
   });
 });
 
-reportsRouter.get('/api/reports/dashboard', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+reportsRouter.get('/api/reports/dashboard', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const tenantId = req.tenantId!;
 
   const openInvoicesCount = await prisma.invoice.count({

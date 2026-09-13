@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.js';
 import { resetTestDatabase } from './helpers/testApp.js';
 import { prisma } from '../src/db/client.js';
 import { mailer } from '../src/lib/mailer.js';
+import { hashPassword } from '../src/auth/password.js';
 
 beforeEach(resetTestDatabase);
 
@@ -437,6 +438,211 @@ test('login rate limit is independent from the register/resend-verification buck
     password: 'correct horse battery staple',
   });
   assert.notEqual(registerRes.status, 429);
+});
+
+test('team-member login succeeds and the resulting session carries the correct role via requireTenantAuth', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'owner@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'owner@acmeprints.co.za' } });
+
+  await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Sam Sales',
+      email: 'sam@acmeprints.co.za',
+      role: 'sales',
+      active: true,
+      passwordHash: await hashPassword('correct horse battery staple'),
+    },
+  });
+
+  const agent = request.agent(app);
+  const loginRes = await agent.post('/api/auth/login').send({
+    email: 'sam@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  assert.equal(loginRes.status, 200);
+  assert.equal(loginRes.body.ok, true);
+
+  const me = await agent.get('/api/auth/me');
+  assert.equal(me.status, 200);
+  // The team member's session resolves req.tenantId to the OWNING tenant —
+  // /api/auth/me reports that tenant's own info, plus the actor's own role
+  // and identity distinct from it.
+  assert.equal(me.body.tenant.id, tenant!.id);
+  assert.equal(me.body.tenant.businessName, 'Acme Prints');
+  assert.equal(me.body.actorRole, 'sales');
+  assert.equal(me.body.actorName, 'Sam Sales');
+  assert.equal(me.body.actorEmail, 'sam@acmeprints.co.za');
+});
+
+test('an admin-role team member session reports actorRole admin, distinct from the owner', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'owner@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'owner@acmeprints.co.za' } });
+
+  await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Alex Admin',
+      email: 'alex@acmeprints.co.za',
+      role: 'admin',
+      active: true,
+      passwordHash: await hashPassword('correct horse battery staple'),
+    },
+  });
+
+  const agent = request.agent(app);
+  await agent.post('/api/auth/login').send({
+    email: 'alex@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+
+  const me = await agent.get('/api/auth/me');
+  assert.equal(me.status, 200);
+  assert.equal(me.body.actorRole, 'admin');
+  assert.equal(me.body.actorName, 'Alex Admin');
+});
+
+test('a deactivated team member cannot log in even with the correct password', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'owner@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'owner@acmeprints.co.za' } });
+
+  await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Sam Sales',
+      email: 'sam@acmeprints.co.za',
+      role: 'sales',
+      active: false,
+      passwordHash: await hashPassword('correct horse battery staple'),
+    },
+  });
+
+  const res = await request(app).post('/api/auth/login').send({
+    email: 'sam@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  assert.equal(res.status, 401);
+  assert.equal(res.body.ok, false);
+});
+
+test('an invited team member with no password set yet cannot log in', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'owner@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'owner@acmeprints.co.za' } });
+
+  await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Sam Sales',
+      email: 'sam@acmeprints.co.za',
+      role: 'sales',
+      active: true,
+      passwordHash: null,
+      setPasswordToken: 'sometoken',
+      setPasswordTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const res = await request(app).post('/api/auth/login').send({
+    email: 'sam@acmeprints.co.za',
+    password: 'anything at all',
+  });
+  assert.equal(res.status, 401);
+  assert.equal(res.body.ok, false);
+});
+
+test('a team member deactivated MID-SESSION is rejected on the very next request, not just at next login', async () => {
+  // This is the test that actually proves the security property described
+  // in the design spec: requireTenantAuth re-checks `active` on every
+  // request, not just at login — so revoking access takes effect
+  // immediately, without waiting for the session to expire or the member
+  // to log out.
+  const app = buildApp();
+  await registerAndVerify(app, 'owner@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'owner@acmeprints.co.za' } });
+
+  const member = await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Sam Sales',
+      email: 'sam@acmeprints.co.za',
+      role: 'sales',
+      active: true,
+      passwordHash: await hashPassword('correct horse battery staple'),
+    },
+  });
+
+  const agent = request.agent(app);
+  const loginRes = await agent.post('/api/auth/login').send({
+    email: 'sam@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  assert.equal(loginRes.status, 200);
+
+  // The session is genuinely valid at this point.
+  const meBefore = await agent.get('/api/auth/me');
+  assert.equal(meBefore.status, 200);
+
+  // Deactivate directly at the DB layer (simulating an admin's
+  // PATCH /api/team/:id call) WITHOUT touching the existing session token.
+  await prisma.teamMember.update({ where: { id: member.id }, data: { active: false } });
+
+  const meAfter = await agent.get('/api/auth/me');
+  assert.equal(meAfter.status, 401, 'the still-valid session token must now be rejected');
+});
+
+test('POST /api/auth/login runs exactly one real bcrypt comparison across all three login outcomes (unknown email, wrong tenant password, wrong team-member password)', async () => {
+  // Extends the backlog #9 timing-safety property to the new three-way
+  // lookup (tenant -> team member -> dummy hash) — every outcome must run
+  // exactly one real comparison, so none of them is distinguishable from
+  // the others via response timing.
+  const app = buildApp();
+  await registerAndVerify(app, 'jane@acmeprints.co.za');
+  const tenant = await prisma.tenant.findUnique({ where: { email: 'jane@acmeprints.co.za' } });
+  await prisma.teamMember.create({
+    data: {
+      tenantId: tenant!.id,
+      name: 'Sam Sales',
+      email: 'sam@acmeprints.co.za',
+      role: 'sales',
+      active: true,
+      passwordHash: await hashPassword('team member password'),
+    },
+  });
+  const bcrypt = (await import('bcryptjs')).default;
+
+  try {
+    const unknownEmailSpy = mock.method(bcrypt, 'compare');
+    const unknownRes = await request(app).post('/api/auth/login').send({
+      email: 'nobody@acmeprints.co.za',
+      password: 'whatever password',
+    });
+    assert.equal(unknownRes.status, 401);
+    assert.equal(unknownEmailSpy.mock.calls.length, 1, 'an unknown email should run exactly one real bcrypt compare');
+    mock.restoreAll();
+
+    const wrongTenantPasswordSpy = mock.method(bcrypt, 'compare');
+    const wrongTenantRes = await request(app).post('/api/auth/login').send({
+      email: 'jane@acmeprints.co.za',
+      password: 'wrong password entirely',
+    });
+    assert.equal(wrongTenantRes.status, 401);
+    assert.equal(wrongTenantPasswordSpy.mock.calls.length, 1, 'a wrong tenant password should run exactly one real bcrypt compare');
+    mock.restoreAll();
+
+    const wrongTeamMemberPasswordSpy = mock.method(bcrypt, 'compare');
+    const wrongTeamMemberRes = await request(app).post('/api/auth/login').send({
+      email: 'sam@acmeprints.co.za',
+      password: 'wrong password entirely',
+    });
+    assert.equal(wrongTeamMemberRes.status, 401);
+    assert.equal(wrongTeamMemberPasswordSpy.mock.calls.length, 1, 'a wrong team-member password should run exactly one real bcrypt compare');
+  } finally {
+    mock.restoreAll();
+  }
 });
 
 test('register and resend-verification share one rate-limit bucket', async () => {

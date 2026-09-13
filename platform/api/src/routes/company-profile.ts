@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
+import { requireAdminRole } from '../middleware/requireAdminRole.js';
 import { tenantScope } from '../db/scoped.js';
 
 export const companyProfileRouter = Router();
@@ -41,13 +42,13 @@ const updateCompanyProfileSchema = z
     message: 'VAT number is required when VAT-registered.',
   });
 
-companyProfileRouter.get('/api/company-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+companyProfileRouter.get('/api/company-profile', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
   const profile = await scoped.companyProfile.get();
   res.json({ ok: true, companyProfile: profile });
 });
 
-companyProfileRouter.patch('/api/company-profile', requireTenantAuth, requireActiveSubscription, async (req, res) => {
+companyProfileRouter.patch('/api/company-profile', requireTenantAuth, requireActiveSubscription, requireAdminRole, async (req, res) => {
   const parsed = updateCompanyProfileSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Invalid company profile fields.' });

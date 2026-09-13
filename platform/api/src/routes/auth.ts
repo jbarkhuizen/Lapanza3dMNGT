@@ -159,21 +159,46 @@ export function createAuthRouter() {
     }
 
     const tenant = await prisma.tenant.findUnique({ where: { email: parsed.data.email } });
-    // Always run the bcrypt comparison, even when no tenant was found —
-    // comparing against a precomputed dummy hash in that case — so an
-    // unknown email takes the same wall-clock time as a wrong password
-    // instead of leaking which emails are registered via response timing
-    // (backlog #9).
-    const valid = await verifyPassword(parsed.data.password, tenant?.passwordHash ?? DUMMY_PASSWORD_HASH);
-    if (!tenant || !valid) {
+    // Only look up a team member when no tenant matched — email is unique
+    // across both tables, so at most one of the two can ever exist for a
+    // given address. A team member with no password yet (invited but never
+    // completed set-password) or one that's been deactivated is treated
+    // the same as "no match" for login purposes — falls through to the
+    // dummy-hash compare below, same as a genuinely unknown email.
+    const teamMember = tenant ? null : await prisma.teamMember.findUnique({ where: { email: parsed.data.email } });
+    const usableTeamMember = teamMember && teamMember.active && teamMember.passwordHash ? teamMember : null;
+
+    // Always run exactly one real bcrypt comparison, even when neither a
+    // tenant nor a usable team member was found — comparing against a
+    // precomputed dummy hash in that case — so an unknown email takes the
+    // same wall-clock time as a known email (tenant OR team member) with
+    // the wrong password, instead of leaking which emails are registered
+    // via response timing (backlog #9). This now covers all three
+    // outcomes (unknown email, wrong tenant password, wrong team-member
+    // password), not just the original two.
+    const hashToCompare = tenant?.passwordHash ?? usableTeamMember?.passwordHash ?? DUMMY_PASSWORD_HASH;
+    const valid = await verifyPassword(parsed.data.password, hashToCompare);
+
+    if ((!tenant && !usableTeamMember) || !valid) {
       return res.status(401).json({ ok: false, error: 'Incorrect email or password.' });
     }
 
-    if (!tenant.emailVerifiedAt) {
-      return res.status(403).json({ ok: false, error: 'Verify your email address before logging in.' });
+    if (tenant) {
+      if (!tenant.emailVerifiedAt) {
+        return res.status(403).json({ ok: false, error: 'Verify your email address before logging in.' });
+      }
+
+      const { token, expiresAt } = await createSession('tenant', tenant.id);
+      res.cookie(env.sessionCookieName, token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: env.nodeEnv === 'production',
+        expires: expiresAt,
+      });
+      return res.json({ ok: true });
     }
 
-    const { token, expiresAt } = await createSession('tenant', tenant.id);
+    const { token, expiresAt } = await createSession('team_member', usableTeamMember!.id);
     res.cookie(env.sessionCookieName, token, {
       httpOnly: true,
       sameSite: 'lax',
@@ -198,6 +223,19 @@ export function createAuthRouter() {
       return res.status(401).json({ ok: false, error: 'Log in to continue.' });
     }
     const subscription = await tenantScope(tenant.id).subscription.get();
+
+    // req.actorId is only set by requireTenantAuth for a 'team_member'
+    // session (never for the tenant owner) — look up that member's own
+    // name/email so the frontend can show "Signed in as {name} (Sales)",
+    // distinct from the tenant's own businessName/email.
+    let actorName: string | null = null;
+    let actorEmail: string | null = null;
+    if (req.actorId) {
+      const teamMember = await prisma.teamMember.findUnique({ where: { id: req.actorId } });
+      actorName = teamMember?.name ?? null;
+      actorEmail = teamMember?.email ?? null;
+    }
+
     res.json({
       ok: true,
       tenant: {
@@ -212,6 +250,9 @@ export function createAuthRouter() {
         // dead" (canceled/lapsed) without a second round trip.
         subscriptionStatus: subscription?.status ?? null,
       },
+      actorRole: req.actorRole ?? 'admin',
+      actorName,
+      actorEmail,
     });
   });
 
