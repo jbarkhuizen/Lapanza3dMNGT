@@ -19,6 +19,14 @@ import { MaterialsLibraryPage } from './pages/materials/MaterialsLibraryPage.js'
 import { MaterialComparePage } from './pages/materials/MaterialComparePage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
 import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
+import { ScannersListPage } from './pages/scanners/ScannersListPage.js';
+import { ScannerFormPage } from './pages/scanners/ScannerFormPage.js';
+import { LaserMaterialsListPage } from './pages/laserMaterials/LaserMaterialsListPage.js';
+import { LaserMaterialFormPage } from './pages/laserMaterials/LaserMaterialFormPage.js';
+import { PremadeItemsListPage } from './pages/premadeItems/PremadeItemsListPage.js';
+import { PremadeItemFormPage } from './pages/premadeItems/PremadeItemFormPage.js';
+import { ProductsListPage } from './pages/products/ProductsListPage.js';
+import { ProductFormPage } from './pages/products/ProductFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
 import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
@@ -264,6 +272,126 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <PrinterFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/scanners"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ScannersListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/scanners/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ScannerFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/scanners/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ScannerFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/laser-materials"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <LaserMaterialsListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/laser-materials/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <LaserMaterialFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/laser-materials/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <LaserMaterialFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/premade-items"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PremadeItemsListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/premade-items/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PremadeItemFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/premade-items/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <PremadeItemFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/products"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ProductsListPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/products/new"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ProductFormPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/products/:id"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <ProductFormPage />
               </AppShell>
             </RequireAuth>
           }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateCosting, CostingInputError } from '../src/costing/calculate.js';
+import { calculateCosting, calculateScannerCosting, calculateLaserCosting, CostingInputError } from '../src/costing/calculate.js';
 
 const baseFilament = { weightGrams: 0, costPerKg: 0, costPerSpool: null, spoolWeightGrams: null };
 const basePrinter = { printTimeHours: 0, powerDrawWatts: 0, electricityRatePerKwh: 0, purchaseCost: 0, expectedLifetimeHours: 1000 };
@@ -230,4 +230,195 @@ test('rounds markupPercent, hourlyRate, and costPerUnit snapshots to 2dp and ret
     result.consumableLineRates[0].times(7).toFixed(2),
     result.consumableLineCosts[0].toFixed(2),
   );
+});
+
+// --- calculateScannerCosting ---
+
+test('calculateScannerCosting: hourlyRate = scannerCost / expectedScanHours + powerCostPerHour', () => {
+  const result = calculateScannerCosting({
+    scannerCost: 6000,
+    expectedScanHours: 1000,
+    powerCostPerHour: 0.5,
+    scanHours: 2,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  // 6000 / 1000 = 6.00, + 0.5 = 6.5000
+  assert.equal(result.hourlyRate.toFixed(4), '6.5000');
+  // 6.5 * 2 = 13.00
+  assert.equal(result.scanCost.toFixed(2), '13.00');
+  assert.equal(result.totalCost.toFixed(2), '13.00');
+});
+
+test('calculateScannerCosting: combines scan cost with labour/consumables/markup using the shared tail', () => {
+  const result = calculateScannerCosting({
+    scannerCost: 0,
+    expectedScanHours: 100,
+    powerCostPerHour: 0,
+    scanHours: 1,
+    labourLines: [{ hourlyRate: 150, hours: 1 }],
+    consumableLines: [{ costPerUnit: 10, quantity: 2 }],
+    markupPercent: 50,
+  });
+  assert.equal(result.scanCost.toFixed(2), '0.00');
+  assert.equal(result.labourCost.toFixed(2), '150.00');
+  assert.equal(result.consumablesCost.toFixed(2), '20.00');
+  assert.equal(result.totalCost.toFixed(2), '170.00');
+  assert.equal(result.suggestedPrice.toFixed(2), '255.00');
+});
+
+test('calculateScannerCosting throws CostingInputError when expectedScanHours is zero', () => {
+  assert.throws(
+    () =>
+      calculateScannerCosting({
+        scannerCost: 6000,
+        expectedScanHours: 0,
+        powerCostPerHour: 0,
+        scanHours: 2,
+        labourLines: [],
+        consumableLines: [],
+        markupPercent: 0,
+      }),
+    CostingInputError,
+  );
+});
+
+test('calculateScannerCosting rounds hourlyRate to 4dp BEFORE multiplying by scanHours, not after', () => {
+  // 1/7 = 0.142857142857... -> round to 4dp = 0.1429 (5th decimal digit is 5, rounds up).
+  // Rounding-first: 0.1429 * 700 = 100.03.
+  // Raw (unrounded) multiplication would give exactly 100.00 (1/7 * 700 = 100), rounded
+  // to 2dp as 100.00 -- a full 3-cent divergence from the rounded-first result, so this
+  // pins which ordering is actually implemented.
+  const result = calculateScannerCosting({
+    scannerCost: 1,
+    expectedScanHours: 7,
+    powerCostPerHour: 0,
+    scanHours: 700,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  assert.equal(result.hourlyRate.toFixed(4), '0.1429');
+  assert.equal(result.scanCost.toFixed(2), '100.03');
+});
+
+// --- calculateLaserCosting (sheet variant) ---
+
+test('calculateLaserCosting (sheet): perPartCost = (areaM2 / usableSheetAreaM2) * sheetPrice * costMultiplier', () => {
+  const result = calculateLaserCosting({
+    variant: 'sheet',
+    sheetPrice: 500,
+    usableSheetAreaM2: 2,
+    costMultiplier: 1,
+    areaM2: 0.5,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  // (0.5 / 2) * 500 * 1 = 125.00
+  assert.equal(result.materialCost.toFixed(2), '125.00');
+  assert.equal(result.totalCost.toFixed(2), '125.00');
+});
+
+test('calculateLaserCosting (sheet): applies costMultiplier and combines with labour/consumables/markup', () => {
+  const result = calculateLaserCosting({
+    variant: 'sheet',
+    sheetPrice: 500,
+    usableSheetAreaM2: 2,
+    costMultiplier: 1.2,
+    areaM2: 0.5,
+    labourLines: [{ hourlyRate: 100, hours: 1 }],
+    consumableLines: [],
+    markupPercent: 10,
+  });
+  // (0.5 / 2) * 500 * 1.2 = 150.00
+  assert.equal(result.materialCost.toFixed(2), '150.00');
+  assert.equal(result.totalCost.toFixed(2), '250.00');
+  assert.equal(result.suggestedPrice.toFixed(2), '275.00');
+});
+
+test('calculateLaserCosting (sheet) throws CostingInputError when usableSheetAreaM2 is zero', () => {
+  assert.throws(
+    () =>
+      calculateLaserCosting({
+        variant: 'sheet',
+        sheetPrice: 500,
+        usableSheetAreaM2: 0,
+        costMultiplier: 1,
+        areaM2: 0.5,
+        labourLines: [],
+        consumableLines: [],
+        markupPercent: 0,
+      }),
+    CostingInputError,
+  );
+});
+
+test('calculateLaserCosting (sheet) rounds the division/multiplication chain only ONCE, at the end', () => {
+  // 1 / 3 = 0.333333... -- if an implementation rounded this intermediate division to
+  // e.g. 4dp (0.3333) before multiplying by sheetPrice, it would give 0.3333 * 300 =
+  // 99.99. The spec's formula has no intermediate rounding: (1/3) * 300 = exactly
+  // 100, rounded once to 100.00 -- a 1-cent divergence that pins the correct ordering.
+  const result = calculateLaserCosting({
+    variant: 'sheet',
+    sheetPrice: 300,
+    usableSheetAreaM2: 3,
+    costMultiplier: 1,
+    areaM2: 1,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  assert.equal(result.materialCost.toFixed(2), '100.00');
+});
+
+// --- calculateLaserCosting (premade-item variant) ---
+
+test('calculateLaserCosting (premade): itemCost = unitCost * costMultiplier * quantity', () => {
+  const result = calculateLaserCosting({
+    variant: 'premade',
+    unitCost: 25,
+    costMultiplier: 1,
+    quantity: 3,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  assert.equal(result.materialCost.toFixed(2), '75.00');
+  assert.equal(result.totalCost.toFixed(2), '75.00');
+});
+
+test('calculateLaserCosting (premade): applies costMultiplier and combines with labour/consumables/markup', () => {
+  const result = calculateLaserCosting({
+    variant: 'premade',
+    unitCost: 25,
+    costMultiplier: 1.5,
+    quantity: 2,
+    labourLines: [{ hourlyRate: 50, hours: 2 }],
+    consumableLines: [{ costPerUnit: 5, quantity: 1 }],
+    markupPercent: 20,
+  });
+  // 25 * 1.5 * 2 = 75.00
+  assert.equal(result.materialCost.toFixed(2), '75.00');
+  // labour 100 + consumables 5 + material 75 = 180.00
+  assert.equal(result.totalCost.toFixed(2), '180.00');
+  assert.equal(result.suggestedPrice.toFixed(2), '216.00');
+});
+
+test('calculateLaserCosting (premade) rounds unitCost * costMultiplier * quantity only ONCE, at the end', () => {
+  // 2.335 * 1 * 3 = 7.005 exactly -> round HALF_UP to 2dp = 7.01. A "round unitCost to
+  // 2dp first" implementation would give 2.34 * 3 = 7.02 instead -- this pins the
+  // single-round-at-the-end formula the spec states, matching the same rigor as the
+  // existing labour/consumable line-rounding test above.
+  const result = calculateLaserCosting({
+    variant: 'premade',
+    unitCost: 2.335,
+    costMultiplier: 1,
+    quantity: 3,
+    labourLines: [],
+    consumableLines: [],
+    markupPercent: 0,
+  });
+  assert.equal(result.materialCost.toFixed(2), '7.01');
 });

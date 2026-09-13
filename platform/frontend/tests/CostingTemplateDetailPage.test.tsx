@@ -14,6 +14,7 @@ beforeEach(() => {
 const fullTemplate = {
   id: '1',
   name: 'Standard PLA bracket',
+  process: 'printer',
   filamentId: 'f1',
   filamentSnapshotBrand: 'eSun',
   filamentSnapshotMaterialType: 'PLA',
@@ -71,6 +72,29 @@ describe('CostingTemplateDetailPage', () => {
     expect(screen.getByText(formatCurrency('285.00'))).toBeInTheDocument();
     expect(screen.getByText('Slicing')).toBeInTheDocument();
     expect(screen.getByText('Build plate adhesive')).toBeInTheDocument();
+  });
+
+  it('renders scanner-process fields instead of filament/printer fields', async () => {
+    const scannerTemplate = {
+      ...fullTemplate,
+      id: '2',
+      name: '3D scan job',
+      process: 'scanner',
+      scannerSnapshotName: 'Handheld scanner',
+      scanHours: 2,
+      labourLines: [],
+      consumableLines: [],
+    };
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/costing-templates/2') return Promise.resolve({ ok: true, costingTemplate: scannerTemplate });
+      if (path === '/api/jobs') return Promise.resolve({ ok: true, jobs: [] });
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    renderAt('/costing-templates/2');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: '3D scan job' })).toBeInTheDocument());
+    expect(screen.getByText('Handheld scanner')).toBeInTheDocument();
+    expect(screen.queryByText('eSun')).not.toBeInTheDocument();
   });
 
   it('shows an error message when the template fails to load', async () => {

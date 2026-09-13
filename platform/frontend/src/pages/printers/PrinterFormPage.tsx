@@ -14,6 +14,9 @@ import { PresetsSection } from '../../components/printers/PresetsSection.js';
 import { MaintenanceLogSection } from '../../components/printers/MaintenanceLogSection.js';
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
+// A laser cutter/engraver is tracked as a Printer row too -- see the design
+// spec's "Data model" section.
+const PROCESSES = ['fdm', 'resin', 'laser'] as const;
 
 const emptyForm: PrinterFormInput = {
   name: '',
@@ -28,6 +31,7 @@ const emptyForm: PrinterFormInput = {
   electricityRatePerKwh: undefined,
   expectedLifetimeHours: undefined,
   status: 'active',
+  process: 'fdm',
 };
 
 // `purchaseDate` is the only field on the printers route with stricter-than-plain-optional
@@ -67,6 +71,7 @@ export function PrinterFormPage() {
           existingPrinter.electricityRatePerKwh != null ? Number(existingPrinter.electricityRatePerKwh) : undefined,
         expectedLifetimeHours: existingPrinter.expectedLifetimeHours ?? undefined,
         status: existingPrinter.status,
+        process: existingPrinter.process,
       });
     }
   }, [existingPrinter, id]);
@@ -150,6 +155,21 @@ export function PrinterFormPage() {
             {STATUSES.map((status) => (
               <option key={status} value={status}>
                 {status}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="process" className="text-sm font-medium text-slate-700">Process</label>
+          <select
+            id="process"
+            value={form.process}
+            onChange={(e) => set('process', e.target.value as (typeof PROCESSES)[number])}
+            className="rounded border border-slate-300 px-3 py-2 text-sm"
+          >
+            {PROCESSES.map((process) => (
+              <option key={process} value={process}>
+                {process}
               </option>
             ))}
           </select>

@@ -88,6 +88,10 @@ model Tenant {
   featureRequestVotes    FeatureRequestVote[]
   jobCards               JobCard[]
   teamMembers            TeamMember[]
+  scanners               Scanner[]
+  laserMaterials         LaserMaterial[]
+  premadeItems           PremadeItem[]
+  products               Product[]
 
   @@map("tenants")
 }
@@ -206,6 +210,11 @@ model Printer {
   electricityRatePerKwh Decimal? @db.Decimal(10, 4)
   expectedLifetimeHours Float?
   status           String    @default("active")
+  // 'fdm' | 'resin' | 'laser' -- a laser cutter/engraver is tracked as a
+  // Printer row too, since the same purchase-cost/hours/electricity
+  // depreciation formula applies uniformly across all three; only
+  // *material* costing differs by process (see CostingTemplate.process).
+  process          String    @default("fdm")
   createdAt        DateTime  @default(now()) @db.Timestamptz(3)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -322,18 +331,32 @@ model Consumable {
 model CostingTemplate {
   id                                    String    @id @default(uuid())
   tenantId                              String
+  // 'printer' | 'scanner' | 'laser_sheet' | 'laser_premade' -- decides which
+  // of the four input groups below is required/populated; the other
+  // groups' fields stay null on that row, same "sparse columns per variant"
+  // convention as JobCard's cardType.
+  process                               String    @default("printer")
   name                                  String
   filamentId                            String?
   filamentSnapshotBrand                 String?
   filamentSnapshotMaterialType          String?
   filamentSnapshotCostPerGram           Decimal?  @db.Decimal(12, 6)
-  weightGrams                           Float
+  weightGrams                           Float?
   printerId                             String?
   printerSnapshotName                   String?
   printerSnapshotElectricityRatePerKwh  Decimal?  @db.Decimal(10, 4)
   printerSnapshotDepreciationPerHour    Decimal?  @db.Decimal(12, 4)
   printerSnapshotPowerDrawWatts         Float?
-  printTimeHours                        Float
+  printTimeHours                        Float?
+  scannerId                             String?
+  scannerSnapshotName                   String?
+  scanHours                             Float?
+  laserMaterialId                       String?
+  laserMaterialSnapshotName             String?
+  sheetAreaUsedM2                       Float?
+  premadeItemId                         String?
+  premadeItemSnapshotName               String?
+  premadeItemQuantity                   Int?
   markupPercent                         Decimal   @db.Decimal(6, 2)
   filamentCost                          Decimal   @db.Decimal(12, 2)
   electricityCost                       Decimal   @db.Decimal(12, 2)
@@ -344,9 +367,12 @@ model CostingTemplate {
   suggestedPrice                        Decimal   @db.Decimal(12, 2)
   createdAt                             DateTime  @default(now()) @db.Timestamptz(3)
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  filament Filament? @relation(fields: [filamentId], references: [id], onDelete: SetNull)
-  printer  Printer?  @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  filament      Filament?      @relation(fields: [filamentId], references: [id], onDelete: SetNull)
+  printer       Printer?       @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  scanner       Scanner?       @relation(fields: [scannerId], references: [id], onDelete: SetNull)
+  laserMaterial LaserMaterial? @relation(fields: [laserMaterialId], references: [id], onDelete: SetNull)
+  premadeItem   PremadeItem?   @relation(fields: [premadeItemId], references: [id], onDelete: SetNull)
 
   labourLines      CostingLabourLine[]
   consumableLines  CostingConsumableLine[]
@@ -356,6 +382,72 @@ model CostingTemplate {
 
   @@index([tenantId])
   @@map("costing_templates")
+}
+
+model Scanner {
+  id                String   @id @default(uuid())
+  tenantId          String
+  name              String
+  scannerCost       Float
+  expectedScanHours Float
+  powerCostPerHour  Float    @default(0)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  costingTemplates CostingTemplate[]
+
+  @@index([tenantId])
+  @@map("scanners")
+}
+
+model LaserMaterial {
+  id                String   @id @default(uuid())
+  tenantId          String
+  name              String
+  sheetPrice        Float
+  sheetAreaM2       Float
+  usableSheetAreaM2 Float
+  costMultiplier    Float    @default(1)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  costingTemplates CostingTemplate[]
+
+  @@index([tenantId])
+  @@map("laser_materials")
+}
+
+model PremadeItem {
+  id             String   @id @default(uuid())
+  tenantId       String
+  name           String
+  unitCost       Float
+  costMultiplier Float    @default(1)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  costingTemplates CostingTemplate[]
+
+  @@index([tenantId])
+  @@map("premade_items")
+}
+
+model Product {
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  category     String?
+  cost         Decimal  @db.Decimal(12, 2)
+  sellingPrice Decimal  @db.Decimal(12, 2)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("products")
 }
 
 model CostingLabourLine {

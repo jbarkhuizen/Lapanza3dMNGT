@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { CostingTemplatesListPage } from '../src/pages/costingTemplates/CostingTemplatesListPage.js';
+import type { CostingTemplate } from '../src/api/costingTemplates.js';
 import * as client from '../src/api/client.js';
 import { createTestQueryClient } from './helpers/queryClient.js';
 import { formatCurrency } from '../src/lib/formatCurrency.js';
@@ -22,9 +23,10 @@ function renderPage() {
   );
 }
 
-const baseTemplate = {
+const baseTemplate: CostingTemplate = {
   id: '1',
   name: 'Standard PLA bracket',
+  process: 'printer',
   filamentId: 'f1',
   filamentSnapshotBrand: 'eSun',
   filamentSnapshotMaterialType: 'PLA',
@@ -35,6 +37,15 @@ const baseTemplate = {
   printerSnapshotElectricityRatePerKwh: '2.5000',
   printerSnapshotDepreciationPerHour: '2.0000',
   printTimeHours: 2,
+  scannerId: null,
+  scannerSnapshotName: null,
+  scanHours: null,
+  laserMaterialId: null,
+  laserMaterialSnapshotName: null,
+  sheetAreaUsedM2: null,
+  premadeItemId: null,
+  premadeItemSnapshotName: null,
+  premadeItemQuantity: null,
   markupPercent: '50.00',
   filamentCost: '15.00',
   electricityCost: '1.00',
@@ -55,7 +66,7 @@ const testCompanyProfile = {
   quoteNumberPrefix: 'QT', invoiceNumberPrefix: 'INV',
 };
 
-function mockReferenceData(costingTemplates = [baseTemplate], companyProfile = testCompanyProfile) {
+function mockReferenceData(costingTemplates: CostingTemplate[] = [baseTemplate], companyProfile = testCompanyProfile) {
   vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
     if (path === '/api/costing-templates') return Promise.resolve({ ok: true, costingTemplates });
     if (path === '/api/company-profile') return Promise.resolve({ ok: true, companyProfile });
@@ -68,10 +79,28 @@ describe('CostingTemplatesListPage', () => {
     mockReferenceData();
     renderPage();
     await waitFor(() => expect(screen.getByText('Standard PLA bracket')).toBeInTheDocument());
-    expect(screen.getByText('eSun')).toBeInTheDocument();
+    expect(screen.getByText('printer')).toBeInTheDocument();
     expect(screen.getByText('Prusa MK4')).toBeInTheDocument();
     expect(screen.getByText(formatCurrency('190.00'))).toBeInTheDocument();
     expect(screen.getByText(formatCurrency('285.00'))).toBeInTheDocument();
+  });
+
+  it('shows the scanner snapshot name as the source for a scanner-process template', async () => {
+    mockReferenceData([
+      {
+        ...baseTemplate,
+        id: '2',
+        name: '3D scan job',
+        process: 'scanner',
+        printerSnapshotName: null,
+        scannerSnapshotName: 'Handheld scanner',
+        scanHours: 2,
+      },
+    ]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('3D scan job')).toBeInTheDocument());
+    expect(screen.getByText('scanner')).toBeInTheDocument();
+    expect(screen.getByText('Handheld scanner')).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no costing templates', async () => {

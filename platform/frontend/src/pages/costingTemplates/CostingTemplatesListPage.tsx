@@ -1,10 +1,25 @@
 import { Link } from 'react-router-dom';
-import { useCostingTemplates } from '../../api/costingTemplates.js';
+import { useCostingTemplates, type CostingTemplate } from '../../api/costingTemplates.js';
 import { formatCurrency } from '../../lib/formatCurrency.js';
 import { useDisplayCurrency } from '../../lib/useDisplayCurrency.js';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
+}
+
+// Each process variant snapshots a different source entity's name -- show
+// whichever one this row actually has, rather than a printer-only column.
+function sourceLabel(template: CostingTemplate): string {
+  switch (template.process) {
+    case 'scanner':
+      return template.scannerSnapshotName ?? '—';
+    case 'laser_sheet':
+      return template.laserMaterialSnapshotName ?? '—';
+    case 'laser_premade':
+      return template.premadeItemSnapshotName ?? '—';
+    default:
+      return template.printerSnapshotName ?? '—';
+  }
 }
 
 export function CostingTemplatesListPage() {
@@ -29,8 +44,8 @@ export function CostingTemplatesListPage() {
           <thead>
             <tr className="border-b border-slate-200 text-slate-500">
               <th className="py-2">Name</th>
-              <th className="py-2">Filament</th>
-              <th className="py-2">Printer</th>
+              <th className="py-2">Process</th>
+              <th className="py-2">Source</th>
               <th className="py-2">Total cost</th>
               <th className="py-2">Suggested price</th>
               <th className="py-2">Created</th>
@@ -41,8 +56,8 @@ export function CostingTemplatesListPage() {
             {costingTemplates.map((template) => (
               <tr key={template.id} className="border-b border-slate-100">
                 <td className="py-2">{template.name}</td>
-                <td className="py-2">{template.filamentSnapshotBrand ?? '—'}</td>
-                <td className="py-2">{template.printerSnapshotName ?? '—'}</td>
+                <td className="py-2">{template.process}</td>
+                <td className="py-2">{sourceLabel(template)}</td>
                 <td className="py-2">{formatCurrency(template.totalCost, currency)}</td>
                 <td className="py-2">{formatCurrency(template.suggestedPrice, currency)}</td>
                 <td className="py-2">{formatDate(template.createdAt)}</td>

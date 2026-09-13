@@ -19,19 +19,31 @@ export interface CostingConsumableLine {
   lineCost: string;
 }
 
+export type CostingTemplateProcess = 'printer' | 'scanner' | 'laser_sheet' | 'laser_premade';
+
 export interface CostingTemplate {
   id: string;
   name: string;
+  process: CostingTemplateProcess;
   filamentId: string | null;
   filamentSnapshotBrand: string | null;
   filamentSnapshotMaterialType: string | null;
   filamentSnapshotCostPerGram: string | null;
-  weightGrams: number;
+  weightGrams: number | null;
   printerId: string | null;
   printerSnapshotName: string | null;
   printerSnapshotElectricityRatePerKwh: string | null;
   printerSnapshotDepreciationPerHour: string | null;
-  printTimeHours: number;
+  printTimeHours: number | null;
+  scannerId: string | null;
+  scannerSnapshotName: string | null;
+  scanHours: number | null;
+  laserMaterialId: string | null;
+  laserMaterialSnapshotName: string | null;
+  sheetAreaUsedM2: number | null;
+  premadeItemId: string | null;
+  premadeItemSnapshotName: string | null;
+  premadeItemQuantity: number | null;
   markupPercent: string;
   filamentCost: string;
   electricityCost: string;
@@ -45,16 +57,39 @@ export interface CostingTemplate {
   consumableLines?: CostingConsumableLine[];
 }
 
-export interface CostingTemplateFormInput {
+interface SharedCostingTemplateFormFields {
   name: string;
-  filamentId: string;
-  weightGrams: number;
-  printerId: string;
-  printTimeHours: number;
   markupPercent: number;
   labourLines: Array<{ labourStepId: string; hours: number }>;
   consumableLines: Array<{ consumableId: string; quantity: number }>;
 }
+
+// A discriminated union on `process` mirroring the backend's own
+// discriminated create schema in `platform/api/src/routes/costing-templates.ts`
+// -- only one process's fields are ever sent per request.
+export type CostingTemplateFormInput =
+  | (SharedCostingTemplateFormFields & {
+      process: 'printer';
+      filamentId: string;
+      weightGrams: number;
+      printerId: string;
+      printTimeHours: number;
+    })
+  | (SharedCostingTemplateFormFields & {
+      process: 'scanner';
+      scannerId: string;
+      scanHours: number;
+    })
+  | (SharedCostingTemplateFormFields & {
+      process: 'laser_sheet';
+      laserMaterialId: string;
+      sheetAreaUsedM2: number;
+    })
+  | (SharedCostingTemplateFormFields & {
+      process: 'laser_premade';
+      premadeItemId: string;
+      premadeItemQuantity: number;
+    });
 
 export const COSTING_TEMPLATES_QUERY_KEY = ['costingTemplates'] as const;
 

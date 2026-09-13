@@ -59,6 +59,7 @@ export interface CreatePrinterInput {
   electricityRatePerKwh?: number;
   expectedLifetimeHours?: number;
   status?: string;
+  process?: string;
 }
 
 export interface UpdatePrinterInput {
@@ -77,6 +78,7 @@ export interface UpdatePrinterInput {
   electricityRatePerKwh?: number | null;
   expectedLifetimeHours?: number | null;
   status?: string;
+  process?: string;
 }
 
 export interface CreatePrinterPresetInput {
@@ -175,6 +177,63 @@ export interface UpdateConsumableInput {
   supplier?: string;
 }
 
+export interface CreateScannerInput {
+  name: string;
+  scannerCost: number;
+  expectedScanHours: number;
+  powerCostPerHour?: number;
+}
+
+export interface UpdateScannerInput {
+  name?: string;
+  scannerCost?: number;
+  expectedScanHours?: number;
+  powerCostPerHour?: number;
+}
+
+export interface CreateLaserMaterialInput {
+  name: string;
+  sheetPrice: number;
+  sheetAreaM2: number;
+  usableSheetAreaM2: number;
+  costMultiplier?: number;
+}
+
+export interface UpdateLaserMaterialInput {
+  name?: string;
+  sheetPrice?: number;
+  sheetAreaM2?: number;
+  usableSheetAreaM2?: number;
+  costMultiplier?: number;
+}
+
+export interface CreatePremadeItemInput {
+  name: string;
+  unitCost: number;
+  costMultiplier?: number;
+}
+
+export interface UpdatePremadeItemInput {
+  name?: string;
+  unitCost?: number;
+  costMultiplier?: number;
+}
+
+export interface CreateProductInput {
+  name: string;
+  category?: string;
+  cost: string;
+  sellingPrice: string;
+}
+
+export interface UpdateProductInput {
+  name?: string;
+  // string to set, null to explicitly clear, omitted (key absent) to leave untouched.
+  category?: string | null;
+  cost?: string;
+  sellingPrice?: string;
+}
+
 export interface CreateCostingTemplateLabourLineInput {
   labourStepId: string | null;
   labourStepSnapshotName: string;
@@ -193,17 +252,30 @@ export interface CreateCostingTemplateConsumableLineInput {
 
 export interface CreateCostingTemplateInput {
   name: string;
+  // 'printer' | 'scanner' | 'laser_sheet' | 'laser_premade' -- see the
+  // design spec's CostingTemplate.process field. Defaults to 'printer' at
+  // the route layer for backward compatibility with pre-v2 callers.
+  process?: string;
   filamentId: string | null;
   filamentSnapshotBrand: string | null;
   filamentSnapshotMaterialType: string | null;
   filamentSnapshotCostPerGram: string | null;
-  weightGrams: number;
+  weightGrams: number | null;
   printerId: string | null;
   printerSnapshotName: string | null;
   printerSnapshotElectricityRatePerKwh: string | null;
   printerSnapshotDepreciationPerHour: string | null;
   printerSnapshotPowerDrawWatts: number | null;
-  printTimeHours: number;
+  printTimeHours: number | null;
+  scannerId?: string | null;
+  scannerSnapshotName?: string | null;
+  scanHours?: number | null;
+  laserMaterialId?: string | null;
+  laserMaterialSnapshotName?: string | null;
+  sheetAreaUsedM2?: number | null;
+  premadeItemId?: string | null;
+  premadeItemSnapshotName?: string | null;
+  premadeItemQuantity?: number | null;
   markupPercent: string;
   filamentCost: string;
   electricityCost: string;
@@ -760,6 +832,7 @@ export function tenantScope(tenantId: string) {
           data: {
             tenantId,
             name: data.name,
+            process: data.process ?? 'printer',
             filamentId: data.filamentId,
             filamentSnapshotBrand: data.filamentSnapshotBrand,
             filamentSnapshotMaterialType: data.filamentSnapshotMaterialType,
@@ -771,6 +844,15 @@ export function tenantScope(tenantId: string) {
             printerSnapshotDepreciationPerHour: data.printerSnapshotDepreciationPerHour,
             printerSnapshotPowerDrawWatts: data.printerSnapshotPowerDrawWatts,
             printTimeHours: data.printTimeHours,
+            scannerId: data.scannerId ?? null,
+            scannerSnapshotName: data.scannerSnapshotName ?? null,
+            scanHours: data.scanHours ?? null,
+            laserMaterialId: data.laserMaterialId ?? null,
+            laserMaterialSnapshotName: data.laserMaterialSnapshotName ?? null,
+            sheetAreaUsedM2: data.sheetAreaUsedM2 ?? null,
+            premadeItemId: data.premadeItemId ?? null,
+            premadeItemSnapshotName: data.premadeItemSnapshotName ?? null,
+            premadeItemQuantity: data.premadeItemQuantity ?? null,
             markupPercent: data.markupPercent,
             filamentCost: data.filamentCost,
             electricityCost: data.electricityCost,
@@ -802,6 +884,68 @@ export function tenantScope(tenantId: string) {
           },
           include: { labourLines: true, consumableLines: true },
         }),
+    },
+
+    scanners: {
+      findMany: () => prisma.scanner.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.scanner.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateScannerInput) => prisma.scanner.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdateScannerInput) =>
+        prisma.scanner.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+
+      delete: (id: string) => prisma.scanner.deleteMany({ where: { id, tenantId } }),
+    },
+
+    laserMaterials: {
+      findMany: () => prisma.laserMaterial.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.laserMaterial.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateLaserMaterialInput) => prisma.laserMaterial.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdateLaserMaterialInput) =>
+        prisma.laserMaterial.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+
+      delete: (id: string) => prisma.laserMaterial.deleteMany({ where: { id, tenantId } }),
+    },
+
+    premadeItems: {
+      findMany: () => prisma.premadeItem.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.premadeItem.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreatePremadeItemInput) => prisma.premadeItem.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdatePremadeItemInput) =>
+        prisma.premadeItem.updateMany({ where: { id, tenantId }, data: { ...data, tenantId: undefined } }),
+
+      delete: (id: string) => prisma.premadeItem.deleteMany({ where: { id, tenantId } }),
+    },
+
+    products: {
+      findMany: () => prisma.product.findMany({ where: { tenantId } }),
+
+      findById: (id: string) => prisma.product.findFirst({ where: { id, tenantId } }),
+
+      create: (data: CreateProductInput) => prisma.product.create({ data: { ...data, tenantId } }),
+
+      update: (id: string, data: UpdateProductInput) =>
+        prisma.product.updateMany({
+          where: { id, tenantId },
+          data: {
+            ...data,
+            // 'category' in data distinguishes "key omitted" (undefined here ->
+            // don't touch it) from "explicitly null" (clear it) — same
+            // three-state pattern used elsewhere in this file.
+            category: 'category' in data ? (data.category ?? null) : undefined,
+            tenantId: undefined,
+          },
+        }),
+
+      delete: (id: string) => prisma.product.deleteMany({ where: { id, tenantId } }),
     },
 
     companyProfile: {

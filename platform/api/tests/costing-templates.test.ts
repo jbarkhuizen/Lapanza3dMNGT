@@ -326,7 +326,7 @@ test('POST /api/costing-templates rejects markupPercent at the Decimal(6,2) ceil
   assert.equal(res.status, 400);
   assert.equal(
     res.body.error,
-    'Name, filament, weight, printer, print time, and markup are required.',
+    'Name, a valid process, its required fields, and markup are required.',
   );
 });
 
@@ -347,6 +347,175 @@ test('POST /api/costing-templates accepts markupPercent just under the Decimal(6
   });
   assert.equal(res.status, 201);
   assert.equal(res.body.costingTemplate.markupPercent, '9999.99');
+});
+
+test('create-with-process:scanner snapshots the scanner and computes correct totals', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const scannerRes = await agent.post('/api/scanners').send({
+    name: 'Handheld scanner',
+    scannerCost: 6000,
+    expectedScanHours: 1000,
+    powerCostPerHour: 0.5,
+  });
+  assert.equal(scannerRes.status, 201);
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'scanner',
+    name: '3D scan job',
+    scannerId: scannerRes.body.scanner.id,
+    scanHours: 2,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 201);
+  const t = res.body.costingTemplate;
+  assert.equal(t.process, 'scanner');
+  assert.equal(t.scannerSnapshotName, 'Handheld scanner');
+  // hourlyRate = 6000/1000 + 0.5 = 6.5; scanCost = 6.5 * 2 = 13.00
+  assert.equal(t.depreciationCost, '13.00');
+  assert.equal(t.totalCost, '13.00');
+  assert.equal(t.suggestedPrice, '13.00');
+});
+
+test('create-with-process:scanner rejects a scanner belonging to another tenant', async () => {
+  const app = buildApp();
+  const agentA = await loggedInAgent(app, 'jane@acmeprints.co.za');
+  const scannerRes = await agentA.post('/api/scanners').send({
+    name: 'Handheld scanner', scannerCost: 6000, expectedScanHours: 1000,
+  });
+  const agentB = await loggedInAgent(app, 'bob@othershop.co.za');
+
+  const res = await agentB.post('/api/costing-templates').send({
+    process: 'scanner',
+    name: '3D scan job',
+    scannerId: scannerRes.body.scanner.id,
+    scanHours: 2,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error, 'Scanner not found.');
+});
+
+test('create-with-process:scanner rejects cross-process fields (filamentId not valid on a scanner template)', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const scannerRes = await agent.post('/api/scanners').send({
+    name: 'Handheld scanner', scannerCost: 6000, expectedScanHours: 1000,
+  });
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'scanner',
+    name: '3D scan job',
+    scannerId: scannerRes.body.scanner.id,
+    scanHours: 2,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+    filamentId: 'not-allowed-here',
+  });
+  assert.equal(res.status, 400);
+});
+
+test('create-with-process:laser_sheet snapshots the laser material and computes correct totals', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const laserMaterialRes = await agent.post('/api/laser-materials').send({
+    name: 'Acrylic 3mm',
+    sheetPrice: 500,
+    sheetAreaM2: 2.88,
+    usableSheetAreaM2: 2,
+    costMultiplier: 1,
+  });
+  assert.equal(laserMaterialRes.status, 201);
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'laser_sheet',
+    name: 'Acrylic sign',
+    laserMaterialId: laserMaterialRes.body.laserMaterial.id,
+    sheetAreaUsedM2: 0.5,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 201);
+  const t = res.body.costingTemplate;
+  assert.equal(t.process, 'laser_sheet');
+  assert.equal(t.laserMaterialSnapshotName, 'Acrylic 3mm');
+  // (0.5 / 2) * 500 * 1 = 125.00
+  assert.equal(t.filamentCost, '125.00');
+  assert.equal(t.totalCost, '125.00');
+});
+
+test('create-with-process:laser_sheet rejects cross-process fields (printerId not valid on a laser_sheet template)', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const laserMaterialRes = await agent.post('/api/laser-materials').send({
+    name: 'Acrylic 3mm', sheetPrice: 500, sheetAreaM2: 2.88, usableSheetAreaM2: 2,
+  });
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'laser_sheet',
+    name: 'Acrylic sign',
+    laserMaterialId: laserMaterialRes.body.laserMaterial.id,
+    sheetAreaUsedM2: 0.5,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+    printerId: 'not-allowed-here',
+  });
+  assert.equal(res.status, 400);
+});
+
+test('create-with-process:laser_premade snapshots the premade item and computes correct totals', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const premadeItemRes = await agent.post('/api/premade-items').send({
+    name: 'Keychain blank',
+    unitCost: 25,
+    costMultiplier: 1,
+  });
+  assert.equal(premadeItemRes.status, 201);
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'laser_premade',
+    name: 'Engraved keychain',
+    premadeItemId: premadeItemRes.body.premadeItem.id,
+    premadeItemQuantity: 3,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+  });
+  assert.equal(res.status, 201);
+  const t = res.body.costingTemplate;
+  assert.equal(t.process, 'laser_premade');
+  assert.equal(t.premadeItemSnapshotName, 'Keychain blank');
+  // 25 * 1 * 3 = 75.00
+  assert.equal(t.filamentCost, '75.00');
+  assert.equal(t.totalCost, '75.00');
+});
+
+test('create-with-process:laser_premade rejects cross-process fields (weightGrams not valid on a laser_premade template)', async () => {
+  const app = buildApp();
+  const agent = await loggedInAgent(app);
+  const premadeItemRes = await agent.post('/api/premade-items').send({
+    name: 'Keychain blank', unitCost: 25,
+  });
+
+  const res = await agent.post('/api/costing-templates').send({
+    process: 'laser_premade',
+    name: 'Engraved keychain',
+    premadeItemId: premadeItemRes.body.premadeItem.id,
+    premadeItemQuantity: 3,
+    markupPercent: 0,
+    labourLines: [],
+    consumableLines: [],
+    weightGrams: 50,
+  });
+  assert.equal(res.status, 400);
 });
 
 test('GET /api/costing-templates/:id returns 404 for another tenant\'s template', async () => {

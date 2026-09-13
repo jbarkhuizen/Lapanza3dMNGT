@@ -47,24 +47,64 @@ export function CostingTemplateDetailPage() {
       <h1 className="text-2xl font-semibold text-slate-900">{template.name}</h1>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <div className="text-slate-500">Filament</div>
-          <div>
-            <span>{template.filamentSnapshotBrand}</span> — <span>{template.filamentSnapshotMaterialType}</span>
-          </div>
-        </div>
-        <div>
-          <div className="text-slate-500">Printer</div>
-          <div>{template.printerSnapshotName}</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Weight</div>
-          <div>{template.weightGrams}g</div>
-        </div>
-        <div>
-          <div className="text-slate-500">Print time</div>
-          <div>{template.printTimeHours}h</div>
-        </div>
+        {template.process === 'printer' && (
+          <>
+            <div>
+              <div className="text-slate-500">Filament</div>
+              <div>
+                <span>{template.filamentSnapshotBrand}</span> — <span>{template.filamentSnapshotMaterialType}</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-slate-500">Printer</div>
+              <div>{template.printerSnapshotName}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Weight</div>
+              <div>{template.weightGrams}g</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Print time</div>
+              <div>{template.printTimeHours}h</div>
+            </div>
+          </>
+        )}
+        {template.process === 'scanner' && (
+          <>
+            <div>
+              <div className="text-slate-500">Scanner</div>
+              <div>{template.scannerSnapshotName}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Scan hours</div>
+              <div>{template.scanHours}h</div>
+            </div>
+          </>
+        )}
+        {template.process === 'laser_sheet' && (
+          <>
+            <div>
+              <div className="text-slate-500">Laser material</div>
+              <div>{template.laserMaterialSnapshotName}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Sheet area used</div>
+              <div>{template.sheetAreaUsedM2}m²</div>
+            </div>
+          </>
+        )}
+        {template.process === 'laser_premade' && (
+          <>
+            <div>
+              <div className="text-slate-500">Pre-made item</div>
+              <div>{template.premadeItemSnapshotName}</div>
+            </div>
+            <div>
+              <div className="text-slate-500">Quantity</div>
+              <div>{template.premadeItemQuantity}</div>
+            </div>
+          </>
+        )}
         <div>
           <div className="text-slate-500">Markup</div>
           <div>{template.markupPercent}%</div>

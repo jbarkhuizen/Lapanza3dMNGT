@@ -24,6 +24,15 @@ function mockReferenceData(options?: { emptyLabourSteps?: boolean; emptyConsumab
     if (path === '/api/consumables') {
       return Promise.resolve({ ok: true, consumables: options?.emptyConsumables ? [] : [{ id: 'cs1', name: 'Build plate adhesive', category: 'other', unitOfMeasure: 'each', costPerUnit: 10, currentStock: 5, reorderThreshold: null, supplier: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
     }
+    if (path === '/api/scanners') {
+      return Promise.resolve({ ok: true, scanners: [{ id: 's1', name: 'Handheld scanner', scannerCost: 6000, expectedScanHours: 1000, powerCostPerHour: 0.5, createdAt: '2026-01-01T00:00:00.000Z' }] });
+    }
+    if (path === '/api/laser-materials') {
+      return Promise.resolve({ ok: true, laserMaterials: [{ id: 'lm1', name: 'Acrylic 3mm', sheetPrice: 500, sheetAreaM2: 2.88, usableSheetAreaM2: 2, costMultiplier: 1, createdAt: '2026-01-01T00:00:00.000Z' }] });
+    }
+    if (path === '/api/premade-items') {
+      return Promise.resolve({ ok: true, premadeItems: [{ id: 'pi1', name: 'Keychain blank', unitCost: 25, costMultiplier: 1, createdAt: '2026-01-01T00:00:00.000Z' }] });
+    }
     return Promise.reject(new client.ApiError('not found', 404));
   });
 }
@@ -66,6 +75,7 @@ describe('CostingTemplateCreatePage', () => {
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'printer',
         name: 'Standard bracket',
         filamentId: 'f1',
         weightGrams: 50,
@@ -104,6 +114,7 @@ describe('CostingTemplateCreatePage', () => {
 
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'printer',
         name: 'Standard bracket',
         filamentId: 'f1',
         weightGrams: 50,
@@ -157,5 +168,110 @@ describe('CostingTemplateCreatePage', () => {
     const addConsumableButton = screen.getByRole('button', { name: 'Add Consumable Line' });
     expect(addConsumableButton).toBeDisabled();
     expect(screen.getByText('Add a consumable first (Consumables page) before adding one here.')).toBeInTheDocument();
+  });
+
+  it('switching the process selector swaps the visible input group', async () => {
+    mockReferenceData();
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Filament')).toBeInTheDocument();
+    expect(screen.getByLabelText('Printer')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'scanner' } });
+    expect(screen.queryByLabelText('Filament')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Scanner')).toBeInTheDocument();
+    expect(screen.getByLabelText('Scan hours')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'laser_sheet' } });
+    expect(screen.queryByLabelText('Scanner')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Laser material')).toBeInTheDocument();
+    expect(screen.getByLabelText('Sheet area used (m²)')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'laser_premade' } });
+    expect(screen.queryByLabelText('Laser material')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Pre-made item')).toBeInTheDocument();
+    expect(screen.getByLabelText('Quantity', { selector: '#premadeItemQuantity' })).toBeInTheDocument();
+  });
+
+  it('creates a scanner-process costing template with the scanner payload shape', async () => {
+    mockReferenceData();
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, costingTemplate: { id: 'new-template-2' } });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'scanner' } });
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: '3D scan job' } });
+    fireEvent.change(screen.getByLabelText('Scanner'), { target: { value: 's1' } });
+    fireEvent.change(screen.getByLabelText('Scan hours'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Markup (%)'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Costing Template' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'scanner',
+        name: '3D scan job',
+        scannerId: 's1',
+        scanHours: 2,
+        markupPercent: 0,
+        labourLines: [],
+        consumableLines: [],
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('detail page')).toBeInTheDocument());
+  });
+
+  it('creates a laser_sheet-process costing template with the laser sheet payload shape', async () => {
+    mockReferenceData();
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, costingTemplate: { id: 'new-template-3' } });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'laser_sheet' } });
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Acrylic sign' } });
+    fireEvent.change(screen.getByLabelText('Laser material'), { target: { value: 'lm1' } });
+    fireEvent.change(screen.getByLabelText('Sheet area used (m²)'), { target: { value: '0.5' } });
+    fireEvent.change(screen.getByLabelText('Markup (%)'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Costing Template' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'laser_sheet',
+        name: 'Acrylic sign',
+        laserMaterialId: 'lm1',
+        sheetAreaUsedM2: 0.5,
+        markupPercent: 0,
+        labourLines: [],
+        consumableLines: [],
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('detail page')).toBeInTheDocument());
+  });
+
+  it('creates a laser_premade-process costing template with the premade item payload shape', async () => {
+    mockReferenceData();
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, costingTemplate: { id: 'new-template-4' } });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Process'), { target: { value: 'laser_premade' } });
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Engraved keychain' } });
+    fireEvent.change(screen.getByLabelText('Pre-made item'), { target: { value: 'pi1' } });
+    fireEvent.change(screen.getByLabelText('Quantity', { selector: '#premadeItemQuantity' }), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Markup (%)'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Costing Template' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'laser_premade',
+        name: 'Engraved keychain',
+        premadeItemId: 'pi1',
+        premadeItemQuantity: 3,
+        markupPercent: 0,
+        labourLines: [],
+        consumableLines: [],
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('detail page')).toBeInTheDocument());
   });
 });

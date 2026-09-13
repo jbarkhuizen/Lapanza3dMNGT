@@ -24,6 +24,11 @@ function serializePrinter(printer: Printer) {
 // router / app.ts's final 404 handler instead. See backlog #6.
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
+// A laser cutter/engraver is tracked as a Printer row too -- see the design
+// spec's "Data model" section -- the same purchase-cost/hours/electricity
+// depreciation formula applies uniformly across all three; only *material*
+// costing differs by process (CostingTemplate.process).
+const PROCESSES = ['fdm', 'resin', 'laser'] as const;
 
 const createPrinterSchema = z.object({
   name: z.string().min(1),
@@ -38,6 +43,7 @@ const createPrinterSchema = z.object({
   electricityRatePerKwh: z.number().nonnegative().optional(),
   expectedLifetimeHours: z.number().positive().optional(),
   status: z.enum(STATUSES).optional(),
+  process: z.enum(PROCESSES).optional(),
 });
 
 const updatePrinterSchema = createPrinterSchema.partial().extend({

@@ -7,6 +7,9 @@ import { useFilaments } from '../../api/filaments.js';
 import { usePrinters } from '../../api/printers.js';
 import { useLabourSteps } from '../../api/labourSteps.js';
 import { useConsumables } from '../../api/consumables.js';
+import { useScanners } from '../../api/scanners.js';
+import { useLaserMaterials } from '../../api/laserMaterials.js';
+import { usePremadeItems } from '../../api/premadeItems.js';
 
 interface LabourLineDraft {
   labourStepId: string;
@@ -18,19 +21,41 @@ interface ConsumableLineDraft {
   quantity: string;
 }
 
+// The four backend process variants -- see the design spec's "Data model"
+// section. Each swaps in its own input group below; only one group's
+// fields are sent to the server, matching the backend's discriminated
+// union on `process`.
+const PROCESSES = [
+  { value: 'printer', label: 'Printer' },
+  { value: 'scanner', label: 'Scanner' },
+  { value: 'laser_sheet', label: 'Laser — sheet' },
+  { value: 'laser_premade', label: 'Laser — premade item' },
+] as const;
+type Process = (typeof PROCESSES)[number]['value'];
+
 export function CostingTemplateCreatePage() {
   const navigate = useNavigate();
   const { data: filaments, isLoading: isLoadingFilaments } = useFilaments();
   const { data: printers, isLoading: isLoadingPrinters } = usePrinters();
   const { data: labourSteps, isLoading: isLoadingLabourSteps } = useLabourSteps();
   const { data: consumables, isLoading: isLoadingConsumables } = useConsumables();
+  const { data: scanners, isLoading: isLoadingScanners } = useScanners();
+  const { data: laserMaterials, isLoading: isLoadingLaserMaterials } = useLaserMaterials();
+  const { data: premadeItems, isLoading: isLoadingPremadeItems } = usePremadeItems();
   const createMutation = useCreateCostingTemplate();
 
+  const [process, setProcess] = useState<Process>('printer');
   const [name, setName] = useState('');
   const [filamentId, setFilamentId] = useState('');
   const [weightGrams, setWeightGrams] = useState('');
   const [printerId, setPrinterId] = useState('');
   const [printTimeHours, setPrintTimeHours] = useState('');
+  const [scannerId, setScannerId] = useState('');
+  const [scanHours, setScanHours] = useState('');
+  const [laserMaterialId, setLaserMaterialId] = useState('');
+  const [sheetAreaUsedM2, setSheetAreaUsedM2] = useState('');
+  const [premadeItemId, setPremadeItemId] = useState('');
+  const [premadeItemQuantity, setPremadeItemQuantity] = useState('');
   const [markupPercent, setMarkupPercent] = useState('');
   const [labourLines, setLabourLines] = useState<LabourLineDraft[]>([]);
   const [consumableLines, setConsumableLines] = useState<ConsumableLineDraft[]>([]);
@@ -59,16 +84,44 @@ export function CostingTemplateCreatePage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const payload: CostingTemplateFormInput = {
+    const sharedFields = {
       name,
-      filamentId,
-      weightGrams: Number(weightGrams),
-      printerId,
-      printTimeHours: Number(printTimeHours),
       markupPercent: Number(markupPercent),
       labourLines: labourLines.map((line) => ({ labourStepId: line.labourStepId, hours: Number(line.hours) })),
       consumableLines: consumableLines.map((line) => ({ consumableId: line.consumableId, quantity: Number(line.quantity) })),
     };
+    let payload: CostingTemplateFormInput;
+    if (process === 'printer') {
+      payload = {
+        process: 'printer',
+        ...sharedFields,
+        filamentId,
+        weightGrams: Number(weightGrams),
+        printerId,
+        printTimeHours: Number(printTimeHours),
+      };
+    } else if (process === 'scanner') {
+      payload = {
+        process: 'scanner',
+        ...sharedFields,
+        scannerId,
+        scanHours: Number(scanHours),
+      };
+    } else if (process === 'laser_sheet') {
+      payload = {
+        process: 'laser_sheet',
+        ...sharedFields,
+        laserMaterialId,
+        sheetAreaUsedM2: Number(sheetAreaUsedM2),
+      };
+    } else {
+      payload = {
+        process: 'laser_premade',
+        ...sharedFields,
+        premadeItemId,
+        premadeItemQuantity: Number(premadeItemQuantity),
+      };
+    }
     try {
       const created = await createMutation.mutateAsync(payload);
       navigate(`/costing-templates/${created.id}`);
@@ -77,7 +130,8 @@ export function CostingTemplateCreatePage() {
     }
   }
 
-  const isLoadingReferenceData = isLoadingFilaments || isLoadingPrinters || isLoadingLabourSteps || isLoadingConsumables;
+  const isLoadingReferenceData = isLoadingFilaments || isLoadingPrinters || isLoadingLabourSteps || isLoadingConsumables
+    || isLoadingScanners || isLoadingLaserMaterials || isLoadingPremadeItems;
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-xl flex-col gap-4">
@@ -85,42 +139,127 @@ export function CostingTemplateCreatePage() {
       <FormField id="templateName" label="Template name" value={name} onChange={(e) => setName(e.target.value)} required />
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="filamentId" className="text-sm font-medium text-slate-700">Filament</label>
+        <label htmlFor="process" className="text-sm font-medium text-slate-700">Process</label>
         <select
-          id="filamentId"
-          value={filamentId}
-          onChange={(e) => setFilamentId(e.target.value)}
-          disabled={isLoadingFilaments}
-          required
+          id="process"
+          value={process}
+          onChange={(e) => setProcess(e.target.value as Process)}
           className="rounded border border-slate-300 px-3 py-2 text-sm"
         >
-          <option value="" disabled>Select a filament…</option>
-          {filaments?.map((f) => (
-            <option key={f.id} value={f.id}>{f.brand} — {f.materialType}</option>
+          {PROCESSES.map((p) => (
+            <option key={p.value} value={p.value}>{p.label}</option>
           ))}
         </select>
       </div>
 
-      <FormField id="weightGrams" label="Weight (g)" type="number" min="0.01" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} required />
+      {process === 'printer' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="filamentId" className="text-sm font-medium text-slate-700">Filament</label>
+            <select
+              id="filamentId"
+              value={filamentId}
+              onChange={(e) => setFilamentId(e.target.value)}
+              disabled={isLoadingFilaments}
+              required
+              className="rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>Select a filament…</option>
+              {filaments?.map((f) => (
+                <option key={f.id} value={f.id}>{f.brand} — {f.materialType}</option>
+              ))}
+            </select>
+          </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="printerId" className="text-sm font-medium text-slate-700">Printer</label>
-        <select
-          id="printerId"
-          value={printerId}
-          onChange={(e) => setPrinterId(e.target.value)}
-          disabled={isLoadingPrinters}
-          required
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
-        >
-          <option value="" disabled>Select a printer…</option>
-          {printers?.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
-          ))}
-        </select>
-      </div>
+          <FormField id="weightGrams" label="Weight (g)" type="number" min="0.01" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} required />
 
-      <FormField id="printTimeHours" label="Print time (hours)" type="number" min="0.01" value={printTimeHours} onChange={(e) => setPrintTimeHours(e.target.value)} required />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="printerId" className="text-sm font-medium text-slate-700">Printer</label>
+            <select
+              id="printerId"
+              value={printerId}
+              onChange={(e) => setPrinterId(e.target.value)}
+              disabled={isLoadingPrinters}
+              required
+              className="rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>Select a printer…</option>
+              {printers?.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <FormField id="printTimeHours" label="Print time (hours)" type="number" min="0.01" value={printTimeHours} onChange={(e) => setPrintTimeHours(e.target.value)} required />
+        </>
+      )}
+
+      {process === 'scanner' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="scannerId" className="text-sm font-medium text-slate-700">Scanner</label>
+            <select
+              id="scannerId"
+              value={scannerId}
+              onChange={(e) => setScannerId(e.target.value)}
+              disabled={isLoadingScanners}
+              required
+              className="rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>Select a scanner…</option>
+              {scanners?.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <FormField id="scanHours" label="Scan hours" type="number" min="0.01" value={scanHours} onChange={(e) => setScanHours(e.target.value)} required />
+        </>
+      )}
+
+      {process === 'laser_sheet' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="laserMaterialId" className="text-sm font-medium text-slate-700">Laser material</label>
+            <select
+              id="laserMaterialId"
+              value={laserMaterialId}
+              onChange={(e) => setLaserMaterialId(e.target.value)}
+              disabled={isLoadingLaserMaterials}
+              required
+              className="rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>Select a laser material…</option>
+              {laserMaterials?.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+          <FormField id="sheetAreaUsedM2" label="Sheet area used (m²)" type="number" min="0.01" value={sheetAreaUsedM2} onChange={(e) => setSheetAreaUsedM2(e.target.value)} required />
+        </>
+      )}
+
+      {process === 'laser_premade' && (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="premadeItemId" className="text-sm font-medium text-slate-700">Pre-made item</label>
+            <select
+              id="premadeItemId"
+              value={premadeItemId}
+              onChange={(e) => setPremadeItemId(e.target.value)}
+              disabled={isLoadingPremadeItems}
+              required
+              className="rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>Select a pre-made item…</option>
+              {premadeItems?.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </div>
+          <FormField id="premadeItemQuantity" label="Quantity" type="number" min="1" step="1" value={premadeItemQuantity} onChange={(e) => setPremadeItemQuantity(e.target.value)} required />
+        </>
+      )}
+
       <FormField id="markupPercent" label="Markup (%)" type="number" min="0" max="9999.99" value={markupPercent} onChange={(e) => setMarkupPercent(e.target.value)} required />
 
       <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">

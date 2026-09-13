@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPatch, apiPost } from './client.js';
 
 export type PrinterStatus = 'active' | 'maintenance' | 'retired';
+// A laser cutter/engraver is tracked as a Printer row too -- see the design
+// spec's "Data model" section.
+export type PrinterProcess = 'fdm' | 'resin' | 'laser';
 
 export interface Printer {
   id: string;
@@ -17,6 +20,7 @@ export interface Printer {
   electricityRatePerKwh: string | null;
   expectedLifetimeHours: number | null;
   status: PrinterStatus;
+  process: PrinterProcess;
   createdAt: string;
 }
 
@@ -34,6 +38,7 @@ export interface PrinterFormInput {
   electricityRatePerKwh?: number | null;
   expectedLifetimeHours?: number | null;
   status?: PrinterStatus;
+  process?: PrinterProcess;
 }
 
 const PRINTERS_QUERY_KEY = ['printers'] as const;

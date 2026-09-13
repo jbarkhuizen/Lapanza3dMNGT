@@ -4,7 +4,7 @@ import type { CostingTemplate, CostingLabourLine, CostingConsumableLine } from '
 import { requireTenantAuth } from '../middleware/requireTenantAuth.js';
 import { requireActiveSubscription } from '../middleware/requireActiveSubscription.js';
 import { tenantScope } from '../db/scoped.js';
-import { calculateCosting, CostingInputError } from '../costing/calculate.js';
+import { calculateCosting, calculateScannerCosting, calculateLaserCosting, CostingInputError } from '../costing/calculate.js';
 
 export const costingTemplatesRouter = Router();
 // Auth/subscription gating is applied per-route (not via a blanket
@@ -68,16 +68,116 @@ const consumableLineSchema = z.object({
   quantity: z.number().positive(),
 });
 
-const createCostingTemplateSchema = z.object({
+// Fields shared by every process variant below.
+const sharedFields = {
   name: z.string().min(1),
-  filamentId: z.string().min(1),
-  weightGrams: z.number().positive(),
-  printerId: z.string().min(1),
-  printTimeHours: z.number().positive(),
   markupPercent: z.number().min(0).max(9999.99),
   labourLines: z.array(labourLineSchema).default([]),
   consumableLines: z.array(consumableLineSchema).default([]),
-});
+};
+
+// A discriminated union on `process` -- each variant is `.strict()`, so a
+// `scanner`-typed request that includes e.g. `filamentId` is rejected
+// outright rather than silently ignored, same technique JobCard's
+// discriminated union uses in job-cards.ts for its `cardType`.
+const printerVariantSchema = z
+  .object({
+    process: z.literal('printer'),
+    ...sharedFields,
+    filamentId: z.string().min(1),
+    weightGrams: z.number().positive(),
+    printerId: z.string().min(1),
+    printTimeHours: z.number().positive(),
+  })
+  .strict();
+
+const scannerVariantSchema = z
+  .object({
+    process: z.literal('scanner'),
+    ...sharedFields,
+    scannerId: z.string().min(1),
+    scanHours: z.number().positive(),
+  })
+  .strict();
+
+const laserSheetVariantSchema = z
+  .object({
+    process: z.literal('laser_sheet'),
+    ...sharedFields,
+    laserMaterialId: z.string().min(1),
+    sheetAreaUsedM2: z.number().positive(),
+  })
+  .strict();
+
+const laserPremadeVariantSchema = z
+  .object({
+    process: z.literal('laser_premade'),
+    ...sharedFields,
+    premadeItemId: z.string().min(1),
+    premadeItemQuantity: z.number().int().positive(),
+  })
+  .strict();
+
+// `process` defaults to 'printer' when omitted entirely -- this keeps every
+// pre-v2 caller (which never sent a `process` field) parsing exactly as
+// before, while still requiring the discriminator once one of the new
+// process variants is used.
+const createCostingTemplateSchema = z.preprocess((value) => {
+  if (value && typeof value === 'object' && !('process' in (value as Record<string, unknown>))) {
+    return { ...(value as Record<string, unknown>), process: 'printer' };
+  }
+  return value;
+}, z.discriminatedUnion('process', [printerVariantSchema, scannerVariantSchema, laserSheetVariantSchema, laserPremadeVariantSchema]));
+
+type ResolvedLabourLine = { id: string; name: string; hourlyRate: number; hours: number };
+type ResolvedConsumableLine = { id: string; name: string; costPerUnit: number; quantity: number };
+
+// Shared by every process branch below -- batch-resolves labour steps and
+// consumables in one round trip per type (instead of one findById per
+// line), same as the original 'printer' branch always did.
+async function resolveLines(
+  scoped: ReturnType<typeof tenantScope>,
+  labourLines: { labourStepId: string; hours: number }[],
+  consumableLines: { consumableId: string; quantity: number }[],
+): Promise<
+  | { ok: true; labourLines: ResolvedLabourLine[]; consumableLines: ResolvedConsumableLine[] }
+  | { ok: false; error: string }
+> {
+  const labourStepsById = new Map(
+    (await scoped.labourSteps.findManyByIds([...new Set(labourLines.map((line) => line.labourStepId))])).map(
+      (step) => [step.id, step],
+    ),
+  );
+  const resolvedLabourLines: ResolvedLabourLine[] = [];
+  for (const line of labourLines) {
+    const step = labourStepsById.get(line.labourStepId);
+    if (!step) {
+      return { ok: false, error: 'One of the labour steps was not found.' };
+    }
+    resolvedLabourLines.push({ id: step.id, name: step.name, hourlyRate: step.hourlyRate, hours: line.hours });
+  }
+
+  const consumablesById = new Map(
+    (await scoped.consumables.findManyByIds([...new Set(consumableLines.map((line) => line.consumableId))])).map(
+      (consumable) => [consumable.id, consumable],
+    ),
+  );
+  const resolvedConsumableLines: ResolvedConsumableLine[] = [];
+  for (const line of consumableLines) {
+    const consumable = consumablesById.get(line.consumableId);
+    if (!consumable) {
+      return { ok: false, error: 'One of the consumables was not found.' };
+    }
+    resolvedConsumableLines.push({
+      id: consumable.id,
+      name: consumable.name,
+      costPerUnit: consumable.costPerUnit,
+      quantity: line.quantity,
+    });
+  }
+
+  return { ok: true, labourLines: resolvedLabourLines, consumableLines: resolvedConsumableLines };
+}
 
 costingTemplatesRouter.get('/api/costing-templates', requireTenantAuth, requireActiveSubscription, async (req, res) => {
   const scoped = tenantScope(req.tenantId!);
@@ -99,98 +199,293 @@ costingTemplatesRouter.post('/api/costing-templates', requireTenantAuth, require
   if (!parsed.success) {
     return res.status(400).json({
       ok: false,
-      error: 'Name, filament, weight, printer, print time, and markup are required.',
+      error: 'Name, a valid process, its required fields, and markup are required.',
     });
   }
-  const { name, filamentId, weightGrams, printerId, printTimeHours, markupPercent, labourLines, consumableLines } =
-    parsed.data;
+  const data = parsed.data;
   const scoped = tenantScope(req.tenantId!);
 
-  const filament = await scoped.filaments.findById(filamentId);
-  if (!filament) {
-    return res.status(400).json({ ok: false, error: 'Filament not found.' });
+  const resolvedLines = await resolveLines(scoped, data.labourLines, data.consumableLines);
+  if (!resolvedLines.ok) {
+    return res.status(400).json({ ok: false, error: resolvedLines.error });
   }
+  const { labourLines: resolvedLabourLines, consumableLines: resolvedConsumableLines } = resolvedLines;
+  const engineLabourLines = resolvedLabourLines.map((line) => ({ hourlyRate: line.hourlyRate, hours: line.hours }));
+  const engineConsumableLines = resolvedConsumableLines.map((line) => ({
+    costPerUnit: line.costPerUnit,
+    quantity: line.quantity,
+  }));
+  const persistLabourLines = resolvedLabourLines.map((line, i) => ({
+    labourStepId: line.id,
+    labourStepSnapshotName: line.name,
+    hours: line.hours,
+    hourlyRate: line.hourlyRate,
+    index: i,
+  }));
+  const persistConsumableLines = resolvedConsumableLines.map((line, i) => ({
+    consumableId: line.id,
+    consumableSnapshotName: line.name,
+    quantity: line.quantity,
+    costPerUnit: line.costPerUnit,
+    index: i,
+  }));
 
-  const printer = await scoped.printers.findById(printerId);
-  if (!printer) {
-    return res.status(400).json({ ok: false, error: 'Printer not found.' });
-  }
-  if (
-    printer.electricityRatePerKwh == null ||
-    printer.expectedLifetimeHours == null ||
-    printer.purchaseCost == null ||
-    printer.powerDrawWatts == null
-  ) {
-    return res.status(400).json({
-      ok: false,
-      error:
-        'This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.',
-    });
-  }
-  const electricityRatePerKwh = printer.electricityRatePerKwh;
-  const expectedLifetimeHours = printer.expectedLifetimeHours;
-  const purchaseCost = printer.purchaseCost;
-  const powerDrawWatts = printer.powerDrawWatts;
-
-  // Batch-resolve labour steps and consumables in one round trip per type
-  // (instead of one findById per line) via a findMany({ id: { in: [...] } }),
-  // then look each line up from an id -> record Map. Tenant scoping and the
-  // "missing/invalid id" 400 behavior are unchanged from the per-line findById.
-  const labourStepsById = new Map(
-    (await scoped.labourSteps.findManyByIds([...new Set(labourLines.map((line) => line.labourStepId))])).map(
-      (step) => [step.id, step],
-    ),
-  );
-  const resolvedLabourLines: Array<{ id: string; name: string; hourlyRate: number; hours: number }> = [];
-  for (const line of labourLines) {
-    const step = labourStepsById.get(line.labourStepId);
-    if (!step) {
-      return res.status(400).json({ ok: false, error: 'One of the labour steps was not found.' });
+  if (data.process === 'printer') {
+    const filament = await scoped.filaments.findById(data.filamentId);
+    if (!filament) {
+      return res.status(400).json({ ok: false, error: 'Filament not found.' });
     }
-    resolvedLabourLines.push({ id: step.id, name: step.name, hourlyRate: step.hourlyRate, hours: line.hours });
+
+    const printer = await scoped.printers.findById(data.printerId);
+    if (!printer) {
+      return res.status(400).json({ ok: false, error: 'Printer not found.' });
+    }
+    if (
+      printer.electricityRatePerKwh == null ||
+      printer.expectedLifetimeHours == null ||
+      printer.purchaseCost == null ||
+      printer.powerDrawWatts == null
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          'This printer is missing an electricity rate, power draw, expected lifetime, or purchase cost — set these before costing a job on it.',
+      });
+    }
+    const electricityRatePerKwh = printer.electricityRatePerKwh;
+    const expectedLifetimeHours = printer.expectedLifetimeHours;
+    const purchaseCost = printer.purchaseCost;
+    const powerDrawWatts = printer.powerDrawWatts;
+
+    let result;
+    try {
+      result = calculateCosting({
+        filament: {
+          weightGrams: data.weightGrams,
+          costPerKg: filament.costPerKg,
+          costPerSpool: filament.costPerSpool,
+          spoolWeightGrams: filament.spoolWeightGrams,
+        },
+        printer: {
+          printTimeHours: data.printTimeHours,
+          powerDrawWatts,
+          electricityRatePerKwh,
+          purchaseCost,
+          expectedLifetimeHours,
+        },
+        labourLines: engineLabourLines,
+        consumableLines: engineConsumableLines,
+        markupPercent: data.markupPercent,
+      });
+    } catch (err) {
+      if (err instanceof CostingInputError) {
+        return res.status(400).json({ ok: false, error: err.message });
+      }
+      throw err;
+    }
+
+    const costingTemplate = await scoped.costingTemplates.create({
+      name: data.name,
+      process: 'printer',
+      filamentId: filament.id,
+      filamentSnapshotBrand: filament.brand,
+      filamentSnapshotMaterialType: filament.materialType,
+      filamentSnapshotCostPerGram: result.costPerGram.toString(),
+      weightGrams: data.weightGrams,
+      printerId: printer.id,
+      printerSnapshotName: printer.name,
+      printerSnapshotElectricityRatePerKwh: electricityRatePerKwh.toString(),
+      printerSnapshotDepreciationPerHour: result.depreciationPerHour.toString(),
+      printerSnapshotPowerDrawWatts: powerDrawWatts,
+      printTimeHours: data.printTimeHours,
+      markupPercent: result.markupPercent.toString(),
+      filamentCost: result.filamentCost.toString(),
+      electricityCost: result.electricityCost.toString(),
+      depreciationCost: result.depreciationCost.toString(),
+      labourCost: result.labourCost.toString(),
+      consumablesCost: result.consumablesCost.toString(),
+      totalCost: result.totalCost.toString(),
+      suggestedPrice: result.suggestedPrice.toString(),
+      labourLines: persistLabourLines.map((line) => ({
+        labourStepId: line.labourStepId,
+        labourStepSnapshotName: line.labourStepSnapshotName,
+        hourlyRateSnapshot: result.labourLineRates[line.index].toString(),
+        hours: line.hours,
+        lineCost: result.labourLineCosts[line.index].toString(),
+      })),
+      consumableLines: persistConsumableLines.map((line) => ({
+        consumableId: line.consumableId,
+        consumableSnapshotName: line.consumableSnapshotName,
+        costPerUnitSnapshot: result.consumableLineRates[line.index].toString(),
+        quantity: line.quantity,
+        lineCost: result.consumableLineCosts[line.index].toString(),
+      })),
+    });
+
+    return res.status(201).json({ ok: true, costingTemplate: serializeCostingTemplate(costingTemplate) });
   }
 
-  const consumablesById = new Map(
-    (await scoped.consumables.findManyByIds([...new Set(consumableLines.map((line) => line.consumableId))])).map(
-      (consumable) => [consumable.id, consumable],
-    ),
-  );
-  const resolvedConsumableLines: Array<{ id: string; name: string; costPerUnit: number; quantity: number }> = [];
-  for (const line of consumableLines) {
-    const consumable = consumablesById.get(line.consumableId);
-    if (!consumable) {
-      return res.status(400).json({ ok: false, error: 'One of the consumables was not found.' });
+  if (data.process === 'scanner') {
+    const scanner = await scoped.scanners.findById(data.scannerId);
+    if (!scanner) {
+      return res.status(400).json({ ok: false, error: 'Scanner not found.' });
     }
-    resolvedConsumableLines.push({
-      id: consumable.id,
-      name: consumable.name,
-      costPerUnit: consumable.costPerUnit,
-      quantity: line.quantity,
+
+    let result;
+    try {
+      result = calculateScannerCosting({
+        scannerCost: scanner.scannerCost,
+        expectedScanHours: scanner.expectedScanHours,
+        powerCostPerHour: scanner.powerCostPerHour,
+        scanHours: data.scanHours,
+        labourLines: engineLabourLines,
+        consumableLines: engineConsumableLines,
+        markupPercent: data.markupPercent,
+      });
+    } catch (err) {
+      if (err instanceof CostingInputError) {
+        return res.status(400).json({ ok: false, error: err.message });
+      }
+      throw err;
+    }
+
+    const costingTemplate = await scoped.costingTemplates.create({
+      name: data.name,
+      process: 'scanner',
+      filamentId: null,
+      filamentSnapshotBrand: null,
+      filamentSnapshotMaterialType: null,
+      filamentSnapshotCostPerGram: null,
+      weightGrams: null,
+      printerId: null,
+      printerSnapshotName: null,
+      printerSnapshotElectricityRatePerKwh: null,
+      printerSnapshotDepreciationPerHour: null,
+      printerSnapshotPowerDrawWatts: null,
+      printTimeHours: null,
+      scannerId: scanner.id,
+      scannerSnapshotName: scanner.name,
+      scanHours: data.scanHours,
+      markupPercent: result.markupPercent.toString(),
+      // Scanner has no separate material cost -- its single blended
+      // hourly-rate cost (depreciation + power) is stored in
+      // depreciationCost, the closest existing bucket, with filamentCost
+      // and electricityCost left at zero. See calculate.ts's
+      // calculateScannerCosting for the formula.
+      filamentCost: '0.00',
+      electricityCost: '0.00',
+      depreciationCost: result.scanCost.toString(),
+      labourCost: result.labourCost.toString(),
+      consumablesCost: result.consumablesCost.toString(),
+      totalCost: result.totalCost.toString(),
+      suggestedPrice: result.suggestedPrice.toString(),
+      labourLines: persistLabourLines.map((line) => ({
+        labourStepId: line.labourStepId,
+        labourStepSnapshotName: line.labourStepSnapshotName,
+        hourlyRateSnapshot: result.labourLineRates[line.index].toString(),
+        hours: line.hours,
+        lineCost: result.labourLineCosts[line.index].toString(),
+      })),
+      consumableLines: persistConsumableLines.map((line) => ({
+        consumableId: line.consumableId,
+        consumableSnapshotName: line.consumableSnapshotName,
+        costPerUnitSnapshot: result.consumableLineRates[line.index].toString(),
+        quantity: line.quantity,
+        lineCost: result.consumableLineCosts[line.index].toString(),
+      })),
     });
+
+    return res.status(201).json({ ok: true, costingTemplate: serializeCostingTemplate(costingTemplate) });
+  }
+
+  if (data.process === 'laser_sheet') {
+    const laserMaterial = await scoped.laserMaterials.findById(data.laserMaterialId);
+    if (!laserMaterial) {
+      return res.status(400).json({ ok: false, error: 'Laser material not found.' });
+    }
+
+    let result;
+    try {
+      result = calculateLaserCosting({
+        variant: 'sheet',
+        sheetPrice: laserMaterial.sheetPrice,
+        usableSheetAreaM2: laserMaterial.usableSheetAreaM2,
+        costMultiplier: laserMaterial.costMultiplier,
+        areaM2: data.sheetAreaUsedM2,
+        labourLines: engineLabourLines,
+        consumableLines: engineConsumableLines,
+        markupPercent: data.markupPercent,
+      });
+    } catch (err) {
+      if (err instanceof CostingInputError) {
+        return res.status(400).json({ ok: false, error: err.message });
+      }
+      throw err;
+    }
+
+    const costingTemplate = await scoped.costingTemplates.create({
+      name: data.name,
+      process: 'laser_sheet',
+      filamentId: null,
+      filamentSnapshotBrand: null,
+      filamentSnapshotMaterialType: null,
+      filamentSnapshotCostPerGram: null,
+      weightGrams: null,
+      printerId: null,
+      printerSnapshotName: null,
+      printerSnapshotElectricityRatePerKwh: null,
+      printerSnapshotDepreciationPerHour: null,
+      printerSnapshotPowerDrawWatts: null,
+      printTimeHours: null,
+      laserMaterialId: laserMaterial.id,
+      laserMaterialSnapshotName: laserMaterial.name,
+      sheetAreaUsedM2: data.sheetAreaUsedM2,
+      markupPercent: result.markupPercent.toString(),
+      // The sheet material cost is stored in filamentCost, the closest
+      // existing "material consumed" bucket, with electricityCost and
+      // depreciationCost left at zero.
+      filamentCost: result.materialCost.toString(),
+      electricityCost: '0.00',
+      depreciationCost: '0.00',
+      labourCost: result.labourCost.toString(),
+      consumablesCost: result.consumablesCost.toString(),
+      totalCost: result.totalCost.toString(),
+      suggestedPrice: result.suggestedPrice.toString(),
+      labourLines: persistLabourLines.map((line) => ({
+        labourStepId: line.labourStepId,
+        labourStepSnapshotName: line.labourStepSnapshotName,
+        hourlyRateSnapshot: result.labourLineRates[line.index].toString(),
+        hours: line.hours,
+        lineCost: result.labourLineCosts[line.index].toString(),
+      })),
+      consumableLines: persistConsumableLines.map((line) => ({
+        consumableId: line.consumableId,
+        consumableSnapshotName: line.consumableSnapshotName,
+        costPerUnitSnapshot: result.consumableLineRates[line.index].toString(),
+        quantity: line.quantity,
+        lineCost: result.consumableLineCosts[line.index].toString(),
+      })),
+    });
+
+    return res.status(201).json({ ok: true, costingTemplate: serializeCostingTemplate(costingTemplate) });
+  }
+
+  // data.process === 'laser_premade'
+  const premadeItem = await scoped.premadeItems.findById(data.premadeItemId);
+  if (!premadeItem) {
+    return res.status(400).json({ ok: false, error: 'Premade item not found.' });
   }
 
   let result;
   try {
-    result = calculateCosting({
-      filament: {
-        weightGrams,
-        costPerKg: filament.costPerKg,
-        costPerSpool: filament.costPerSpool,
-        spoolWeightGrams: filament.spoolWeightGrams,
-      },
-      printer: {
-        printTimeHours,
-        powerDrawWatts,
-        electricityRatePerKwh,
-        purchaseCost,
-        expectedLifetimeHours,
-      },
-      labourLines: resolvedLabourLines.map((line) => ({ hourlyRate: line.hourlyRate, hours: line.hours })),
-      consumableLines: resolvedConsumableLines.map((line) => ({
-        costPerUnit: line.costPerUnit,
-        quantity: line.quantity,
-      })),
-      markupPercent,
+    result = calculateLaserCosting({
+      variant: 'premade',
+      unitCost: premadeItem.unitCost,
+      costMultiplier: premadeItem.costMultiplier,
+      quantity: data.premadeItemQuantity,
+      labourLines: engineLabourLines,
+      consumableLines: engineConsumableLines,
+      markupPercent: data.markupPercent,
     });
   } catch (err) {
     if (err instanceof CostingInputError) {
@@ -200,39 +495,44 @@ costingTemplatesRouter.post('/api/costing-templates', requireTenantAuth, require
   }
 
   const costingTemplate = await scoped.costingTemplates.create({
-    name,
-    filamentId: filament.id,
-    filamentSnapshotBrand: filament.brand,
-    filamentSnapshotMaterialType: filament.materialType,
-    filamentSnapshotCostPerGram: result.costPerGram.toString(),
-    weightGrams,
-    printerId: printer.id,
-    printerSnapshotName: printer.name,
-    printerSnapshotElectricityRatePerKwh: electricityRatePerKwh.toString(),
-    printerSnapshotDepreciationPerHour: result.depreciationPerHour.toString(),
-    printerSnapshotPowerDrawWatts: powerDrawWatts,
-    printTimeHours,
+    name: data.name,
+    process: 'laser_premade',
+    filamentId: null,
+    filamentSnapshotBrand: null,
+    filamentSnapshotMaterialType: null,
+    filamentSnapshotCostPerGram: null,
+    weightGrams: null,
+    printerId: null,
+    printerSnapshotName: null,
+    printerSnapshotElectricityRatePerKwh: null,
+    printerSnapshotDepreciationPerHour: null,
+    printerSnapshotPowerDrawWatts: null,
+    printTimeHours: null,
+    premadeItemId: premadeItem.id,
+    premadeItemSnapshotName: premadeItem.name,
+    premadeItemQuantity: data.premadeItemQuantity,
     markupPercent: result.markupPercent.toString(),
-    filamentCost: result.filamentCost.toString(),
-    electricityCost: result.electricityCost.toString(),
-    depreciationCost: result.depreciationCost.toString(),
+    // Same reuse-of-filamentCost convention as the laser_sheet branch above.
+    filamentCost: result.materialCost.toString(),
+    electricityCost: '0.00',
+    depreciationCost: '0.00',
     labourCost: result.labourCost.toString(),
     consumablesCost: result.consumablesCost.toString(),
     totalCost: result.totalCost.toString(),
     suggestedPrice: result.suggestedPrice.toString(),
-    labourLines: resolvedLabourLines.map((line, i) => ({
-      labourStepId: line.id,
-      labourStepSnapshotName: line.name,
-      hourlyRateSnapshot: result.labourLineRates[i].toString(),
+    labourLines: persistLabourLines.map((line) => ({
+      labourStepId: line.labourStepId,
+      labourStepSnapshotName: line.labourStepSnapshotName,
+      hourlyRateSnapshot: result.labourLineRates[line.index].toString(),
       hours: line.hours,
-      lineCost: result.labourLineCosts[i].toString(),
+      lineCost: result.labourLineCosts[line.index].toString(),
     })),
-    consumableLines: resolvedConsumableLines.map((line, i) => ({
-      consumableId: line.id,
-      consumableSnapshotName: line.name,
-      costPerUnitSnapshot: result.consumableLineRates[i].toString(),
+    consumableLines: persistConsumableLines.map((line) => ({
+      consumableId: line.consumableId,
+      consumableSnapshotName: line.consumableSnapshotName,
+      costPerUnitSnapshot: result.consumableLineRates[line.index].toString(),
       quantity: line.quantity,
-      lineCost: result.consumableLineCosts[i].toString(),
+      lineCost: result.consumableLineCosts[line.index].toString(),
     })),
   });
 

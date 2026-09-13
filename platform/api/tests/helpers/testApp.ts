@@ -28,6 +28,13 @@ export async function resetTestDatabase() {
   await prisma.filament.deleteMany();
   await prisma.labourStep.deleteMany();
   await prisma.consumable.deleteMany();
+  // Scanner/LaserMaterial/PremadeItem are referenced (nullably) by
+  // CostingTemplate -- deleted after it, same as printer/filament above.
+  // Product has no such reference, but is wiped here too for consistency.
+  await prisma.scanner.deleteMany();
+  await prisma.laserMaterial.deleteMany();
+  await prisma.premadeItem.deleteMany();
+  await prisma.product.deleteMany();
   await prisma.invoiceLineItem.deleteMany();
   await prisma.invoice.deleteMany();
   await prisma.quoteLineItem.deleteMany();
