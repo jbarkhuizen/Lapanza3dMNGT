@@ -6,14 +6,20 @@ export interface GcodeSliceResult {
 }
 
 // PrusaSlicer writes lines like:
-//   ; filament used [g] = 12.34, 1.20
 //   ; filament used [mm] = 456.70, 12.30
+//   ; filament used [cm3] = 1.10
+//   ; total filament used [g] = 12.34, 1.20
 //   ; estimated printing time (normal mode) = 1h 23m 45s
-// The first value in a comma-separated "filament used" line is the model
+// Confirmed against a real `prusa-slicer --export-gcode` run (2.8.1) during
+// the production VPS install -- the weight line is "total filament used
+// [g]", NOT "filament used [g]" (an earlier version of this parser assumed
+// the latter, matched only by this file's own test stub, and was never
+// actually exercised against real PrusaSlicer output until then). The first
+// value in a comma-separated "total filament used" line is the model
 // filament; a second value (if present) is support filament on a different
 // extruder/tool. Time is normalized to fractional hours.
 export function parseGcodeFooter(gcodeText: string): GcodeSliceResult | null {
-  const weightMatch = gcodeText.match(/;\s*filament used \[g\]\s*=\s*([\d.]+)(?:\s*,\s*([\d.]+))?/);
+  const weightMatch = gcodeText.match(/;\s*total filament used \[g\]\s*=\s*([\d.]+)(?:\s*,\s*([\d.]+))?/);
   const lengthMatch = gcodeText.match(/;\s*filament used \[mm\]\s*=\s*([\d.]+)/);
   const timeMatch = gcodeText.match(/;\s*estimated printing time.*=\s*(.+)/);
   if (!weightMatch || !lengthMatch || !timeMatch) {

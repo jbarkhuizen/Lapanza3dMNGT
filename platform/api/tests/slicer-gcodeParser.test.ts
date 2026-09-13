@@ -5,7 +5,7 @@ import { parseGcodeFooter } from '../src/slicer/gcodeParser.js';
 test('full well-formed footer with model + support weight extracts all four fields', () => {
   const gcode = [
     '; some other comment',
-    '; filament used [g] = 12.34, 1.20',
+    '; total filament used [g] = 12.34, 1.20',
     '; filament used [mm] = 456.70, 12.30',
     '; estimated printing time (normal mode) = 1h 23m 45s',
   ].join('\n');
@@ -19,7 +19,7 @@ test('full well-formed footer with model + support weight extracts all four fiel
 
 test('footer with only model weight (no comma) has supportWeightGrams 0', () => {
   const gcode = [
-    '; filament used [g] = 12.34',
+    '; total filament used [g] = 12.34',
     '; filament used [mm] = 456.70',
     '; estimated printing time (normal mode) = 1h 23m 45s',
   ].join('\n');
@@ -30,7 +30,7 @@ test('footer with only model weight (no comma) has supportWeightGrams 0', () => 
 
 test('footer missing the time line entirely returns null', () => {
   const gcode = [
-    '; filament used [g] = 12.34, 1.20',
+    '; total filament used [g] = 12.34, 1.20',
     '; filament used [mm] = 456.70, 12.30',
   ].join('\n');
   assert.equal(parseGcodeFooter(gcode), null);
@@ -38,7 +38,7 @@ test('footer missing the time line entirely returns null', () => {
 
 test('"1h 23m 45s" duration is converted to fractional hours correctly', () => {
   const gcode = [
-    '; filament used [g] = 1',
+    '; total filament used [g] = 1',
     '; filament used [mm] = 1',
     '; estimated printing time (normal mode) = 1h 23m 45s',
   ].join('\n');
@@ -48,7 +48,7 @@ test('"1h 23m 45s" duration is converted to fractional hours correctly', () => {
 
 test('"45s" duration only is converted to fractional hours correctly', () => {
   const gcode = [
-    '; filament used [g] = 1',
+    '; total filament used [g] = 1',
     '; filament used [mm] = 1',
     '; estimated printing time (normal mode) = 45s',
   ].join('\n');

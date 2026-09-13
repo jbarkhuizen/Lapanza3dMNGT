@@ -10,6 +10,11 @@ test('no preset + PLA material uses PLA defaults', () => {
   assert.match(profile, /bed_temperature = 60/);
   assert.match(profile, /perimeter_speed = 60/);
   assert.match(profile, /nozzle_diameter = 0\.4/);
+  // filament_density is required for PrusaSlicer to report a non-zero
+  // "total filament used [g]" at all -- confirmed missing live during the
+  // production VPS install, where every slice reported 0.00g until this
+  // was added. See profileBuilder.ts's comment on MATERIAL_DEFAULTS.
+  assert.match(profile, /filament_density = 1\.24/);
 });
 
 test('no preset + unrecognized material string falls back to PLA defaults', () => {
