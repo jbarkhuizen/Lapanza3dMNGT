@@ -58,6 +58,15 @@ export interface JobCard {
 
   // Print
   printFileName: string | null;
+  // Populated by the slicer integration -- sliceJobId is traceability only
+  // (which SliceJob produced these numbers), the four slice* fields are the
+  // actual result values. See the slicer design spec.
+  sliceJobId: string | null;
+  stlFileName: string | null;
+  sliceWeightGrams: number | null;
+  sliceSupportWeightGrams: number | null;
+  sliceFilamentLengthMm: number | null;
+  slicePrintTimeHours: number | null;
   printQuantity: number | null;
   printWhatIsPrinted: string | null;
   printProcess: string | null;
@@ -138,6 +147,12 @@ export interface JobCardFormInput {
 
   // Print
   printFileName?: string;
+  sliceJobId?: string | null;
+  stlFileName?: string | null;
+  sliceWeightGrams?: number | null;
+  sliceSupportWeightGrams?: number | null;
+  sliceFilamentLengthMm?: number | null;
+  slicePrintTimeHours?: number | null;
   printQuantity?: number;
   printWhatIsPrinted?: string;
   printProcess?: string;

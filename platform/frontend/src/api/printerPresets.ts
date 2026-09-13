@@ -25,10 +25,15 @@ export interface PrinterPresetFormInput {
   notes?: string;
 }
 
-export function usePrinterPresets(printerId: string) {
+export function usePrinterPresets(printerId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['printers', printerId, 'presets'],
     queryFn: () => apiGet<{ presets: PrinterPreset[] }>(`/api/printers/${printerId}/presets`).then((r) => r.presets),
+    // Callers that don't yet have a printerId selected (e.g. SliceUploadPanel,
+    // before the user picks a printer) can pass `enabled: false` to avoid
+    // firing a request for a blank id -- defaults to true, matching every
+    // pre-existing call site that never passed this option.
+    enabled: options?.enabled ?? true,
   });
 }
 

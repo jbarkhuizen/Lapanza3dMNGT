@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
 import { TextareaField } from '../../components/TextareaField.js';
+import { SliceToCostingTemplatePanel } from '../../components/SliceToCostingTemplatePanel.js';
 import { ApiError } from '../../api/client.js';
 import { useCreateQuote, type DiscountAppliesTo, type QuoteLineItemInput } from '../../api/quotes.js';
 import { useCustomers } from '../../api/customers.js';
@@ -39,6 +40,9 @@ export function QuoteCreatePage() {
   const [discountPercent, setDiscountPercent] = useState('');
   const [lines, setLines] = useState<LineItemDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // At most one line's "slice a file to build this line" flow is open at a
+  // time -- index into `lines`, or null when none is open.
+  const [sliceFlowIndex, setSliceFlowIndex] = useState<number | null>(null);
   // Pre-fill from the tenant's current defaults once, on load -- a one-time
   // snapshot for this new quote, same as the server does at creation time.
   // Only fills blank fields, so it doesn't clobber anything the user already typed.
@@ -214,6 +218,22 @@ export function QuoteCreatePage() {
                     <option key={ct.id} value={ct.id}>{ct.name}</option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => setSliceFlowIndex(sliceFlowIndex === i ? null : i)}
+                  className="w-fit text-sm text-slate-600 underline"
+                >
+                  Slice a file to build this line
+                </button>
+                {sliceFlowIndex === i && (
+                  <SliceToCostingTemplatePanel
+                    onAttached={(costingTemplateId) => {
+                      updateLine(i, { costingTemplateId });
+                      setSliceFlowIndex(null);
+                    }}
+                    onCancel={() => setSliceFlowIndex(null)}
+                  />
+                )}
               </div>
             )}
             <FormField

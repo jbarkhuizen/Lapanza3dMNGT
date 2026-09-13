@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { FormField } from '../../components/FormField.js';
 import { TextareaField } from '../../components/TextareaField.js';
 import { Checkbox } from '../../components/Checkbox.js';
+import { SliceUploadPanel, type SliceResult } from '../../components/SliceUploadPanel.js';
 import { ApiError } from '../../api/client.js';
 import { useCustomers } from '../../api/customers.js';
 import {
@@ -56,6 +57,7 @@ export function JobCardFormPage() {
 
   const [form, setForm] = useState<JobCardFormInput>(() => emptyForm(initialCardType));
   const [error, setError] = useState<string | null>(null);
+  const [showSlicePanel, setShowSlicePanel] = useState(false);
   const populatedForIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -90,6 +92,12 @@ export function JobCardFormPage() {
         technicianFindings: existingCard.technicianFindings ?? '',
 
         printFileName: existingCard.printFileName ?? '',
+        sliceJobId: existingCard.sliceJobId ?? undefined,
+        stlFileName: existingCard.stlFileName ?? undefined,
+        sliceWeightGrams: existingCard.sliceWeightGrams ?? undefined,
+        sliceSupportWeightGrams: existingCard.sliceSupportWeightGrams ?? undefined,
+        sliceFilamentLengthMm: existingCard.sliceFilamentLengthMm ?? undefined,
+        slicePrintTimeHours: existingCard.slicePrintTimeHours ?? undefined,
         printQuantity: existingCard.printQuantity ?? undefined,
         printWhatIsPrinted: existingCard.printWhatIsPrinted ?? '',
         printProcess: existingCard.printProcess ?? '',
@@ -128,6 +136,19 @@ export function JobCardFormPage() {
 
   function set<K extends keyof JobCardFormInput>(key: K, value: JobCardFormInput[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleSliceResult(result: SliceResult) {
+    setForm((prev) => ({
+      ...prev,
+      stlFileName: result.fileName,
+      sliceJobId: result.jobId,
+      sliceWeightGrams: result.weightGrams,
+      sliceSupportWeightGrams: result.supportWeightGrams,
+      sliceFilamentLengthMm: result.filamentLengthMm,
+      slicePrintTimeHours: result.printTimeHours,
+    }));
+    setShowSlicePanel(false);
   }
 
   const cardType = form.cardType;
@@ -176,6 +197,12 @@ export function JobCardFormPage() {
       return {
         ...shared,
         printFileName: form.printFileName,
+        sliceJobId: form.sliceJobId,
+        stlFileName: form.stlFileName,
+        sliceWeightGrams: form.sliceWeightGrams,
+        sliceSupportWeightGrams: form.sliceSupportWeightGrams,
+        sliceFilamentLengthMm: form.sliceFilamentLengthMm,
+        slicePrintTimeHours: form.slicePrintTimeHours,
         printQuantity: form.printQuantity,
         printWhatIsPrinted: form.printWhatIsPrinted,
         printProcess: form.printProcess,
@@ -372,6 +399,27 @@ export function JobCardFormPage() {
         <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
           <h2 className="text-lg font-semibold text-slate-900">Print details</h2>
           <FormField id="printFileName" label="File name" value={form.printFileName ?? ''} onChange={(e) => set('printFileName', e.target.value)} />
+
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setShowSlicePanel((prev) => !prev)}
+              className="w-fit rounded bg-slate-100 px-3 py-1 text-sm"
+            >
+              {showSlicePanel ? 'Close slicer' : 'Slice STL'}
+            </button>
+            {showSlicePanel && <SliceUploadPanel onResult={handleSliceResult} />}
+            {form.sliceWeightGrams != null && (
+              <div className="flex flex-col gap-1 rounded bg-slate-50 p-3 text-sm">
+                <p className="font-medium text-slate-700">Slice result{form.stlFileName ? ` — ${form.stlFileName}` : ''}</p>
+                <div className="flex justify-between"><span>Weight</span><span>{form.sliceWeightGrams?.toFixed(2)} g</span></div>
+                <div className="flex justify-between"><span>Support weight</span><span>{form.sliceSupportWeightGrams?.toFixed(2)} g</span></div>
+                <div className="flex justify-between"><span>Filament length</span><span>{form.sliceFilamentLengthMm?.toFixed(1)} mm</span></div>
+                <div className="flex justify-between"><span>Print time</span><span>{form.slicePrintTimeHours?.toFixed(2)} h</span></div>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-4">
             <FormField
               id="printQuantity"

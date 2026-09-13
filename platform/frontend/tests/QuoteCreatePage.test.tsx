@@ -93,6 +93,106 @@ describe('QuoteCreatePage', () => {
     );
   });
 
+  it('slices a file to build a line: creates a costing template, attaches it, and submits the quote', async () => {
+    // Starts empty; the mocked POST below pushes the newly created template
+    // into it, so the query invalidation this hook fires on success (see
+    // useCreateCostingTemplate) refetches a list that actually contains a
+    // matching <option> for the <select>'s now-attached value -- otherwise
+    // the <select required> would have no matching option and the browser's
+    // own constraint validation would silently block form submission.
+    const costingTemplatesList: Array<{ id: string; name: string }> = [];
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/customers') {
+        return Promise.resolve({ ok: true, customers: [{ id: 'c1', name: 'Bob Client', company: null, email: null, phone: null, billingAddress: '1 Oak St', deliveryAddress: null, vatNumber: null, notes: null, createdAt: '2026-01-01T00:00:00.000Z' }] });
+      }
+      if (path === '/api/costing-templates') {
+        return Promise.resolve({ ok: true, costingTemplates: costingTemplatesList });
+      }
+      if (path === '/api/company-profile') {
+        return Promise.resolve({ ok: true, companyProfile: testCompanyProfile });
+      }
+      if (path === '/api/printers') {
+        return Promise.resolve({ ok: true, printers: [{ id: 'p1', name: 'Prusa MK4' }] });
+      }
+      if (path === '/api/filaments') {
+        return Promise.resolve({ ok: true, filaments: [{ id: 'f1', brand: 'eSun', materialType: 'PLA' }] });
+      }
+      if (path === '/api/slicer/jobs/job1') {
+        return Promise.resolve({
+          ok: true,
+          job: {
+            id: 'job1',
+            status: 'done',
+            originFileName: 'bracket.stl',
+            resultWeightGrams: 30,
+            resultSupportWeightGrams: 2,
+            resultFilamentLengthMm: 900,
+            resultPrintTimeHours: 2.5,
+            errorMessage: null,
+          },
+        });
+      }
+      return Promise.reject(new client.ApiError('not found', 404));
+    });
+    vi.spyOn(client, 'apiPostFormData').mockResolvedValue({ ok: true, job: { id: 'job1', status: 'queued' } });
+    const postSpy = vi.spyOn(client, 'apiPost').mockImplementation((path: string, body?: unknown) => {
+      if (path === '/api/costing-templates') {
+        costingTemplatesList.push({ id: 'ct-new', name: (body as { name: string }).name });
+        return Promise.resolve({ ok: true, costingTemplate: { id: 'ct-new', ...(body as object) } });
+      }
+      if (path === '/api/quotes') {
+        return Promise.resolve({ ok: true, quote: { id: 'q1' } });
+      }
+      return Promise.reject(new client.ApiError('unexpected', 400));
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Bob Client' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Customer'), { target: { value: 'c1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add Line Item' }));
+    fireEvent.click(screen.getByLabelText('From a costing template'));
+    fireEvent.click(screen.getByRole('button', { name: 'Slice a file to build this line' }));
+
+    const file = new File(['solid stub'], 'bracket.stl', { type: 'model/stl' });
+    fireEvent.change(screen.getByLabelText('STL file'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Slice' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Template name')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Sliced bracket' } });
+    fireEvent.change(screen.getByLabelText('Filament'), { target: { value: 'f1' } });
+    fireEvent.change(screen.getByLabelText('Printer'), { target: { value: 'p1' } });
+    fireEvent.change(screen.getByLabelText('Markup (%)'), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create & attach' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', expect.objectContaining({
+        process: 'printer',
+        name: 'Sliced bracket',
+        filamentId: 'f1',
+        weightGrams: 30,
+        printerId: 'p1',
+        printTimeHours: 2.5,
+        sliceJobId: 'job1',
+        markupPercent: 50,
+      })),
+    );
+
+    // Slice flow closes and the line now points at the newly created
+    // template -- wait for the invalidated list to refetch and give the
+    // <select> a matching option before submitting.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Create & attach' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Sliced bracket' })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Quote' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/quotes', {
+        customerId: 'c1',
+        lineItems: [{ costingTemplateId: 'ct-new', quantity: 1 }],
+      }),
+    );
+  });
+
   it('sends discountPercent/discountAppliesTo when a discount mode other than None is selected', async () => {
     mockReferenceData();
     const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, quote: { id: 'q1' } });

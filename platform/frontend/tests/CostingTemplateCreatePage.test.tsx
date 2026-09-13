@@ -33,6 +33,21 @@ function mockReferenceData(options?: { emptyLabourSteps?: boolean; emptyConsumab
     if (path === '/api/premade-items') {
       return Promise.resolve({ ok: true, premadeItems: [{ id: 'pi1', name: 'Keychain blank', unitCost: 25, costMultiplier: 1, createdAt: '2026-01-01T00:00:00.000Z' }] });
     }
+    if (path === '/api/slicer/jobs/job1') {
+      return Promise.resolve({
+        ok: true,
+        job: {
+          id: 'job1',
+          status: 'done',
+          originFileName: 'bracket.stl',
+          resultWeightGrams: 42,
+          resultSupportWeightGrams: 3,
+          resultFilamentLengthMm: 1000,
+          resultPrintTimeHours: 3.5,
+          errorMessage: null,
+        },
+      });
+    }
     return Promise.reject(new client.ApiError('not found', 404));
   });
 }
@@ -192,6 +207,44 @@ describe('CostingTemplateCreatePage', () => {
     expect(screen.queryByLabelText('Laser material')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Pre-made item')).toBeInTheDocument();
     expect(screen.getByLabelText('Quantity', { selector: '#premadeItemQuantity' })).toBeInTheDocument();
+  });
+
+  it('slicing an STL fills weight/print time and attaches sliceJobId to the create payload', async () => {
+    mockReferenceData();
+    vi.spyOn(client, 'apiPostFormData').mockResolvedValue({ ok: true, job: { id: 'job1', status: 'queued' } });
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, costingTemplate: { id: 'new-template-5' } });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'eSun — PLA' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('Template name'), { target: { value: 'Sliced bracket' } });
+    fireEvent.change(screen.getByLabelText('Filament'), { target: { value: 'f1' } });
+    fireEvent.change(screen.getByLabelText('Printer'), { target: { value: 'p1' } });
+    fireEvent.change(screen.getByLabelText('Markup (%)'), { target: { value: '50' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Slice STL' }));
+    const file = new File(['solid stub'], 'bracket.stl', { type: 'model/stl' });
+    fireEvent.change(screen.getByLabelText('STL file'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Slice' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Weight (g)')).toHaveValue(42));
+    expect(screen.getByLabelText('Print time (hours)')).toHaveValue(3.5);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create Costing Template' }));
+
+    await waitFor(() =>
+      expect(postSpy).toHaveBeenCalledWith('/api/costing-templates', {
+        process: 'printer',
+        name: 'Sliced bracket',
+        filamentId: 'f1',
+        weightGrams: 42,
+        printerId: 'p1',
+        printTimeHours: 3.5,
+        sliceJobId: 'job1',
+        markupPercent: 50,
+        labourLines: [],
+        consumableLines: [],
+      }),
+    );
   });
 
   it('creates a scanner-process costing template with the scanner payload shape', async () => {

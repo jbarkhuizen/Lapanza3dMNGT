@@ -30,6 +30,7 @@ import { ProductFormPage } from './pages/products/ProductFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
 import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
+import { SlicerToolPage } from './pages/slicer/SlicerToolPage.js';
 import { JobsBoardPage } from './pages/jobs/JobsBoardPage.js';
 import { JobCardsListPage } from './pages/jobCards/JobCardsListPage.js';
 import { JobCardFormPage } from './pages/jobCards/JobCardFormPage.js';
@@ -422,6 +423,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <CostingTemplateDetailPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/slicer"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <SlicerToolPage />
               </AppShell>
             </RequireAuth>
           }

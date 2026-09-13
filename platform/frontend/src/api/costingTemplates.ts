@@ -44,6 +44,9 @@ export interface CostingTemplate {
   premadeItemId: string | null;
   premadeItemSnapshotName: string | null;
   premadeItemQuantity: number | null;
+  // Traceability only -- which SliceJob (if any) produced weightGrams/
+  // printTimeHours above. See the slicer design spec.
+  sliceJobId: string | null;
   markupPercent: string;
   filamentCost: string;
   electricityCost: string;
@@ -74,6 +77,9 @@ export type CostingTemplateFormInput =
       weightGrams: number;
       printerId: string;
       printTimeHours: number;
+      // Only sent when the weight/time above came from the slicer -- see
+      // SliceUploadPanel's onResult wiring in CostingTemplateCreatePage.
+      sliceJobId?: string;
     })
   | (SharedCostingTemplateFormFields & {
       process: 'scanner';

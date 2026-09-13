@@ -96,6 +96,12 @@ function existingJobCard(overrides: Record<string, unknown> = {}) {
     deliverableDrawingPdf: false,
     deliverableRenderedImages: false,
     cadApprovedRevision: null,
+    sliceJobId: null,
+    stlFileName: null,
+    sliceWeightGrams: null,
+    sliceSupportWeightGrams: null,
+    sliceFilamentLengthMm: null,
+    slicePrintTimeHours: null,
     ...overrides,
   };
 }
@@ -159,6 +165,57 @@ describe('JobCardFormPage — create mode', () => {
     expect(payload.printFileName).toBeUndefined();
   });
 
+  it('slicing an STL on a print-type intake populates the slice result fields and submits them', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [] });
+      if (path === '/api/printers') return Promise.resolve({ ok: true, printers: [] });
+      if (path === '/api/filaments') return Promise.resolve({ ok: true, filaments: [] });
+      if (path === '/api/slicer/jobs/job1') {
+        return Promise.resolve({
+          ok: true,
+          job: {
+            id: 'job1',
+            status: 'done',
+            originFileName: 'bracket.stl',
+            resultWeightGrams: 25,
+            resultSupportWeightGrams: 2,
+            resultFilamentLengthMm: 800,
+            resultPrintTimeHours: 4,
+            errorMessage: null,
+          },
+        });
+      }
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    vi.spyOn(client, 'apiPostFormData').mockResolvedValue({ ok: true, job: { id: 'job1', status: 'queued' } });
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, jobCard: { id: '1' } });
+    renderAt('/job-cards/new?type=print');
+
+    await waitFor(() => expect(screen.getByText('Print details')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Job title'), { target: { value: 'Print bracket set' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Slice STL' }));
+    const file = new File(['solid stub'], 'bracket.stl', { type: 'model/stl' });
+    fireEvent.change(screen.getByLabelText('STL file'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Slice' }));
+
+    await waitFor(() => expect(screen.getByText('Slice result — bracket.stl')).toBeInTheDocument());
+    expect(screen.getByText('25.00 g')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, payload] = postSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(payload).toMatchObject({
+      sliceJobId: 'job1',
+      stlFileName: 'bracket.stl',
+      sliceWeightGrams: 25,
+      sliceSupportWeightGrams: 2,
+      sliceFilamentLengthMm: 800,
+      slicePrintTimeHours: 4,
+    });
+  });
+
   it('defaults to the repair type when no ?type is given', async () => {
     mockNoCustomers();
     renderAt('/job-cards/new');
@@ -203,6 +260,45 @@ describe('JobCardFormPage — edit mode', () => {
     expect(path).toBe('/api/job-cards/1');
     expect(payload.reportedFault).toBe('Now grinding');
     expect(payload.cardType).toBeUndefined();
+  });
+
+  it('shows the slice result section when a print-type card already has slice data', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/job-cards/1') {
+        return Promise.resolve({
+          ok: true,
+          jobCard: existingJobCard({
+            cardType: 'print',
+            sliceJobId: 'job1',
+            stlFileName: 'bracket.stl',
+            sliceWeightGrams: 25,
+            sliceSupportWeightGrams: 2,
+            sliceFilamentLengthMm: 800,
+            slicePrintTimeHours: 4,
+          }),
+        });
+      }
+      if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [] });
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    renderAt('/job-cards/1');
+
+    await waitFor(() => expect(screen.getByText('Slice result — bracket.stl')).toBeInTheDocument());
+    expect(screen.getByText('25.00 g')).toBeInTheDocument();
+  });
+
+  it('omits the slice result section for a print-type card with no slice data', async () => {
+    vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
+      if (path === '/api/job-cards/1') {
+        return Promise.resolve({ ok: true, jobCard: existingJobCard({ cardType: 'print' }) });
+      }
+      if (path === '/api/customers') return Promise.resolve({ ok: true, customers: [] });
+      return Promise.reject(new Error(`Unexpected path: ${path}`));
+    });
+    renderAt('/job-cards/1');
+
+    await waitFor(() => expect(screen.getByText('Print details')).toBeInTheDocument());
+    expect(screen.queryByText(/Slice result/)).not.toBeInTheDocument();
   });
 
   it('shows a loading state while the existing card is being fetched', async () => {

@@ -46,6 +46,7 @@ const baseTemplate: CostingTemplate = {
   premadeItemId: null,
   premadeItemSnapshotName: null,
   premadeItemQuantity: null,
+  sliceJobId: null,
   markupPercent: '50.00',
   filamentCost: '15.00',
   electricityCost: '1.00',

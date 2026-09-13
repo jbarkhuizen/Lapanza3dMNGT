@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FormField } from '../../components/FormField.js';
+import { SliceUploadPanel, type SliceResult } from '../../components/SliceUploadPanel.js';
 import { ApiError } from '../../api/client.js';
 import { useCreateCostingTemplate, type CostingTemplateFormInput } from '../../api/costingTemplates.js';
 import { useFilaments } from '../../api/filaments.js';
@@ -60,6 +61,15 @@ export function CostingTemplateCreatePage() {
   const [labourLines, setLabourLines] = useState<LabourLineDraft[]>([]);
   const [consumableLines, setConsumableLines] = useState<ConsumableLineDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [sliceJobId, setSliceJobId] = useState<string | undefined>(undefined);
+  const [showSlicePanel, setShowSlicePanel] = useState(false);
+
+  function handleSliceResult(result: SliceResult) {
+    setWeightGrams(String(result.weightGrams));
+    setPrintTimeHours(String(result.printTimeHours));
+    setSliceJobId(result.jobId);
+    setShowSlicePanel(false);
+  }
 
   function addLabourLine() {
     setLabourLines((prev) => [...prev, { labourStepId: labourSteps?.[0]?.id ?? '', hours: '' }]);
@@ -99,6 +109,11 @@ export function CostingTemplateCreatePage() {
         weightGrams: Number(weightGrams),
         printerId,
         printTimeHours: Number(printTimeHours),
+        // Only included when these numbers came from a slice -- omitted
+        // entirely (not sent as null/undefined) when the user typed them in
+        // by hand, same "optional means omit" convention as every other
+        // optional field on this discriminated union.
+        ...(sliceJobId ? { sliceJobId } : {}),
       };
     } else if (process === 'scanner') {
       payload = {
@@ -171,7 +186,28 @@ export function CostingTemplateCreatePage() {
             </select>
           </div>
 
-          <FormField id="weightGrams" label="Weight (g)" type="number" min="0.01" value={weightGrams} onChange={(e) => setWeightGrams(e.target.value)} required />
+          <button
+            type="button"
+            onClick={() => setShowSlicePanel((prev) => !prev)}
+            className="w-fit rounded bg-slate-100 px-3 py-1 text-sm"
+          >
+            {showSlicePanel ? 'Close slicer' : 'Slice STL'}
+          </button>
+          {showSlicePanel && <SliceUploadPanel onResult={handleSliceResult} />}
+          {sliceJobId && <p className="text-sm text-slate-500">Weight and print time below came from a slice.</p>}
+
+          <FormField
+            id="weightGrams"
+            label="Weight (g)"
+            type="number"
+            min="0.01"
+            value={weightGrams}
+            onChange={(e) => {
+              setWeightGrams(e.target.value);
+              setSliceJobId(undefined);
+            }}
+            required
+          />
 
           <div className="flex flex-col gap-1">
             <label htmlFor="printerId" className="text-sm font-medium text-slate-700">Printer</label>
@@ -190,7 +226,18 @@ export function CostingTemplateCreatePage() {
             </select>
           </div>
 
-          <FormField id="printTimeHours" label="Print time (hours)" type="number" min="0.01" value={printTimeHours} onChange={(e) => setPrintTimeHours(e.target.value)} required />
+          <FormField
+            id="printTimeHours"
+            label="Print time (hours)"
+            type="number"
+            min="0.01"
+            value={printTimeHours}
+            onChange={(e) => {
+              setPrintTimeHours(e.target.value);
+              setSliceJobId(undefined);
+            }}
+            required
+          />
         </>
       )}
 

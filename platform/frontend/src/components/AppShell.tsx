@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { to: '/premade-items', label: 'Pre-made Items', adminOnly: false },
   { to: '/products', label: 'Products', adminOnly: false },
   { to: '/costing-templates', label: 'Costing Templates', adminOnly: false },
+  { to: '/slicer', label: 'Slicer', adminOnly: false },
   { to: '/jobs', label: 'Jobs', adminOnly: false },
   { to: '/job-cards', label: 'Job Cards (Intake)', adminOnly: false },
   { to: '/quotes', label: 'Quotes', adminOnly: false },
