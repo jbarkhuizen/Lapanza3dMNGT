@@ -49,8 +49,8 @@ export function MaterialComparePage() {
   if (isInvalid) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Compare materials</h1>
-        <p className="text-slate-500">
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Compare materials</h1>
+        <p className="text-slate-500 dark:text-slate-400">
           Pick two materials to compare them.{' '}
           <Link to="/materials" className="underline">
             Back to materials
@@ -62,12 +62,12 @@ export function MaterialComparePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Compare materials</h1>
-      {isLoading && <p className="text-slate-500">Loading…</p>}
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Compare materials</h1>
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
       {!isLoading && materialA && materialB && (
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Point</th>
               <th className="py-2">{materialA.name}</th>
               <th className="py-2">{materialB.name}</th>
@@ -75,8 +75,8 @@ export function MaterialComparePage() {
           </thead>
           <tbody>
             {COMPARE_ROWS.map((row) => (
-              <tr key={row.label} className="border-b border-slate-100">
-                <th className="py-2 font-medium text-slate-700">{row.label}</th>
+              <tr key={row.label} className="border-b border-slate-100 dark:border-slate-800">
+                <th className="py-2 font-medium text-slate-700 dark:text-slate-300">{row.label}</th>
                 <td className="py-2">{row.render(materialA)}</td>
                 <td className="py-2">{row.render(materialB)}</td>
               </tr>

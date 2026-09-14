@@ -9,10 +9,10 @@ function JobCard({ job }: { job: Job }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm shadow-sm">
-      <div className="font-medium text-slate-900">{job.name}</div>
-      {job.notes && <p className="text-slate-600">{job.notes}</p>}
-      <div className="text-xs text-slate-500">
+    <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div className="font-medium text-slate-900 dark:text-slate-100">{job.name}</div>
+      {job.notes && <p className="text-slate-600 dark:text-slate-400">{job.notes}</p>}
+      <div className="text-xs text-slate-500 dark:text-slate-400">
         <div>Created {job.createdAt.slice(0, 10)}</div>
         {job.startedAt && <div>Started {job.startedAt.slice(0, 10)}</div>}
       </div>
@@ -21,7 +21,7 @@ function JobCard({ job }: { job: Job }) {
         value={job.status}
         onChange={handleStatusChange}
         disabled={updateStatusMutation.isPending}
-        className="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+        className="rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
       >
         {JOB_STATUSES.map((status) => (
           <option key={status} value={status}>
@@ -38,23 +38,23 @@ export function JobsBoardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Jobs</h1>
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load jobs. Try refreshing the page.</p>}
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Jobs</h1>
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load jobs. Try refreshing the page.</p>}
       {!isLoading && !isError && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {JOB_STATUSES.map((status) => {
             const jobsInColumn = (jobs ?? []).filter((job) => job.status === status);
             return (
-              <div key={status} className="flex flex-col gap-3 rounded bg-slate-50 p-3">
-                <h2 className="text-sm font-semibold text-slate-700">
-                  {JOB_STATUS_LABELS[status]} <span className="text-slate-400">({jobsInColumn.length})</span>
+              <div key={status} className="flex flex-col gap-3 rounded bg-slate-50 p-3 dark:bg-slate-900">
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {JOB_STATUS_LABELS[status]} <span className="text-slate-400 dark:text-slate-500">({jobsInColumn.length})</span>
                 </h2>
                 <div className="flex flex-col gap-3">
                   {jobsInColumn.map((job) => (
                     <JobCard key={job.id} job={job} />
                   ))}
-                  {jobsInColumn.length === 0 && <p className="text-xs text-slate-400">No jobs</p>}
+                  {jobsInColumn.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500">No jobs</p>}
                 </div>
               </div>
             );

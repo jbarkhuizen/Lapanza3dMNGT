@@ -27,10 +27,10 @@ function MaterialCard({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded border border-slate-200 p-4">
+    <div className="flex flex-col gap-2 rounded border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-lg font-semibold text-slate-900">{material.name}</h3>
-        <label className="flex items-center gap-1 text-xs text-slate-600">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{material.name}</h3>
+        <label className="flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
           <input
             type="checkbox"
             checked={checked}
@@ -40,25 +40,25 @@ function MaterialCard({
           Compare
         </label>
       </div>
-      <p className="text-sm text-slate-500">{material.chemistry}</p>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-slate-500 dark:text-slate-400">{material.chemistry}</p>
+      <p className="text-sm text-slate-700 dark:text-slate-300">
         <strong>Best for: </strong>
         {material.bestFor}
       </p>
-      <p className="text-sm text-slate-700">
+      <p className="text-sm text-slate-700 dark:text-slate-300">
         R{material.priceZarPerKgLow}–R{material.priceZarPerKgHigh}/kg
         {material.priceEstimated ? ' (est.)' : ''}
       </p>
       <div className="flex flex-wrap gap-1">
         {material.tags.map((tag) => (
-          <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+          <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-slate-700 dark:text-slate-300">
             {TAG_LABELS[tag] ?? tag}
           </span>
         ))}
       </div>
       <Link
         to={getUseThisMaterialHref(material)}
-        className="mt-2 w-fit rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
+        className="mt-2 w-fit rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-900"
       >
         Use this material
       </Link>
@@ -96,12 +96,12 @@ export function MaterialsLibraryPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Materials</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Materials</h1>
         {selected.length === 2 && (
           <button
             type="button"
             onClick={handleCompare}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-900"
           >
             Compare selected
           </button>
@@ -114,7 +114,9 @@ export function MaterialsLibraryPage() {
           onClick={() => setActiveTag(undefined)}
           aria-pressed={activeTag === undefined}
           className={`rounded-full border px-3 py-1 text-sm ${
-            activeTag === undefined ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 text-slate-700'
+            activeTag === undefined
+              ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+              : 'border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'
           }`}
         >
           All materials
@@ -126,7 +128,9 @@ export function MaterialsLibraryPage() {
             onClick={() => setActiveTag(tag)}
             aria-pressed={activeTag === tag}
             className={`rounded-full border px-3 py-1 text-sm ${
-              activeTag === tag ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 text-slate-700'
+              activeTag === tag
+                ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                : 'border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'
             }`}
           >
             {label}
@@ -134,9 +138,9 @@ export function MaterialsLibraryPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load materials. Try refreshing the page.</p>}
-      {!isLoading && !isError && materials?.length === 0 && <p className="text-slate-500">No materials match this filter.</p>}
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load materials. Try refreshing the page.</p>}
+      {!isLoading && !isError && materials?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No materials match this filter.</p>}
       {!isLoading && !isError && materials && materials.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {materials.map((material) => (

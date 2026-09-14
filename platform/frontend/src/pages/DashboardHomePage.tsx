@@ -21,10 +21,10 @@ export function DashboardHomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Welcome back, {tenant?.businessName}</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Welcome back, {tenant?.businessName}</h1>
 
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load the dashboard. Try refreshing the page.</p>}
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load the dashboard. Try refreshing the page.</p>}
 
       {!isLoading && !isError && data && (
         <>
@@ -36,8 +36,8 @@ export function DashboardHomePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="rounded border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">Invoice status</h2>
+            <div className="rounded border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <h2 className="mb-3 text-lg font-semibold text-slate-900 dark:text-slate-100">Invoice status</h2>
               <div className="flex flex-col gap-3">
                 {INVOICE_STATUS_ROWS.map((row) => {
                   const count = data.invoiceStatusCounts[row.key];
@@ -45,11 +45,11 @@ export function DashboardHomePage() {
                   return (
                     <div key={row.key} className="flex flex-col gap-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">{row.label}</span>
-                        <span className="text-slate-900">{count}</span>
+                        <span className="text-slate-600 dark:text-slate-400">{row.label}</span>
+                        <span className="text-slate-900 dark:text-slate-100">{count}</span>
                       </div>
-                      <div className="h-2 w-full rounded bg-slate-100">
-                        <div className="h-2 rounded bg-slate-900" style={{ width: `${percent}%` }} />
+                      <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-700">
+                        <div className="h-2 rounded bg-slate-900 dark:bg-slate-100" style={{ width: `${percent}%` }} />
                       </div>
                     </div>
                   );

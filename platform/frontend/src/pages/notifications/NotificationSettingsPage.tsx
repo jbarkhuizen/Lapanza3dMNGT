@@ -85,33 +85,33 @@ export function NotificationSettingsPage() {
   }
 
   if (isError) {
-    return <p className="text-red-600">Couldn't load notification settings. Try refreshing the page.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load notification settings. Try refreshing the page.</p>;
   }
 
   if (isLoading || !form) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
 
   return (
     <div className="flex max-w-2xl flex-col gap-8">
-      <h1 className="text-2xl font-semibold text-slate-900">Notification Settings</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Notification Settings</h1>
 
       {SECTIONS.map((section) => (
         <section key={section.title} className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{section.title}</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{section.title}</h2>
           <div className="grid grid-cols-[1fr_5rem_5rem] items-center gap-x-4 gap-y-3">
             <span />
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">In-app</span>
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Email</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">In-app</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">Email</span>
             {section.rows.map((row) => (
               <Fragment key={row.key}>
-                <span className="text-sm text-slate-700">{row.label}</span>
+                <span className="text-sm text-slate-700 dark:text-slate-300">{row.label}</span>
                 <input
                   type="checkbox"
                   aria-label={`${row.label} in-app`}
                   checked={form[row.inAppField]}
                   onChange={(e) => handleToggle(row.inAppField, e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300"
+                  className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 dark:bg-slate-800"
                 />
                 {row.emailField ? (
                   <input
@@ -119,10 +119,10 @@ export function NotificationSettingsPage() {
                     aria-label={`${row.label} email`}
                     checked={form[row.emailField]}
                     onChange={(e) => handleToggle(row.emailField as keyof NotificationPreferences, e.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300"
+                    className="h-4 w-4 rounded border-slate-300 dark:border-slate-600 dark:bg-slate-800"
                   />
                 ) : (
-                  <span className="text-xs text-slate-400">Always sent</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500">Always sent</span>
                 )}
               </Fragment>
             ))}
@@ -130,8 +130,8 @@ export function NotificationSettingsPage() {
         </section>
       ))}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {saved && !error && <p className="text-sm text-green-600">Saved.</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {saved && !error && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}
     </div>
   );
 }

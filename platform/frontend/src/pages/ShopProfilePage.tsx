@@ -189,19 +189,19 @@ export function ShopProfilePage() {
   }
 
   if (isError) {
-    return <p className="text-red-600">Couldn't load the shop profile. Try refreshing the page.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load the shop profile. Try refreshing the page.</p>;
   }
 
   if (isLoading || !form) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-8">
-      <h1 className="text-2xl font-semibold text-slate-900">Shop Profile</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Shop Profile</h1>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Public page</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Public page</h2>
         <Checkbox
           id="shopIsPublished"
           label="Publish this page"
@@ -214,13 +214,13 @@ export function ShopProfilePage() {
           value={form.shopSlug}
           onChange={(e) => set('shopSlug', e.target.value)}
         />
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           Your public page: barkie.co.za/shop/{form.shopSlug || '…'}
         </p>
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">About your shop</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">About your shop</h2>
         <FormField
           id="shopTagline"
           label="Tagline"
@@ -254,12 +254,12 @@ export function ShopProfilePage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trading hours</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Trading hours</h2>
         {DAYS_OF_WEEK.map((day) => {
           const dayHours = form.shopTradingHours[day];
           return (
             <div key={day} className="flex flex-wrap items-center gap-4">
-              <span className="w-24 text-sm font-medium text-slate-700">{dayLabel(day)}</span>
+              <span className="w-24 text-sm font-medium text-slate-700 dark:text-slate-300">{dayLabel(day)}</span>
               <Checkbox
                 id={`shopTradingHours-${day}-open`}
                 label="Open"
@@ -286,7 +286,7 @@ export function ShopProfilePage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Gallery &amp; contact</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Gallery &amp; contact</h2>
         <TextareaField
           id="shopGalleryUrlsText"
           label="Gallery image URLs (one per line)"
@@ -308,7 +308,7 @@ export function ShopProfilePage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Social media</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Social media</h2>
         <FormField
           id="shopFacebookUrl"
           label="Facebook"
@@ -354,7 +354,7 @@ export function ShopProfilePage() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Model marketplaces</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Model marketplaces</h2>
         <FormField
           id="shopCults3dUrl"
           label="Cults3D"
@@ -399,12 +399,12 @@ export function ShopProfilePage() {
         />
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {saved && !error && <p className="text-sm text-green-600">Saved.</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {saved && !error && <p className="text-sm text-green-600 dark:text-green-400">Saved.</p>}
       <button
         type="submit"
         disabled={updateMutation.isPending}
-        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
         Save
       </button>
