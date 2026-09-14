@@ -149,6 +149,40 @@ describe('PrintersListPage — inline add form', () => {
     expect((body as Record<string, unknown>).purchaseDate).toBeUndefined();
   });
 
+  it('choosing a printer from the catalog dropdown pre-fills make, model, process, build volume, and power draw', async () => {
+    mockGet([]);
+    const postSpy = vi.spyOn(client, 'apiPost').mockResolvedValue({ ok: true, printer: { id: '1' } });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('Name', { selector: '#add-name' })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Load specs from catalog/), { target: { value: 'Prusa Research|||MK4S' } });
+    fireEvent.change(screen.getByLabelText('Name', { selector: '#add-name' }), { target: { value: 'My MK4S' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => expect(postSpy).toHaveBeenCalled());
+    const [, body] = postSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(body).toMatchObject({
+      name: 'My MK4S',
+      make: 'Prusa Research',
+      model: 'MK4S',
+      process: 'fdm',
+      buildVolumeXMm: 250,
+      buildVolumeYMm: 210,
+      buildVolumeZMm: 220,
+      powerDrawWatts: 240,
+    });
+  });
+
+  it('the catalog dropdown resets to the placeholder after applying, so it never looks bound to a chosen value', async () => {
+    mockGet([]);
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('Name', { selector: '#add-name' })).toBeInTheDocument());
+    const catalogSelect = screen.getByLabelText(/Load specs from catalog/) as HTMLSelectElement;
+    fireEvent.change(catalogSelect, { target: { value: 'Prusa Research|||MK4S' } });
+    expect(catalogSelect.value).toBe('');
+  });
+
   it('does not render Presets/Maintenance Log sections in the add form', async () => {
     mockGet([]);
     renderPage();

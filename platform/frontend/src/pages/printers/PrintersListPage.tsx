@@ -16,6 +16,7 @@ import {
 import { omitBlankFields } from '../../lib/omitBlankFields.js';
 import { PresetsSection } from '../../components/printers/PresetsSection.js';
 import { MaintenanceLogSection } from '../../components/printers/MaintenanceLogSection.js';
+import { PRINTER_CATALOG } from '../../data/printerCatalog.js';
 
 const STATUSES = ['active', 'maintenance', 'retired'] as const;
 // A laser cutter/engraver is tracked as a Printer row too -- see the design
@@ -70,6 +71,27 @@ export function PrintersListPage() {
   }
   function setAddNumber(key: NumericPrinterField, raw: string) {
     setAdd(key, raw ? Number(raw) : undefined);
+  }
+
+  // Pre-fills the add form from the printer-specs catalog (see
+  // src/data/printerCatalog.ts) -- a convenience, not a data source: every
+  // field it sets is still a normal editable form field afterward, and
+  // choosing nothing here is exactly as valid as choosing an entry. Resets
+  // its own selection back to the placeholder after applying, since it's a
+  // one-shot "apply these values" action, not a field bound to the form.
+  function applyCatalogEntry(catalogKey: string) {
+    const entry = PRINTER_CATALOG.find((p) => `${p.make}|||${p.model}` === catalogKey);
+    if (!entry) return;
+    setAddForm((prev) => ({
+      ...prev,
+      make: entry.make,
+      model: entry.model,
+      process: entry.process,
+      buildVolumeXMm: entry.buildVolumeXMm,
+      buildVolumeYMm: entry.buildVolumeYMm,
+      buildVolumeZMm: entry.buildVolumeZMm,
+      powerDrawWatts: entry.powerDrawWatts,
+    }));
   }
 
   async function handleAdd(e: FormEvent) {
@@ -159,6 +181,40 @@ export function PrintersListPage() {
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Printers</h1>
 
       <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4 dark:border-slate-700">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="add-catalog" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Load specs from catalog (optional)
+          </label>
+          <select
+            id="add-catalog"
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value) applyCatalogEntry(e.target.value);
+              e.target.value = '';
+            }}
+            className="w-fit rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          >
+            <option value="">Choose a printer model…</option>
+            {Object.entries(
+              PRINTER_CATALOG.reduce<Record<string, typeof PRINTER_CATALOG>>((groups, entry) => {
+                (groups[entry.make] ??= []).push(entry);
+                return groups;
+              }, {}),
+            ).map(([make, entries]) => (
+              <optgroup key={make} label={make}>
+                {entries.map((entry) => (
+                  <option key={`${entry.make}|||${entry.model}`} value={`${entry.make}|||${entry.model}`}>
+                    {entry.model}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Fills in make, model, process, build volume, and power draw below — still editable, just saves you
+            looking the numbers up.
+          </p>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <FormField id="add-name" label="Name" value={addForm.name} onChange={(e) => setAdd('name', e.target.value)} required />
           <div className="flex flex-col gap-1">
