@@ -10,20 +10,15 @@ import { ShopProfilePage } from './pages/ShopProfilePage.js';
 import { CustomersListPage } from './pages/customers/CustomersListPage.js';
 import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
 import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js';
-import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
 import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
 import { MaterialsLibraryPage } from './pages/materials/MaterialsLibraryPage.js';
 import { MaterialComparePage } from './pages/materials/MaterialComparePage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
 import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { ScannersListPage } from './pages/scanners/ScannersListPage.js';
-import { ScannerFormPage } from './pages/scanners/ScannerFormPage.js';
 import { LaserMaterialsListPage } from './pages/laserMaterials/LaserMaterialsListPage.js';
-import { LaserMaterialFormPage } from './pages/laserMaterials/LaserMaterialFormPage.js';
 import { PremadeItemsListPage } from './pages/premadeItems/PremadeItemsListPage.js';
-import { PremadeItemFormPage } from './pages/premadeItems/PremadeItemFormPage.js';
 import { ProductsListPage } from './pages/products/ProductsListPage.js';
-import { ProductFormPage } from './pages/products/ProductFormPage.js';
 import { CostingTemplatesListPage } from './pages/costingTemplates/CostingTemplatesListPage.js';
 import { CostingTemplateCreatePage } from './pages/costingTemplates/CostingTemplateCreatePage.js';
 import { CostingTemplateDetailPage } from './pages/costingTemplates/CostingTemplateDetailPage.js';
@@ -155,21 +150,11 @@ export function App() {
           }
         />
         <Route
-          path="/labour-steps/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <LabourStepFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/labour-steps/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <LabourStepFormPage />
+                <LabourStepsListPage />
               </AppShell>
             </RequireAuth>
           }
@@ -255,21 +240,11 @@ export function App() {
           }
         />
         <Route
-          path="/scanners/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <ScannerFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/scanners/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <ScannerFormPage />
+                <ScannersListPage />
               </AppShell>
             </RequireAuth>
           }
@@ -285,21 +260,11 @@ export function App() {
           }
         />
         <Route
-          path="/laser-materials/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <LaserMaterialFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/laser-materials/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <LaserMaterialFormPage />
+                <LaserMaterialsListPage />
               </AppShell>
             </RequireAuth>
           }
@@ -315,21 +280,11 @@ export function App() {
           }
         />
         <Route
-          path="/premade-items/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <PremadeItemFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/premade-items/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <PremadeItemFormPage />
+                <PremadeItemsListPage />
               </AppShell>
             </RequireAuth>
           }
@@ -345,21 +300,11 @@ export function App() {
           }
         />
         <Route
-          path="/products/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <ProductFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/products/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <ProductFormPage />
+                <ProductsListPage />
               </AppShell>
             </RequireAuth>
           }
