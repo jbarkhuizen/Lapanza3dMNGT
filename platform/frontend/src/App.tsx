@@ -10,7 +10,6 @@ import { ShopProfilePage } from './pages/ShopProfilePage.js';
 import { CustomersListPage } from './pages/customers/CustomersListPage.js';
 import { CustomerFormPage } from './pages/customers/CustomerFormPage.js';
 import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
-import { FilamentFormPage } from './pages/filaments/FilamentFormPage.js';
 import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js';
 import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
 import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
@@ -148,21 +147,11 @@ export function App() {
           }
         />
         <Route
-          path="/filaments/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <FilamentFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/filaments/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <FilamentFormPage />
+                <FilamentsListPage />
               </AppShell>
             </RequireAuth>
           }

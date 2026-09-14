@@ -14,7 +14,7 @@ const TAG_LABELS: Record<string, string> = {
 function getUseThisMaterialHref(material: Material): string {
   const midpoint = Math.round((material.priceZarPerKgLow + material.priceZarPerKgHigh) / 2);
   const params = new URLSearchParams({ materialType: material.name, costPerKg: String(midpoint) });
-  return `/filaments/new?${params.toString()}`;
+  return `/filaments?${params.toString()}`;
 }
 
 function MaterialCard({

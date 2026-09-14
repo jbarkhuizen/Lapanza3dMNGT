@@ -75,7 +75,7 @@ describe('MaterialsLibraryPage', () => {
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Use this material' })).toHaveAttribute(
         'href',
-        '/filaments/new?materialType=PLA&costPerKg=360',
+        '/filaments?materialType=PLA&costPerKg=360',
       ),
     );
   });
