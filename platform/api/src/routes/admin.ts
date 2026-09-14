@@ -132,7 +132,13 @@ adminRouter.post('/login', adminLoginLimiter, async (req, res) => {
 
 adminRouter.post('/logout', requirePlatformAdminAuth, async (req, res) => {
   const token = req.cookies?.[env.sessionCookieName];
-  if (token) {
+  // See requireTenantAuth.ts's matching comment on cookie-parser's
+  // auto-JSON-parse behavior. This route is already gated by
+  // requirePlatformAdminAuth (which rejects a non-string token before this
+  // handler runs), but destroySession() guards it too, and this explicit
+  // check keeps the pattern consistent with the two ungated logout/auth
+  // call sites where it's the actual security boundary.
+  if (typeof token === 'string' && token.length > 0) {
     await destroySession(token);
   }
   res.clearCookie(env.sessionCookieName);
@@ -245,6 +251,34 @@ adminRouter.get('/tenants/:id', requirePlatformAdminAuth, async (req, res) => {
       <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/cancel" style="margin-top:12px">
         <button type="submit" class="btn btn-danger">Cancel subscription</button>
       </form>`;
+  }
+
+  // Recovery path for backlog #62: a lost first-contact ITN (PayFast) or
+  // webhook (PayPal) can leave a row with a REAL, live, billing provider
+  // subscription but providerSubscriptionId still null locally -- neither
+  // POST /api/billing/cancel nor the admin cancel button above can ever
+  // reach it, since both work by looking up this same field. There is no
+  // way for Barkie to learn the id on its own after the fact (PayFast/
+  // PayPal don't push a second notification once the first is missed), so
+  // this is a manual-but-real fix: an admin who's checked the tenant's
+  // subscription in the provider's own merchant dashboard can paste the id
+  // found there in, which makes the row cancelable through the completely
+  // normal cancel flow from that point on -- no separate "orphan cancel"
+  // code path needed.
+  if (sub && (sub.paymentProvider === 'payfast' || sub.paymentProvider === 'paypal') && !sub.providerSubscriptionId) {
+    subscriptionSection += `
+      <form method="post" action="/api/admin/tenants/${tenant.id}/subscription/bind-provider-id" class="grid-2" style="margin-top:12px;align-items:end">
+        <label class="field"><span>Bind ${escapeHtml(sub.paymentProvider)} subscription ID</span>
+          <input name="providerSubscriptionId" placeholder="Found in the ${escapeHtml(sub.paymentProvider)} merchant dashboard" required />
+        </label>
+        <button type="submit" class="btn btn-secondary">Bind (then cancel normally)</button>
+      </form>
+      <p style="color:var(--muted);font-size:0.85em;margin-top:6px">
+        This row has no provider subscription id on file -- see backlog #62. If this tenant's first-contact
+        webhook was lost, the real subscription may still be live at ${escapeHtml(sub.paymentProvider)} and
+        billing them with no local record. Check the provider's merchant dashboard for a subscription tied to
+        this tenant before assuming there isn't one.
+      </p>`;
   }
   subscriptionSection += '</div>';
 
@@ -461,6 +495,35 @@ adminRouter.post(
     // charging. A throw here propagates to Express's error handler.
     await provider.cancelSubscription(subscription.providerSubscriptionId);
     await prisma.subscription.update({ where: { tenantId }, data: { status: 'canceled' } });
+    res.redirect(`/api/admin/tenants/${tenantId}`);
+  },
+);
+
+adminRouter.post(
+  '/tenants/:id/subscription/bind-provider-id',
+  requirePlatformAdminAuth,
+  async (req: Request<{ id: string }>, res: Response) => {
+    const tenantId = req.params.id;
+    const { providerSubscriptionId } = (req.body ?? {}) as Record<string, unknown>;
+    if (typeof providerSubscriptionId !== 'string' || providerSubscriptionId.trim() === '') {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    const existing = await prisma.subscription.findUnique({ where: { tenantId } });
+    // Only ever fills a gap, never overwrites a real id already on file --
+    // this route exists solely to recover the backlog #62 scenario (a row
+    // stuck with providerSubscriptionId: null despite a live provider
+    // subscription). Silently no-ops on a row that already has one, or
+    // that isn't a payfast/paypal row at all (a 'manual' admin-granted
+    // subscription has no provider id to bind by design).
+    if (!existing || existing.providerSubscriptionId || (existing.paymentProvider !== 'payfast' && existing.paymentProvider !== 'paypal')) {
+      return res.redirect(`/api/admin/tenants/${tenantId}`);
+    }
+
+    await prisma.subscription.update({
+      where: { tenantId },
+      data: { providerSubscriptionId: providerSubscriptionId.trim() },
+    });
     res.redirect(`/api/admin/tenants/${tenantId}`);
   },
 );

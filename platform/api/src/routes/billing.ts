@@ -128,6 +128,20 @@ billingRouter.post('/api/billing/checkout', requireTenantAuth, requireAdminRole,
     // Best-effort: for an already-canceled row this call is likely
     // redundant, but harmless, and a failure (e.g. 404 because it's
     // already dead provider-side) must not block the resubscribe.
+    //
+    // See backlog #62: a row can reach here with providerSubscriptionId
+    // still null despite a genuinely live subscription at the provider, if
+    // that row's first-contact webhook was lost in transit -- Barkie has
+    // no way to detect that from local state alone. Flagged here (not
+    // silently skipped) so ops has a chance to notice and check the
+    // provider's own merchant dashboard before a second, untracked
+    // subscription gets created underneath this one; see admin.ts's
+    // "bind provider subscription ID" recovery route if that's confirmed.
+    if (!existing.providerSubscriptionId) {
+      console.warn(
+        `Resubscribing tenant ${req.tenantId} over a ${existing.paymentProvider} subscription with no providerSubscriptionId on file (row ${existing.id}, was ${existing.status}) -- if its first-contact webhook was lost, this may leave a live untracked subscription at ${existing.paymentProvider}. See backlog #62.`,
+      );
+    }
     if (existing.providerSubscriptionId) {
       const oldProvider = providers[existing.paymentProvider];
       if (!oldProvider) {

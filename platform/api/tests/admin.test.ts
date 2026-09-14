@@ -864,3 +864,99 @@ test('backlog routes require a platform-admin session', async () => {
   const res2 = await request(app).post('/api/admin/backlog').send({ title: 'x', description: 'y', category: 'Bug', priority: 'Low' });
   assert.equal(res2.status, 302);
 });
+
+// Backlog #62 recovery path: binding a provider subscription id onto a row
+// that's missing one (the "lost first-contact webhook" scenario) so it
+// becomes cancelable through the completely normal cancel flow.
+test('binding a provider subscription id onto a payfast row with none fills the gap', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'lapsed',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: null,
+      trialEndsAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent
+    .post(`/api/admin/tenants/${tenant.id}/subscription/bind-provider-id`)
+    .send({ providerSubscriptionId: '  recovered_token_abc  ' });
+  assert.equal(res.status, 302);
+
+  const updated = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  // Trimmed -- a pasted-from-dashboard value picking up leading/trailing
+  // whitespace must not become part of the id used in every future
+  // provider API call.
+  assert.equal(updated.providerSubscriptionId, 'recovered_token_abc');
+});
+
+test('binding a provider subscription id never overwrites one already on file', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: 'already_bound_id',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent
+    .post(`/api/admin/tenants/${tenant.id}/subscription/bind-provider-id`)
+    .send({ providerSubscriptionId: 'attempted_overwrite' });
+  assert.equal(res.status, 302);
+
+  const unchanged = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(unchanged.providerSubscriptionId, 'already_bound_id');
+});
+
+test('binding a provider subscription id no-ops on a "manual" (admin-granted) subscription', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  const agent = await loggedInAdminAgent();
+  await agent.post(`/api/admin/tenants/${tenant.id}/subscription/grant`).send({ planId: plan.id });
+
+  const res = await agent
+    .post(`/api/admin/tenants/${tenant.id}/subscription/bind-provider-id`)
+    .send({ providerSubscriptionId: 'should_not_apply' });
+  assert.equal(res.status, 302);
+
+  const unchanged = await prisma.subscription.findUniqueOrThrow({ where: { tenantId: tenant.id } });
+  assert.equal(unchanged.paymentProvider, 'manual');
+  assert.equal(unchanged.providerSubscriptionId, null);
+});
+
+test('bind-provider-id requires a platform-admin session', async () => {
+  const { tenant } = await makeTenantAndPlan();
+  const res = await request(app)
+    .post(`/api/admin/tenants/${tenant.id}/subscription/bind-provider-id`)
+    .send({ providerSubscriptionId: 'x' });
+  assert.equal(res.status, 302);
+  assert.equal(res.headers.location, '/api/admin/login');
+});
+
+test('the tenant detail page shows the bind form only for a payfast/paypal row with no providerSubscriptionId on file', async () => {
+  const { tenant, plan } = await makeTenantAndPlan();
+  await prisma.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      planId: plan.id,
+      status: 'lapsed',
+      paymentProvider: 'payfast',
+      providerSubscriptionId: null,
+      trialEndsAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const agent = await loggedInAdminAgent();
+  const res = await agent.get(`/api/admin/tenants/${tenant.id}`);
+  assert.equal(res.status, 200);
+  assert.match(res.text, /Bind payfast subscription ID/);
+  assert.match(res.text, /backlog #62/);
+});
