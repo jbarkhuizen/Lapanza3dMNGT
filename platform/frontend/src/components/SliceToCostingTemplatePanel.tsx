@@ -52,25 +52,25 @@ export function SliceToCostingTemplatePanel({ onAttached, onCancel }: SliceToCos
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded border border-slate-200 p-3">
+    <div className="flex flex-col gap-3 rounded border border-slate-200 p-3 dark:border-slate-700">
       {!sliceResult ? (
         <SliceUploadPanel onResult={setSliceResult} />
       ) : (
         <>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Slice result: {sliceResult.weightGrams.toFixed(2)} g, {sliceResult.printTimeHours.toFixed(2)} h. Fill in
             the rest to save it as a Costing Template and attach it to this line.
           </p>
           <FormField id={`${idPrefix}-name`} label="Template name" value={name} onChange={(e) => setName(e.target.value)} required />
           <div className="flex flex-col gap-1">
-            <label htmlFor={`${idPrefix}-filament`} className="text-sm font-medium text-slate-700">Filament</label>
+            <label htmlFor={`${idPrefix}-filament`} className="text-sm font-medium text-slate-700 dark:text-slate-300">Filament</label>
             <select
               id={`${idPrefix}-filament`}
               value={filamentId}
               onChange={(e) => setFilamentId(e.target.value)}
               disabled={isLoadingFilaments}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a filament…</option>
               {filaments?.map((f) => (
@@ -79,14 +79,14 @@ export function SliceToCostingTemplatePanel({ onAttached, onCancel }: SliceToCos
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor={`${idPrefix}-printer`} className="text-sm font-medium text-slate-700">Printer</label>
+            <label htmlFor={`${idPrefix}-printer`} className="text-sm font-medium text-slate-700 dark:text-slate-300">Printer</label>
             <select
               id={`${idPrefix}-printer`}
               value={printerId}
               onChange={(e) => setPrinterId(e.target.value)}
               disabled={isLoadingPrinters}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a printer…</option>
               {printers?.map((p) => (
@@ -104,17 +104,17 @@ export function SliceToCostingTemplatePanel({ onAttached, onCancel }: SliceToCos
             onChange={(e) => setMarkupPercent(e.target.value)}
             required
           />
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleCreateAndAttach}
               disabled={createTemplateMutation.isPending || !name || !filamentId || !printerId || !markupPercent}
-              className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
             >
               Create & attach
             </button>
-            <button type="button" onClick={onCancel} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+            <button type="button" onClick={onCancel} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
               Cancel
             </button>
           </div>

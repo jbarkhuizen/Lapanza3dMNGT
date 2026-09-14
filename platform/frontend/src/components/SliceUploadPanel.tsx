@@ -94,9 +94,9 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded border border-slate-200 p-4">
+    <div className="flex flex-col gap-4 rounded border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${idPrefix}-file`} className="text-sm font-medium text-slate-700">
+        <label htmlFor={`${idPrefix}-file`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
           STL file
         </label>
         <input
@@ -105,12 +105,12 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
           accept=".stl"
           disabled={isInFlight}
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="text-sm"
+          className="text-sm dark:text-slate-300"
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${idPrefix}-printer`} className="text-sm font-medium text-slate-700">
+        <label htmlFor={`${idPrefix}-printer`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
           Printer (optional)
         </label>
         <select
@@ -121,7 +121,7 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
             setPrinterPresetId('');
           }}
           disabled={isLoadingPrinters || isInFlight}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           <option value="">No printer selected</option>
           {printers?.map((p) => (
@@ -132,7 +132,7 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
 
       {printerId && (
         <div className="flex flex-col gap-1">
-          <label htmlFor={`${idPrefix}-preset`} className="text-sm font-medium text-slate-700">
+          <label htmlFor={`${idPrefix}-preset`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Printer preset (optional)
           </label>
           <select
@@ -140,7 +140,7 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
             value={printerPresetId}
             onChange={(e) => setPrinterPresetId(e.target.value)}
             disabled={isInFlight}
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           >
             <option value="">Default profile</option>
             {printerPresets?.map((preset) => (
@@ -151,7 +151,7 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
       )}
 
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${idPrefix}-filament`} className="text-sm font-medium text-slate-700">
+        <label htmlFor={`${idPrefix}-filament`} className="text-sm font-medium text-slate-700 dark:text-slate-300">
           Filament (optional)
         </label>
         <select
@@ -159,7 +159,7 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
           value={filamentId}
           onChange={(e) => setFilamentId(e.target.value)}
           disabled={isLoadingFilaments || isInFlight}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           <option value="">No filament selected</option>
           {filaments?.map((f) => (
@@ -173,21 +173,21 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
           type="button"
           onClick={handleSlice}
           disabled={createMutation.isPending}
-          className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Slice
         </button>
       )}
 
-      {isInFlight && <p className="text-sm text-slate-500">Slicing… this can take a minute.</p>}
+      {isInFlight && <p className="text-sm text-slate-500 dark:text-slate-400">Slicing… this can take a minute.</p>}
 
       {isDone && job && (
-        <div className="flex flex-col gap-1 rounded bg-slate-50 p-3 text-sm">
+        <div className="flex flex-col gap-1 rounded bg-slate-50 p-3 text-sm dark:bg-slate-900">
           <div className="flex justify-between"><span>Weight</span><span>{job.resultWeightGrams?.toFixed(2)} g</span></div>
           <div className="flex justify-between"><span>Support weight</span><span>{job.resultSupportWeightGrams?.toFixed(2)} g</span></div>
           <div className="flex justify-between"><span>Filament length</span><span>{job.resultFilamentLengthMm?.toFixed(1)} mm</span></div>
           <div className="flex justify-between"><span>Print time</span><span>{job.resultPrintTimeHours?.toFixed(2)} h</span></div>
-          <button type="button" onClick={handleTryAgain} className="mt-2 w-fit text-sm text-slate-600 underline">
+          <button type="button" onClick={handleTryAgain} className="mt-2 w-fit text-sm text-slate-600 underline dark:text-slate-400">
             Slice another file
           </button>
         </div>
@@ -195,14 +195,14 @@ export function SliceUploadPanel({ onResult }: SliceUploadPanelProps) {
 
       {isFailed && job && (
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-red-600">{job.errorMessage ?? 'Slicing failed.'}</p>
-          <button type="button" onClick={handleTryAgain} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+          <p className="text-sm text-red-600 dark:text-red-400">{job.errorMessage ?? 'Slicing failed.'}</p>
+          <button type="button" onClick={handleTryAgain} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
             Try again
           </button>
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 }

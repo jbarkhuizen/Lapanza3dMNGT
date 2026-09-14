@@ -14,7 +14,7 @@ export function MoreDetailsToggle({ children }: MoreDetailsToggleProps) {
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="w-fit text-sm text-slate-600 underline"
+        className="w-fit text-sm text-slate-600 underline dark:text-slate-400"
       >
         {expanded ? '− Hide details' : '+ More details'}
       </button>

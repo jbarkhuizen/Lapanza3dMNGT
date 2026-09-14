@@ -8,7 +8,7 @@ interface InlineEditableRowProps {
 
 export function InlineEditableRow({ isEditing, readOnlyContent, editContent }: InlineEditableRowProps) {
   if (isEditing) {
-    return <tr className="bg-slate-50">{editContent}</tr>;
+    return <tr className="bg-slate-50 dark:bg-slate-700">{editContent}</tr>;
   }
-  return <tr className="border-b border-slate-100">{readOnlyContent}</tr>;
+  return <tr className="border-b border-slate-100 dark:border-slate-800">{readOnlyContent}</tr>;
 }
