@@ -157,7 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
       <nav className="flex w-56 flex-col gap-1 border-r border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
         <span className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Barkie</span>
         {visibleNavItems.map((item) => (
@@ -212,7 +212,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link to="/billing" className="underline">Manage billing</Link>
           </div>
         )}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 bg-slate-50 p-6 dark:bg-slate-900">{children}</main>
       </div>
     </div>
   );
