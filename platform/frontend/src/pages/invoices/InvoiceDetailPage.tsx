@@ -48,10 +48,10 @@ export function InvoiceDetailPage() {
   }, [invoice?.amountPaid]);
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isError || !invoice) {
-    return <p className="text-red-600">Couldn't load this invoice.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load this invoice.</p>;
   }
 
   const customer = customerLookup.get(invoice.customerId);
@@ -97,22 +97,22 @@ export function InvoiceDetailPage() {
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{invoice.number}</h1>
-          <p className="text-sm text-slate-500">Issued {invoice.createdAt.slice(0, 10)}</p>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{invoice.number}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Issued {invoice.createdAt.slice(0, 10)}</p>
         </div>
-        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{INVOICE_STATUS_LABELS[invoice.status]}</span>
+        <span className="rounded bg-slate-100 px-2 py-1 text-sm dark:bg-slate-700 dark:text-slate-100">{INVOICE_STATUS_LABELS[invoice.status]}</span>
       </div>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
-        <div><div className="text-slate-500">Customer</div><div>{customerDisplayName}</div></div>
-        <div><div className="text-slate-500">Due date</div><div>{invoice.dueDate.slice(0, 10)}</div></div>
+        <div><div className="text-slate-500 dark:text-slate-400">Customer</div><div>{customerDisplayName}</div></div>
+        <div><div className="text-slate-500 dark:text-slate-400">Due date</div><div>{invoice.dueDate.slice(0, 10)}</div></div>
       </section>
 
-      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Line items</h2>
+      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Line items</h2>
         <table className="w-full text-left">
           <thead>
-            <tr className="text-slate-500">
+            <tr className="text-slate-500 dark:text-slate-400">
               <th className="py-1 font-normal">Description</th>
               <th className="py-1 text-right font-normal">Qty</th>
               <th className="py-1 text-right font-normal">Unit price</th>
@@ -130,21 +130,21 @@ export function InvoiceDetailPage() {
             ))}
           </tbody>
         </table>
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal, currency)}</span></div>
+        <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-700"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal, currency)}</span></div>
         {Number(invoice.discountAmount) > 0 && (
           <div className="flex justify-between"><span>Discount</span><span>- {formatCurrency(invoice.discountAmount, currency)}</span></div>
         )}
         {invoice.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(invoice.vatAmount, currency)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(invoice.total, currency)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100"><span>Total</span><span>{formatCurrency(invoice.total, currency)}</span></div>
         <div className="flex justify-between"><span>Amount paid to date</span><span>{formatCurrency(invoice.amountPaid, currency)}</span></div>
-        <div className="flex justify-between font-semibold text-slate-900"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue, currency)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100"><span>Balance due</span><span>{formatCurrency(invoice.balanceDue, currency)}</span></div>
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm">
+      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Notes & Terms</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Notes & Terms</h2>
           {!isEditingDetails && (
-            <button type="button" onClick={() => setIsEditingDetails(true)} className="text-sm text-slate-600 underline">
+            <button type="button" onClick={() => setIsEditingDetails(true)} className="text-sm text-slate-600 underline dark:text-slate-400">
               Edit
             </button>
           )}
@@ -176,11 +176,11 @@ export function InvoiceDetailPage() {
                 type="button"
                 onClick={handleSaveDetails}
                 disabled={updateMutation.isPending}
-                className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
               >
                 Save
               </button>
-              <button type="button" onClick={() => setIsEditingDetails(false)} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+              <button type="button" onClick={() => setIsEditingDetails(false)} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
                 Cancel
               </button>
             </div>
@@ -189,26 +189,26 @@ export function InvoiceDetailPage() {
           <>
             {invoice.notes && (
               <div>
-                <div className="text-slate-500">Notes</div>
-                <p className="whitespace-pre-wrap text-slate-700">{invoice.notes}</p>
+                <div className="text-slate-500 dark:text-slate-400">Notes</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{invoice.notes}</p>
               </div>
             )}
             {invoice.paymentTerms && (
               <div>
-                <div className="text-slate-500">Payment terms</div>
-                <p className="whitespace-pre-wrap text-slate-700">{invoice.paymentTerms}</p>
+                <div className="text-slate-500 dark:text-slate-400">Payment terms</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{invoice.paymentTerms}</p>
               </div>
             )}
             {invoice.termsAndConditionsText && (
               <div>
-                <div className="text-slate-500">Terms & conditions</div>
-                <p className="whitespace-pre-wrap text-slate-700">{invoice.termsAndConditionsText}</p>
+                <div className="text-slate-500 dark:text-slate-400">Terms & conditions</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{invoice.termsAndConditionsText}</p>
               </div>
             )}
             {invoice.paymentLinkUrl && (
               <div>
-                <div className="text-slate-500">Payment link</div>
-                <a href={invoice.paymentLinkUrl} target="_blank" rel="noreferrer" className="text-slate-700 underline">
+                <div className="text-slate-500 dark:text-slate-400">Payment link</div>
+                <a href={invoice.paymentLinkUrl} target="_blank" rel="noreferrer" className="text-slate-700 underline dark:text-slate-300">
                   {invoice.paymentLinkUrl}
                 </a>
               </div>
@@ -217,15 +217,15 @@ export function InvoiceDetailPage() {
         )}
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {successMessage && <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>}
 
       <div className="flex gap-3">
         <SendToCustomerButton onSend={handleSend} isPending={sendMutation.isPending} hasCustomerEmail={!!customer?.email} />
       </div>
 
       {nextStatuses.length > 0 && (
-        <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
+        <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
           {(nextStatuses.includes('partially_paid') || nextStatuses.includes('paid')) && (
             <FormField
               id="amountPaid"
@@ -241,7 +241,7 @@ export function InvoiceDetailPage() {
               <button
                 onClick={() => handleStatusChange('partially_paid', true)}
                 disabled={updateStatusMutation.isPending}
-                className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
+                className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50 dark:bg-slate-700 dark:text-slate-100"
               >
                 Record Partial Payment
               </button>
@@ -250,7 +250,7 @@ export function InvoiceDetailPage() {
               <button
                 onClick={() => handleStatusChange('paid', true)}
                 disabled={updateStatusMutation.isPending}
-                className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
               >
                 Mark as Paid
               </button>
@@ -259,7 +259,7 @@ export function InvoiceDetailPage() {
               <button
                 onClick={() => handleStatusChange('overdue', false)}
                 disabled={updateStatusMutation.isPending}
-                className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
+                className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50 dark:bg-slate-700 dark:text-slate-100"
               >
                 Mark as Overdue
               </button>

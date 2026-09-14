@@ -93,17 +93,17 @@ export function QuoteCreatePage() {
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">New Quote</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">New Quote</h1>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="customerId" className="text-sm font-medium text-slate-700">Customer</label>
+        <label htmlFor="customerId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Customer</label>
         <select
           id="customerId"
           value={customerId}
           onChange={(e) => setCustomerId(e.target.value)}
           disabled={isLoadingCustomers}
           required
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           <option value="" disabled>Select a customer…</option>
           {customers?.map((c) => (
@@ -131,12 +131,12 @@ export function QuoteCreatePage() {
       />
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="discountMode" className="text-sm font-medium text-slate-700">Discount</label>
+        <label htmlFor="discountMode" className="text-sm font-medium text-slate-700 dark:text-slate-300">Discount</label>
         <select
           id="discountMode"
           value={discountMode}
           onChange={(e) => setDiscountMode(e.target.value as DiscountMode)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           <option value="none">None</option>
           <option value="total">Invoice total</option>
@@ -155,15 +155,15 @@ export function QuoteCreatePage() {
         )}
       </div>
 
-      <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
+      <section className="flex flex-col gap-4 border-t border-slate-200 pt-4 dark:border-slate-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Line items</h2>
-          <button type="button" onClick={addLine} className="rounded bg-slate-100 px-3 py-1 text-sm">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Line items</h2>
+          <button type="button" onClick={addLine} className="rounded bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700 dark:text-slate-100">
             Add Line Item
           </button>
         </div>
         {lines.map((line, i) => (
-          <div key={i} className="flex flex-col gap-2 rounded border border-slate-200 p-3">
+          <div key={i} className="flex flex-col gap-2 rounded border border-slate-200 p-3 dark:border-slate-700">
             <div className="flex gap-4 text-sm">
               <label className="flex items-center gap-1">
                 <input
@@ -205,13 +205,13 @@ export function QuoteCreatePage() {
               </>
             ) : (
               <div className="flex flex-col gap-1">
-                <label htmlFor={`costingTemplate-${i}`} className="text-sm font-medium text-slate-700">Costing template</label>
+                <label htmlFor={`costingTemplate-${i}`} className="text-sm font-medium text-slate-700 dark:text-slate-300">Costing template</label>
                 <select
                   id={`costingTemplate-${i}`}
                   value={line.costingTemplateId}
                   onChange={(e) => updateLine(i, { costingTemplateId: e.target.value })}
                   required
-                  className="rounded border border-slate-300 px-3 py-2 text-sm"
+                  className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 >
                   <option value="" disabled>Select a costing template…</option>
                   {costingTemplates?.map((ct) => (
@@ -221,7 +221,7 @@ export function QuoteCreatePage() {
                 <button
                   type="button"
                   onClick={() => setSliceFlowIndex(sliceFlowIndex === i ? null : i)}
-                  className="w-fit text-sm text-slate-600 underline"
+                  className="w-fit text-sm text-slate-600 underline dark:text-slate-400"
                 >
                   Slice a file to build this line
                 </button>
@@ -244,16 +244,16 @@ export function QuoteCreatePage() {
               onChange={(e) => updateLine(i, { quantity: e.target.value })}
               required
             />
-            <button type="button" onClick={() => removeLine(i)} className="w-fit text-sm text-red-600">Remove</button>
+            <button type="button" onClick={() => removeLine(i)} className="w-fit text-sm text-red-600 dark:text-red-400">Remove</button>
           </div>
         ))}
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={createMutation.isPending || isLoadingReferenceData || lines.length === 0}
-        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
         Create Quote
       </button>

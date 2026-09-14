@@ -38,10 +38,10 @@ export function QuoteDetailPage() {
   }, [quote?.notes, quote?.paymentTerms, quote?.termsAndConditionsText]);
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isError || !quote) {
-    return <p className="text-red-600">Couldn't load this quote.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load this quote.</p>;
   }
 
   const customer = customerLookup.get(quote.customerId);
@@ -88,22 +88,22 @@ export function QuoteDetailPage() {
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{quote.number}</h1>
-          <p className="text-sm text-slate-500">Issued {quote.createdAt.slice(0, 10)}</p>
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{quote.number}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Issued {quote.createdAt.slice(0, 10)}</p>
         </div>
-        <span className="rounded bg-slate-100 px-2 py-1 text-sm">{QUOTE_STATUS_LABELS[quote.status]}</span>
+        <span className="rounded bg-slate-100 px-2 py-1 text-sm dark:bg-slate-700 dark:text-slate-100">{QUOTE_STATUS_LABELS[quote.status]}</span>
       </div>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
-        <div><div className="text-slate-500">Customer</div><div>{customerDisplayName}</div></div>
-        <div><div className="text-slate-500">Valid until</div><div>{quote.validUntil?.slice(0, 10) ?? '—'}</div></div>
+        <div><div className="text-slate-500 dark:text-slate-400">Customer</div><div>{customerDisplayName}</div></div>
+        <div><div className="text-slate-500 dark:text-slate-400">Valid until</div><div>{quote.validUntil?.slice(0, 10) ?? '—'}</div></div>
       </section>
 
-      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Line items</h2>
+      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Line items</h2>
         <table className="w-full text-left">
           <thead>
-            <tr className="text-slate-500">
+            <tr className="text-slate-500 dark:text-slate-400">
               <th className="py-1 font-normal">Description</th>
               <th className="py-1 text-right font-normal">Qty</th>
               <th className="py-1 text-right font-normal">Unit price</th>
@@ -121,19 +121,19 @@ export function QuoteDetailPage() {
             ))}
           </tbody>
         </table>
-        <div className="flex justify-between border-t border-slate-200 pt-2"><span>Subtotal</span><span>{formatCurrency(quote.subtotal, currency)}</span></div>
+        <div className="flex justify-between border-t border-slate-200 pt-2 dark:border-slate-700"><span>Subtotal</span><span>{formatCurrency(quote.subtotal, currency)}</span></div>
         {Number(quote.discountAmount) > 0 && (
           <div className="flex justify-between"><span>Discount</span><span>- {formatCurrency(quote.discountAmount, currency)}</span></div>
         )}
         {quote.vatApplied && <div className="flex justify-between"><span>VAT (15%)</span><span>{formatCurrency(quote.vatAmount, currency)}</span></div>}
-        <div className="flex justify-between font-semibold text-slate-900"><span>Total</span><span>{formatCurrency(quote.total, currency)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100"><span>Total</span><span>{formatCurrency(quote.total, currency)}</span></div>
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm">
+      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Notes & Terms</h2>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Notes & Terms</h2>
           {!isEditingDetails && (
-            <button type="button" onClick={() => setIsEditingDetails(true)} className="text-sm text-slate-600 underline">
+            <button type="button" onClick={() => setIsEditingDetails(true)} className="text-sm text-slate-600 underline dark:text-slate-400">
               Edit
             </button>
           )}
@@ -159,11 +159,11 @@ export function QuoteDetailPage() {
                 type="button"
                 onClick={handleSaveDetails}
                 disabled={updateMutation.isPending}
-                className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
               >
                 Save
               </button>
-              <button type="button" onClick={() => setIsEditingDetails(false)} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+              <button type="button" onClick={() => setIsEditingDetails(false)} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
                 Cancel
               </button>
             </div>
@@ -172,28 +172,28 @@ export function QuoteDetailPage() {
           <>
             {quote.notes && (
               <div>
-                <div className="text-slate-500">Notes</div>
-                <p className="whitespace-pre-wrap text-slate-700">{quote.notes}</p>
+                <div className="text-slate-500 dark:text-slate-400">Notes</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{quote.notes}</p>
               </div>
             )}
             {quote.paymentTerms && (
               <div>
-                <div className="text-slate-500">Payment terms</div>
-                <p className="whitespace-pre-wrap text-slate-700">{quote.paymentTerms}</p>
+                <div className="text-slate-500 dark:text-slate-400">Payment terms</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{quote.paymentTerms}</p>
               </div>
             )}
             {quote.termsAndConditionsText && (
               <div>
-                <div className="text-slate-500">Terms & conditions</div>
-                <p className="whitespace-pre-wrap text-slate-700">{quote.termsAndConditionsText}</p>
+                <div className="text-slate-500 dark:text-slate-400">Terms & conditions</div>
+                <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300">{quote.termsAndConditionsText}</p>
               </div>
             )}
           </>
         )}
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {successMessage && <p className="text-sm text-green-700">{successMessage}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {successMessage && <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>}
 
       <div className="flex gap-3">
         <SendToCustomerButton onSend={handleSend} isPending={sendMutation.isPending} hasCustomerEmail={!!customer?.email} />
@@ -202,7 +202,7 @@ export function QuoteDetailPage() {
             key={status}
             onClick={() => handleStatusChange(status)}
             disabled={updateStatusMutation.isPending}
-            className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50"
+            className="rounded bg-slate-100 px-3 py-2 text-sm disabled:opacity-50 dark:bg-slate-700 dark:text-slate-100"
           >
             Mark as {QUOTE_STATUS_LABELS[status]}
           </button>
@@ -211,7 +211,7 @@ export function QuoteDetailPage() {
           <button
             onClick={handleConvert}
             disabled={convertMutation.isPending}
-            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           >
             Convert to Invoice
           </button>

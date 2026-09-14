@@ -268,22 +268,22 @@ export function JobCardFormPage() {
   }
 
   if (isEditMode && isLoadingCard) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isEditMode && isCardError) {
-    return <p className="text-red-600">Couldn't load this job card. It may have been deleted.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load this job card. It may have been deleted.</p>;
   }
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
         {isEditMode ? `Edit ${JOB_CARD_TYPE_LABELS[cardType]} Job Card` : `New ${JOB_CARD_TYPE_LABELS[cardType]} Job Card`}
       </h1>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="customerId" className="text-sm font-medium text-slate-700">
+        <label htmlFor="customerId" className="text-sm font-medium text-slate-700 dark:text-slate-300">
           Customer
         </label>
         <select
@@ -291,7 +291,7 @@ export function JobCardFormPage() {
           value={form.customerId ?? ''}
           onChange={(e) => set('customerId', e.target.value)}
           disabled={isLoadingCustomers}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           <option value="">No customer</option>
           {customers?.map((c) => (
@@ -306,14 +306,14 @@ export function JobCardFormPage() {
 
       <div className="flex gap-4">
         <div className="flex flex-1 flex-col gap-1">
-          <label htmlFor="status" className="text-sm font-medium text-slate-700">
+          <label htmlFor="status" className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Status
           </label>
           <select
             id="status"
             value={form.status ?? 'new'}
             onChange={(e) => set('status', e.target.value as JobCardFormInput['status'])}
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           >
             {JOB_CARD_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -323,14 +323,14 @@ export function JobCardFormPage() {
           </select>
         </div>
         <div className="flex flex-1 flex-col gap-1">
-          <label htmlFor="priority" className="text-sm font-medium text-slate-700">
+          <label htmlFor="priority" className="text-sm font-medium text-slate-700 dark:text-slate-300">
             Priority
           </label>
           <select
             id="priority"
             value={form.priority ?? 'normal'}
             onChange={(e) => set('priority', e.target.value as JobCardFormInput['priority'])}
-            className="rounded border border-slate-300 px-3 py-2 text-sm"
+            className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           >
             {JOB_CARD_PRIORITIES.map((p) => (
               <option key={p} value={p}>
@@ -369,8 +369,8 @@ export function JobCardFormPage() {
       </div>
 
       {cardType === 'repair' && (
-        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
-          <h2 className="text-lg font-semibold text-slate-900">Repair details</h2>
+        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Repair details</h2>
           <div className="flex gap-4">
             <FormField id="equipmentMake" label="Make" value={form.equipmentMake ?? ''} onChange={(e) => set('equipmentMake', e.target.value)} className="flex-1" />
             <FormField id="equipmentModel" label="Model" value={form.equipmentModel ?? ''} onChange={(e) => set('equipmentModel', e.target.value)} className="flex-1" />
@@ -378,7 +378,7 @@ export function JobCardFormPage() {
           <FormField id="equipmentSerial" label="Serial number" value={form.equipmentSerial ?? ''} onChange={(e) => set('equipmentSerial', e.target.value)} />
           <TextareaField id="reportedFault" label="Reported fault" value={form.reportedFault ?? ''} onChange={(v) => set('reportedFault', v)} />
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium text-slate-700">Received with</legend>
+            <legend className="text-sm font-medium text-slate-700 dark:text-slate-300">Received with</legend>
             <Checkbox id="receivedWithPowerCord" label="Power cord" checked={!!form.receivedWithPowerCord} onChange={(v) => set('receivedWithPowerCord', v)} />
             <Checkbox id="receivedWithFilament" label="Filament" checked={!!form.receivedWithFilament} onChange={(v) => set('receivedWithFilament', v)} />
             <Checkbox id="receivedWithBuildPlate" label="Build plate" checked={!!form.receivedWithBuildPlate} onChange={(v) => set('receivedWithBuildPlate', v)} />
@@ -396,22 +396,22 @@ export function JobCardFormPage() {
       )}
 
       {cardType === 'print' && (
-        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
-          <h2 className="text-lg font-semibold text-slate-900">Print details</h2>
+        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Print details</h2>
           <FormField id="printFileName" label="File name" value={form.printFileName ?? ''} onChange={(e) => set('printFileName', e.target.value)} />
 
           <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setShowSlicePanel((prev) => !prev)}
-              className="w-fit rounded bg-slate-100 px-3 py-1 text-sm"
+              className="w-fit rounded bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700 dark:text-slate-100"
             >
               {showSlicePanel ? 'Close slicer' : 'Slice STL'}
             </button>
             {showSlicePanel && <SliceUploadPanel onResult={handleSliceResult} />}
             {form.sliceWeightGrams != null && (
-              <div className="flex flex-col gap-1 rounded bg-slate-50 p-3 text-sm">
-                <p className="font-medium text-slate-700">Slice result{form.stlFileName ? ` — ${form.stlFileName}` : ''}</p>
+              <div className="flex flex-col gap-1 rounded bg-slate-50 p-3 text-sm dark:bg-slate-900">
+                <p className="font-medium text-slate-700 dark:text-slate-300">Slice result{form.stlFileName ? ` — ${form.stlFileName}` : ''}</p>
                 <div className="flex justify-between"><span>Weight</span><span>{form.sliceWeightGrams?.toFixed(2)} g</span></div>
                 <div className="flex justify-between"><span>Support weight</span><span>{form.sliceSupportWeightGrams?.toFixed(2)} g</span></div>
                 <div className="flex justify-between"><span>Filament length</span><span>{form.sliceFilamentLengthMm?.toFixed(1)} mm</span></div>
@@ -438,7 +438,7 @@ export function JobCardFormPage() {
             <FormField id="printQuality" label="Quality" value={form.printQuality ?? ''} onChange={(e) => set('printQuality', e.target.value)} className="flex-1" />
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium text-slate-700">Finishing</legend>
+            <legend className="text-sm font-medium text-slate-700 dark:text-slate-300">Finishing</legend>
             <Checkbox id="finishRemoveSupports" label="Remove supports" checked={!!form.finishRemoveSupports} onChange={(v) => set('finishRemoveSupports', v)} />
             <Checkbox id="finishDeburrClean" label="Deburr / clean" checked={!!form.finishDeburrClean} onChange={(v) => set('finishDeburrClean', v)} />
             <Checkbox id="finishSand" label="Sand" checked={!!form.finishSand} onChange={(v) => set('finishSand', v)} />
@@ -471,8 +471,8 @@ export function JobCardFormPage() {
       )}
 
       {cardType === 'cad' && (
-        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
-          <h2 className="text-lg font-semibold text-slate-900">CAD details</h2>
+        <section className="flex flex-col gap-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">CAD details</h2>
           <div className="flex gap-4">
             <FormField id="cadDesignType" label="Design type" value={form.cadDesignType ?? ''} onChange={(e) => set('cadDesignType', e.target.value)} className="flex-1" />
             <FormField id="cadMaterial" label="Material" value={form.cadMaterial ?? ''} onChange={(e) => set('cadMaterial', e.target.value)} className="flex-1" />
@@ -484,7 +484,7 @@ export function JobCardFormPage() {
             <FormField id="cadCriticalDimensions" label="Critical dimensions" value={form.cadCriticalDimensions ?? ''} onChange={(e) => set('cadCriticalDimensions', e.target.value)} className="flex-1" />
           </div>
           <fieldset className="flex flex-col gap-2">
-            <legend className="text-sm font-medium text-slate-700">Deliverables</legend>
+            <legend className="text-sm font-medium text-slate-700 dark:text-slate-300">Deliverables</legend>
             <Checkbox id="deliverableNativeCad" label="Native CAD file" checked={!!form.deliverableNativeCad} onChange={(v) => set('deliverableNativeCad', v)} />
             <Checkbox id="deliverableStep" label="STEP" checked={!!form.deliverableStep} onChange={(v) => set('deliverableStep', v)} />
             <Checkbox id="deliverableStl" label="STL" checked={!!form.deliverableStl} onChange={(v) => set('deliverableStl', v)} />
@@ -497,16 +497,16 @@ export function JobCardFormPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-4 border-t border-slate-200 pt-4">
+      <section className="flex flex-col gap-4 border-t border-slate-200 pt-4 dark:border-slate-700">
         <TextareaField id="notes" label="Notes" value={form.notes ?? ''} onChange={(v) => set('notes', v)} />
         <TextareaField id="terms" label="Terms" value={form.terms ?? ''} onChange={(v) => set('terms', v)} />
         <FormField id="receivedBy" label="Received by (signature)" value={form.receivedBy ?? ''} onChange={(e) => set('receivedBy', e.target.value)} />
       </section>
 
       {isEditMode && existingCard && (
-        <section className="flex items-center gap-3 border-t border-slate-200 pt-4">
+        <section className="flex items-center gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
           {existingCard.quoteId ? (
-            <Link to={`/quotes/${existingCard.quoteId}`} className="text-sm text-slate-600 underline">
+            <Link to={`/quotes/${existingCard.quoteId}`} className="text-sm text-slate-600 underline dark:text-slate-400">
               View quote
             </Link>
           ) : (
@@ -514,7 +514,7 @@ export function JobCardFormPage() {
               type="button"
               onClick={handleRaiseQuote}
               disabled={!existingCard.customerId || createQuoteMutation.isPending}
-              className="rounded bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 disabled:opacity-50"
+              className="rounded bg-slate-100 px-4 py-2 text-sm font-medium text-slate-900 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-100"
             >
               Raise a quote
             </button>
@@ -522,11 +522,11 @@ export function JobCardFormPage() {
         </section>
       )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={isPending}
-        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
         Save
       </button>

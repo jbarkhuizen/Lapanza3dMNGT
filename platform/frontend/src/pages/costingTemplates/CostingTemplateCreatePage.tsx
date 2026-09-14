@@ -150,16 +150,16 @@ export function CostingTemplateCreatePage() {
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">New Costing Template</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">New Costing Template</h1>
       <FormField id="templateName" label="Template name" value={name} onChange={(e) => setName(e.target.value)} required />
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="process" className="text-sm font-medium text-slate-700">Process</label>
+        <label htmlFor="process" className="text-sm font-medium text-slate-700 dark:text-slate-300">Process</label>
         <select
           id="process"
           value={process}
           onChange={(e) => setProcess(e.target.value as Process)}
-          className="rounded border border-slate-300 px-3 py-2 text-sm"
+          className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
         >
           {PROCESSES.map((p) => (
             <option key={p.value} value={p.value}>{p.label}</option>
@@ -170,14 +170,14 @@ export function CostingTemplateCreatePage() {
       {process === 'printer' && (
         <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="filamentId" className="text-sm font-medium text-slate-700">Filament</label>
+            <label htmlFor="filamentId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Filament</label>
             <select
               id="filamentId"
               value={filamentId}
               onChange={(e) => setFilamentId(e.target.value)}
               disabled={isLoadingFilaments}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a filament…</option>
               {filaments?.map((f) => (
@@ -189,12 +189,12 @@ export function CostingTemplateCreatePage() {
           <button
             type="button"
             onClick={() => setShowSlicePanel((prev) => !prev)}
-            className="w-fit rounded bg-slate-100 px-3 py-1 text-sm"
+            className="w-fit rounded bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700 dark:text-slate-100"
           >
             {showSlicePanel ? 'Close slicer' : 'Slice STL'}
           </button>
           {showSlicePanel && <SliceUploadPanel onResult={handleSliceResult} />}
-          {sliceJobId && <p className="text-sm text-slate-500">Weight and print time below came from a slice.</p>}
+          {sliceJobId && <p className="text-sm text-slate-500 dark:text-slate-400">Weight and print time below came from a slice.</p>}
 
           <FormField
             id="weightGrams"
@@ -210,14 +210,14 @@ export function CostingTemplateCreatePage() {
           />
 
           <div className="flex flex-col gap-1">
-            <label htmlFor="printerId" className="text-sm font-medium text-slate-700">Printer</label>
+            <label htmlFor="printerId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Printer</label>
             <select
               id="printerId"
               value={printerId}
               onChange={(e) => setPrinterId(e.target.value)}
               disabled={isLoadingPrinters}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a printer…</option>
               {printers?.map((p) => (
@@ -244,14 +244,14 @@ export function CostingTemplateCreatePage() {
       {process === 'scanner' && (
         <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="scannerId" className="text-sm font-medium text-slate-700">Scanner</label>
+            <label htmlFor="scannerId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Scanner</label>
             <select
               id="scannerId"
               value={scannerId}
               onChange={(e) => setScannerId(e.target.value)}
               disabled={isLoadingScanners}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a scanner…</option>
               {scanners?.map((s) => (
@@ -266,14 +266,14 @@ export function CostingTemplateCreatePage() {
       {process === 'laser_sheet' && (
         <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="laserMaterialId" className="text-sm font-medium text-slate-700">Laser material</label>
+            <label htmlFor="laserMaterialId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Laser material</label>
             <select
               id="laserMaterialId"
               value={laserMaterialId}
               onChange={(e) => setLaserMaterialId(e.target.value)}
               disabled={isLoadingLaserMaterials}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a laser material…</option>
               {laserMaterials?.map((m) => (
@@ -288,14 +288,14 @@ export function CostingTemplateCreatePage() {
       {process === 'laser_premade' && (
         <>
           <div className="flex flex-col gap-1">
-            <label htmlFor="premadeItemId" className="text-sm font-medium text-slate-700">Pre-made item</label>
+            <label htmlFor="premadeItemId" className="text-sm font-medium text-slate-700 dark:text-slate-300">Pre-made item</label>
             <select
               id="premadeItemId"
               value={premadeItemId}
               onChange={(e) => setPremadeItemId(e.target.value)}
               disabled={isLoadingPremadeItems}
               required
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="" disabled>Select a pre-made item…</option>
               {premadeItems?.map((item) => (
@@ -309,26 +309,26 @@ export function CostingTemplateCreatePage() {
 
       <FormField id="markupPercent" label="Markup (%)" type="number" min="0" max="9999.99" value={markupPercent} onChange={(e) => setMarkupPercent(e.target.value)} required />
 
-      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
+      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Labour lines</h2>
-          <button type="button" onClick={addLabourLine} disabled={isLoadingLabourSteps || !labourSteps?.length} className="rounded bg-slate-100 px-3 py-1 text-sm">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Labour lines</h2>
+          <button type="button" onClick={addLabourLine} disabled={isLoadingLabourSteps || !labourSteps?.length} className="rounded bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700 dark:text-slate-100">
             Add Labour Line
           </button>
         </div>
         {!isLoadingLabourSteps && labourSteps?.length === 0 && (
-          <p className="text-sm text-slate-500">Add a labour step first (Labour Steps page) before adding one here.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Add a labour step first (Labour Steps page) before adding one here.</p>
         )}
         {labourLines.map((line, i) => (
           <div key={i} className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor={`labourStep-${i}`} className="text-sm font-medium text-slate-700">Labour step</label>
+              <label htmlFor={`labourStep-${i}`} className="text-sm font-medium text-slate-700 dark:text-slate-300">Labour step</label>
               <select
                 id={`labourStep-${i}`}
                 aria-label={`Labour step (line ${i + 1})`}
                 value={line.labourStepId}
                 onChange={(e) => updateLabourLine(i, { labourStepId: e.target.value })}
-                className="rounded border border-slate-300 px-3 py-2 text-sm"
+                className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
                 {labourSteps?.map((step) => (
                   <option key={step.id} value={step.id}>{step.name}</option>
@@ -345,31 +345,31 @@ export function CostingTemplateCreatePage() {
               onChange={(e) => updateLabourLine(i, { hours: e.target.value })}
               required
             />
-            <button type="button" onClick={() => removeLabourLine(i)} className="text-sm text-red-600">Remove</button>
+            <button type="button" onClick={() => removeLabourLine(i)} className="text-sm text-red-600 dark:text-red-400">Remove</button>
           </div>
         ))}
       </section>
 
-      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4">
+      <section className="flex flex-col gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Consumable lines</h2>
-          <button type="button" onClick={addConsumableLine} disabled={isLoadingConsumables || !consumables?.length} className="rounded bg-slate-100 px-3 py-1 text-sm">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Consumable lines</h2>
+          <button type="button" onClick={addConsumableLine} disabled={isLoadingConsumables || !consumables?.length} className="rounded bg-slate-100 px-3 py-1 text-sm dark:bg-slate-700 dark:text-slate-100">
             Add Consumable Line
           </button>
         </div>
         {!isLoadingConsumables && consumables?.length === 0 && (
-          <p className="text-sm text-slate-500">Add a consumable first (Consumables page) before adding one here.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Add a consumable first (Consumables page) before adding one here.</p>
         )}
         {consumableLines.map((line, i) => (
           <div key={i} className="flex items-end gap-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor={`consumable-${i}`} className="text-sm font-medium text-slate-700">Consumable</label>
+              <label htmlFor={`consumable-${i}`} className="text-sm font-medium text-slate-700 dark:text-slate-300">Consumable</label>
               <select
                 id={`consumable-${i}`}
                 aria-label={`Consumable (line ${i + 1})`}
                 value={line.consumableId}
                 onChange={(e) => updateConsumableLine(i, { consumableId: e.target.value })}
-                className="rounded border border-slate-300 px-3 py-2 text-sm"
+                className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               >
                 {consumables?.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -386,16 +386,16 @@ export function CostingTemplateCreatePage() {
               onChange={(e) => updateConsumableLine(i, { quantity: e.target.value })}
               required
             />
-            <button type="button" onClick={() => removeConsumableLine(i)} className="text-sm text-red-600">Remove</button>
+            <button type="button" onClick={() => removeConsumableLine(i)} className="text-sm text-red-600 dark:text-red-400">Remove</button>
           </div>
         ))}
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <button
         type="submit"
         disabled={createMutation.isPending || isLoadingReferenceData}
-        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-fit rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
       >
         Create Costing Template
       </button>

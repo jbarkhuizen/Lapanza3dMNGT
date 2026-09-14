@@ -27,11 +27,11 @@ export function CostingTemplateDetailPage() {
   }
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isError || !template) {
     return (
-      <p className="text-red-600">
+      <p className="text-red-600 dark:text-red-400">
         {error instanceof ApiError ? error.message : "Couldn't load this costing template."}
       </p>
     );
@@ -41,30 +41,30 @@ export function CostingTemplateDetailPage() {
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <Link to="/costing-templates" className="text-sm text-slate-600 underline">
+      <Link to="/costing-templates" className="text-sm text-slate-600 underline dark:text-slate-400">
         ← Back to Costing Templates
       </Link>
-      <h1 className="text-2xl font-semibold text-slate-900">{template.name}</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{template.name}</h1>
 
       <section className="grid grid-cols-2 gap-4 text-sm">
         {template.process === 'printer' && (
           <>
             <div>
-              <div className="text-slate-500">Filament</div>
+              <div className="text-slate-500 dark:text-slate-400">Filament</div>
               <div>
                 <span>{template.filamentSnapshotBrand}</span> — <span>{template.filamentSnapshotMaterialType}</span>
               </div>
             </div>
             <div>
-              <div className="text-slate-500">Printer</div>
+              <div className="text-slate-500 dark:text-slate-400">Printer</div>
               <div>{template.printerSnapshotName}</div>
             </div>
             <div>
-              <div className="text-slate-500">Weight</div>
+              <div className="text-slate-500 dark:text-slate-400">Weight</div>
               <div>{template.weightGrams}g</div>
             </div>
             <div>
-              <div className="text-slate-500">Print time</div>
+              <div className="text-slate-500 dark:text-slate-400">Print time</div>
               <div>{template.printTimeHours}h</div>
             </div>
           </>
@@ -72,11 +72,11 @@ export function CostingTemplateDetailPage() {
         {template.process === 'scanner' && (
           <>
             <div>
-              <div className="text-slate-500">Scanner</div>
+              <div className="text-slate-500 dark:text-slate-400">Scanner</div>
               <div>{template.scannerSnapshotName}</div>
             </div>
             <div>
-              <div className="text-slate-500">Scan hours</div>
+              <div className="text-slate-500 dark:text-slate-400">Scan hours</div>
               <div>{template.scanHours}h</div>
             </div>
           </>
@@ -84,11 +84,11 @@ export function CostingTemplateDetailPage() {
         {template.process === 'laser_sheet' && (
           <>
             <div>
-              <div className="text-slate-500">Laser material</div>
+              <div className="text-slate-500 dark:text-slate-400">Laser material</div>
               <div>{template.laserMaterialSnapshotName}</div>
             </div>
             <div>
-              <div className="text-slate-500">Sheet area used</div>
+              <div className="text-slate-500 dark:text-slate-400">Sheet area used</div>
               <div>{template.sheetAreaUsedM2}m²</div>
             </div>
           </>
@@ -96,35 +96,35 @@ export function CostingTemplateDetailPage() {
         {template.process === 'laser_premade' && (
           <>
             <div>
-              <div className="text-slate-500">Pre-made item</div>
+              <div className="text-slate-500 dark:text-slate-400">Pre-made item</div>
               <div>{template.premadeItemSnapshotName}</div>
             </div>
             <div>
-              <div className="text-slate-500">Quantity</div>
+              <div className="text-slate-500 dark:text-slate-400">Quantity</div>
               <div>{template.premadeItemQuantity}</div>
             </div>
           </>
         )}
         <div>
-          <div className="text-slate-500">Markup</div>
+          <div className="text-slate-500 dark:text-slate-400">Markup</div>
           <div>{template.markupPercent}%</div>
         </div>
       </section>
 
-      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Cost breakdown</h2>
+      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Cost breakdown</h2>
         <div className="flex justify-between"><span>Filament cost</span><span>{money(template.filamentCost)}</span></div>
         <div className="flex justify-between"><span>Electricity cost</span><span>{money(template.electricityCost)}</span></div>
         <div className="flex justify-between"><span>Depreciation cost</span><span>{money(template.depreciationCost)}</span></div>
         <div className="flex justify-between"><span>Labour cost</span><span>{money(template.labourCost)}</span></div>
         <div className="flex justify-between"><span>Consumables cost</span><span>{money(template.consumablesCost)}</span></div>
-        <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold"><span>Total cost</span><span>{money(template.totalCost)}</span></div>
-        <div className="flex justify-between font-semibold text-slate-900"><span>Suggested price</span><span>{money(template.suggestedPrice)}</span></div>
+        <div className="flex justify-between border-t border-slate-200 pt-2 font-semibold dark:border-slate-700"><span>Total cost</span><span>{money(template.totalCost)}</span></div>
+        <div className="flex justify-between font-semibold text-slate-900 dark:text-slate-100"><span>Suggested price</span><span>{money(template.suggestedPrice)}</span></div>
       </section>
 
       {template.labourLines && template.labourLines.length > 0 && (
-        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Labour lines</h2>
+        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Labour lines</h2>
           {template.labourLines.map((line) => (
             <div key={line.id} className="flex justify-between">
               <span>
@@ -137,8 +137,8 @@ export function CostingTemplateDetailPage() {
       )}
 
       {template.consumableLines && template.consumableLines.length > 0 && (
-        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Consumable lines</h2>
+        <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Consumable lines</h2>
           {template.consumableLines.map((line) => (
             <div key={line.id} className="flex justify-between">
               <span>
@@ -150,24 +150,24 @@ export function CostingTemplateDetailPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm">
-        <h2 className="text-lg font-semibold text-slate-900">Jobs</h2>
+      <section className="flex flex-col gap-2 border-t border-slate-200 pt-4 text-sm dark:border-slate-700">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Jobs</h2>
         {jobsForTemplate.length > 0 && (
           <ul className="flex flex-col gap-1">
             {jobsForTemplate.map((job) => (
               <li key={job.id}>
-                <Link to="/jobs" className="text-slate-600 underline">
+                <Link to="/jobs" className="text-slate-600 underline dark:text-slate-400">
                   {job.name} — {JOB_STATUS_LABELS[job.status]}
                 </Link>
               </li>
             ))}
           </ul>
         )}
-        {jobError && <p className="text-red-600">{jobError}</p>}
+        {jobError && <p className="text-red-600 dark:text-red-400">{jobError}</p>}
         <button
           onClick={handleStartJob}
           disabled={createJobMutation.isPending}
-          className="self-start rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="self-start rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Start Job
         </button>
