@@ -39,6 +39,7 @@ import { BillingCompletePage } from './pages/billing/BillingCompletePage.js';
 import { BillingSettingsPage } from './pages/billing/BillingSettingsPage.js';
 import { TeamPage } from './pages/team/TeamPage.js';
 import { SetPasswordPage } from './pages/team/SetPasswordPage.js';
+import { HelpPage } from './pages/help/HelpPage.js';
 
 export function App() {
   return (
@@ -454,6 +455,16 @@ export function App() {
             <RequireAuth>
               <AppShell>
                 <FeatureRequestsPage />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <HelpPage />
               </AppShell>
             </RequireAuth>
           }

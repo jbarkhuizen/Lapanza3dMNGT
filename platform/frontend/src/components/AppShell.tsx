@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   // page that can only ever show an error.
   { to: '/reports', label: 'Reports', adminOnly: true },
   { to: '/feature-requests', label: 'Feature Requests', adminOnly: false },
+  { to: '/help', label: 'Help', adminOnly: false },
 ];
 
 const RELATED_ENTITY_ROUTES: Record<string, string> = {
