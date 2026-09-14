@@ -8,12 +8,10 @@ import { DashboardHomePage } from './pages/DashboardHomePage.js';
 import { CompanyProfilePage } from './pages/CompanyProfilePage.js';
 import { ShopProfilePage } from './pages/ShopProfilePage.js';
 import { CustomersListPage } from './pages/customers/CustomersListPage.js';
-import { CustomerFormPage } from './pages/customers/CustomerFormPage.js';
 import { FilamentsListPage } from './pages/filaments/FilamentsListPage.js';
 import { LabourStepsListPage } from './pages/labourSteps/LabourStepsListPage.js';
 import { LabourStepFormPage } from './pages/labourSteps/LabourStepFormPage.js';
 import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js';
-import { ConsumableFormPage } from './pages/consumables/ConsumableFormPage.js';
 import { MaterialsLibraryPage } from './pages/materials/MaterialsLibraryPage.js';
 import { MaterialComparePage } from './pages/materials/MaterialComparePage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
@@ -117,21 +115,11 @@ export function App() {
           }
         />
         <Route
-          path="/customers/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <CustomerFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/customers/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <CustomerFormPage />
+                <CustomersListPage />
               </AppShell>
             </RequireAuth>
           }
@@ -197,21 +185,11 @@ export function App() {
           }
         />
         <Route
-          path="/consumables/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <ConsumableFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/consumables/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <ConsumableFormPage />
+                <ConsumablesListPage />
               </AppShell>
             </RequireAuth>
           }
