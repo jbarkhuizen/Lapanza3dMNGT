@@ -6,6 +6,7 @@ import { AppShell } from '../src/components/AppShell.js';
 import { AuthProvider, useAuth } from '../src/context/AuthContext.js';
 import * as client from '../src/api/client.js';
 import { createTestQueryClient } from './helpers/queryClient.js';
+import { ThemeProvider } from '../src/theme/ThemeContext.js';
 
 function AuthProbe() {
   const { tenant } = useAuth();
@@ -14,6 +15,13 @@ function AuthProbe() {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
   vi.spyOn(client, 'apiGet').mockImplementation((path: string) => {
     if (path === '/api/auth/me') {
       return Promise.resolve({
@@ -35,15 +43,41 @@ describe('AppShell', () => {
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
     expect(screen.getByText('page content')).toBeInTheDocument();
+  });
+
+  it('renders a theme toggle in the header and cycles its label when clicked', async () => {
+    const queryClient = createTestQueryClient();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    const toggle = screen.getByRole('button', { name: /Theme: System/ });
+    expect(toggle).toHaveTextContent('System');
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: /Theme: Light/ })).toHaveTextContent('Light');
   });
 
   it('logs out and calls /api/auth/logout when the logout button is clicked', async () => {
@@ -53,9 +87,11 @@ describe('AppShell', () => {
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -74,9 +110,11 @@ describe('AppShell', () => {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <AuthProbe />
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -107,9 +145,11 @@ describe('AppShell', () => {
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -202,9 +242,11 @@ describe('AppShell', () => {
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
@@ -258,9 +300,11 @@ describe('AppShell', () => {
       <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <AppShell>
-              <div>page content</div>
-            </AppShell>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </MemoryRouter>,
