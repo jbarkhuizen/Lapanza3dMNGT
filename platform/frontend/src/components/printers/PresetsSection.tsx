@@ -43,17 +43,17 @@ export function PresetsSection({ printerId }: { printerId: string }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 border-t border-slate-200 pt-6">
-      <h2 className="text-lg font-semibold text-slate-900">Printer Presets</h2>
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load presets.</p>}
-      {!isLoading && !isError && presets?.length === 0 && <p className="text-slate-500">No presets yet.</p>}
+    <section className="flex flex-col gap-3 border-t border-slate-200 pt-6 dark:border-slate-700">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Printer Presets</h2>
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load presets.</p>}
+      {!isLoading && !isError && presets?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No presets yet.</p>}
       {!isLoading && !isError && presets && presets.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {presets.map((preset) => (
-            <li key={preset.id} className="flex justify-between border-b border-slate-100 py-1">
+            <li key={preset.id} className="flex justify-between border-b border-slate-100 py-1 dark:border-slate-800">
               <span>{preset.name}</span>
-              <span className="text-slate-500">{preset.materialType}</span>
+              <span className="text-slate-500 dark:text-slate-400">{preset.materialType}</span>
             </li>
           ))}
         </ul>
@@ -70,12 +70,12 @@ export function PresetsSection({ printerId }: { printerId: string }) {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Add Preset
         </button>
       </form>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </section>
   );
 }

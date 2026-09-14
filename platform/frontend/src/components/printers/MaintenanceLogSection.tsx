@@ -35,17 +35,17 @@ export function MaintenanceLogSection({ printerId }: { printerId: string }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 border-t border-slate-200 pt-6">
-      <h2 className="text-lg font-semibold text-slate-900">Maintenance Log</h2>
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load maintenance entries.</p>}
-      {!isLoading && !isError && entries?.length === 0 && <p className="text-slate-500">No maintenance entries yet.</p>}
+    <section className="flex flex-col gap-3 border-t border-slate-200 pt-6 dark:border-slate-700">
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Maintenance Log</h2>
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load maintenance entries.</p>}
+      {!isLoading && !isError && entries?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No maintenance entries yet.</p>}
       {!isLoading && !isError && entries && entries.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex justify-between border-b border-slate-100 py-1">
+            <li key={entry.id} className="flex justify-between border-b border-slate-100 py-1 dark:border-slate-800">
               <span>{entry.date.slice(0, 10)} — {entry.description}</span>
-              <span className="text-slate-500">{entry.performedBy ?? ''}</span>
+              <span className="text-slate-500 dark:text-slate-400">{entry.performedBy ?? ''}</span>
             </li>
           ))}
         </ul>
@@ -58,12 +58,12 @@ export function MaintenanceLogSection({ printerId }: { printerId: string }) {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Add Entry
         </button>
       </form>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </section>
   );
 }

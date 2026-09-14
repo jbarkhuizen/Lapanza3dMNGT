@@ -96,9 +96,9 @@ export function LabourStepsListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Labour Steps</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Labour Steps</h1>
 
-      <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4">
+      <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4 dark:border-slate-700">
         <div className="flex flex-wrap items-end gap-3">
           <FormField id="add-name" label="Name" value={addForm.name} onChange={(e) => setAdd('name', e.target.value)} required />
           <FormField
@@ -112,7 +112,7 @@ export function LabourStepsListPage() {
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           >
             Add
           </button>
@@ -120,16 +120,16 @@ export function LabourStepsListPage() {
         <MoreDetailsToggle>
           <Checkbox id="add-active" label="Active" checked={addForm.active ?? true} onChange={(checked) => setAdd('active', checked)} />
         </MoreDetailsToggle>
-        {addError && <p className="text-sm text-red-600">{addError}</p>}
+        {addError && <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>}
       </form>
 
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load labour steps. Try refreshing the page.</p>}
-      {!isLoading && !isError && labourSteps?.length === 0 && <p className="text-slate-500">No labour steps yet.</p>}
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load labour steps. Try refreshing the page.</p>}
+      {!isLoading && !isError && labourSteps?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No labour steps yet.</p>}
       {!isLoading && !isError && labourSteps && labourSteps.length > 0 && (
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Name</th>
               <th className="py-2">Hourly rate</th>
               <th className="py-2">Active</th>
@@ -149,7 +149,7 @@ export function LabourStepsListPage() {
                     <td className="py-2">{step.hourlyRate}</td>
                     <td className="py-2">{step.active ? 'Yes' : 'No'}</td>
                     <td className="py-2 text-right">
-                      <button type="button" onClick={() => startEdit(step)} className="text-slate-600 underline">
+                      <button type="button" onClick={() => startEdit(step)} className="text-slate-600 underline dark:text-slate-400">
                         Edit
                       </button>
                     </td>
@@ -177,16 +177,16 @@ export function LabourStepsListPage() {
                           onChange={(checked) => setEdit('active', checked)}
                         />
                       </MoreDetailsToggle>
-                      {editError && <p className="text-sm text-red-600">{editError}</p>}
+                      {editError && <p className="text-sm text-red-600 dark:text-red-400">{editError}</p>}
                       <div className="flex gap-2">
                         <button
                           type="submit"
                           disabled={updateMutation.isPending}
-                          className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                          className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
                         >
                           Save
                         </button>
-                        <button type="button" onClick={cancelEdit} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+                        <button type="button" onClick={cancelEdit} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
                           Cancel
                         </button>
                       </div>

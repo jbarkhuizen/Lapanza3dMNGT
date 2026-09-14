@@ -134,20 +134,20 @@ export function ConsumablesListPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Consumables</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Consumables</h1>
 
-      <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4">
+      <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4 dark:border-slate-700">
         <div className="flex flex-wrap items-end gap-3">
           <FormField id="add-name" label="Name" value={addForm.name} onChange={(e) => setAdd('name', e.target.value)} required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="add-category" className="text-sm font-medium text-slate-700">
+            <label htmlFor="add-category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
               Category
             </label>
             <select
               id="add-category"
               value={addForm.category}
               onChange={(e) => setAdd('category', e.target.value as ConsumableFormInput['category'])}
-              className="rounded border border-slate-300 px-3 py-2 text-sm"
+              className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
             >
               {CONSUMABLE_CATEGORIES.map((category) => (
                 <option key={category} value={category}>
@@ -174,7 +174,7 @@ export function ConsumablesListPage() {
           <button
             type="submit"
             disabled={createMutation.isPending}
-            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
           >
             Add
           </button>
@@ -195,16 +195,16 @@ export function ConsumablesListPage() {
           />
           <FormField id="add-supplier" label="Supplier" value={addForm.supplier ?? ''} onChange={(e) => setAdd('supplier', e.target.value)} />
         </MoreDetailsToggle>
-        {addError && <p className="text-sm text-red-600">{addError}</p>}
+        {addError && <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>}
       </form>
 
-      {isLoading && <p className="text-slate-500">Loading…</p>}
-      {isError && <p className="text-red-600">Couldn't load consumables. Try refreshing the page.</p>}
-      {!isLoading && !isError && consumables?.length === 0 && <p className="text-slate-500">No consumables yet.</p>}
+      {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
+      {isError && <p className="text-red-600 dark:text-red-400">Couldn't load consumables. Try refreshing the page.</p>}
+      {!isLoading && !isError && consumables?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No consumables yet.</p>}
       {!isLoading && !isError && consumables && consumables.length > 0 && (
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 text-slate-500">
+            <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Name</th>
               <th className="py-2">Category</th>
               <th className="py-2">Unit</th>
@@ -228,7 +228,7 @@ export function ConsumablesListPage() {
                     <td className="py-2">{consumable.costPerUnit}</td>
                     <td className="py-2">{consumable.currentStock}</td>
                     <td className="py-2 text-right">
-                      <button type="button" onClick={() => startEdit(consumable)} className="text-slate-600 underline">
+                      <button type="button" onClick={() => startEdit(consumable)} className="text-slate-600 underline dark:text-slate-400">
                         Edit
                       </button>
                     </td>
@@ -240,14 +240,14 @@ export function ConsumablesListPage() {
                       <div className="flex flex-wrap items-end gap-3">
                         <FormField id="edit-name" label="Name" value={editForm.name} onChange={(e) => setEdit('name', e.target.value)} required />
                         <div className="flex flex-col gap-1">
-                          <label htmlFor="edit-category" className="text-sm font-medium text-slate-700">
+                          <label htmlFor="edit-category" className="text-sm font-medium text-slate-700 dark:text-slate-300">
                             Category
                           </label>
                           <select
                             id="edit-category"
                             value={editForm.category}
                             onChange={(e) => setEdit('category', e.target.value as ConsumableFormInput['category'])}
-                            className="rounded border border-slate-300 px-3 py-2 text-sm"
+                            className="rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                           >
                             {CONSUMABLE_CATEGORIES.map((category) => (
                               <option key={category} value={category}>
@@ -289,16 +289,16 @@ export function ConsumablesListPage() {
                         />
                         <FormField id="edit-supplier" label="Supplier" value={editForm.supplier ?? ''} onChange={(e) => setEdit('supplier', e.target.value)} />
                       </MoreDetailsToggle>
-                      {editError && <p className="text-sm text-red-600">{editError}</p>}
+                      {editError && <p className="text-sm text-red-600 dark:text-red-400">{editError}</p>}
                       <div className="flex gap-2">
                         <button
                           type="submit"
                           disabled={updateMutation.isPending}
-                          className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                          className="w-fit rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
                         >
                           Save
                         </button>
-                        <button type="button" onClick={cancelEdit} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm">
+                        <button type="button" onClick={cancelEdit} className="w-fit rounded bg-slate-100 px-3 py-2 text-sm dark:bg-slate-700 dark:text-slate-100">
                           Cancel
                         </button>
                       </div>
