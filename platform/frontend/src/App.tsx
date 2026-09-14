@@ -14,7 +14,6 @@ import { ConsumablesListPage } from './pages/consumables/ConsumablesListPage.js'
 import { MaterialsLibraryPage } from './pages/materials/MaterialsLibraryPage.js';
 import { MaterialComparePage } from './pages/materials/MaterialComparePage.js';
 import { PrintersListPage } from './pages/printers/PrintersListPage.js';
-import { PrinterFormPage } from './pages/printers/PrinterFormPage.js';
 import { ScannersListPage } from './pages/scanners/ScannersListPage.js';
 import { LaserMaterialsListPage } from './pages/laserMaterials/LaserMaterialsListPage.js';
 import { PremadeItemsListPage } from './pages/premadeItems/PremadeItemsListPage.js';
@@ -210,21 +209,11 @@ export function App() {
           }
         />
         <Route
-          path="/printers/new"
-          element={
-            <RequireAuth>
-              <AppShell>
-                <PrinterFormPage />
-              </AppShell>
-            </RequireAuth>
-          }
-        />
-        <Route
           path="/printers/:id"
           element={
             <RequireAuth>
               <AppShell>
-                <PrinterFormPage />
+                <PrintersListPage />
               </AppShell>
             </RequireAuth>
           }
