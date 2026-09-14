@@ -17,7 +17,11 @@ export async function requirePlatformAdminAuth(req: Request, res: Response, next
   }
 
   const token = req.cookies?.[env.sessionCookieName];
-  if (!token) {
+  // See requireTenantAuth.ts's matching comment: cookie-parser auto-JSON-
+  // parses any "j:..." cookie value, so `token` can be a non-string object
+  // here despite its declared type -- explicitly rejected rather than
+  // relying solely on getSession()'s own internal guard.
+  if (typeof token !== 'string' || token.length === 0) {
     return res.redirect('/api/admin/login');
   }
 

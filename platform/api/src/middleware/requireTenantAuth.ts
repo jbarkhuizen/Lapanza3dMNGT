@@ -38,7 +38,13 @@ export async function requireTenantAuth<P = ParamsDictionary>(
   }
 
   const token = req.cookies?.[env.sessionCookieName];
-  if (!token) {
+  // Not just a truthiness check: cookie-parser auto-JSON-parses any cookie
+  // value starting with "j:", so `token` can be a non-string object here
+  // despite its declared type. getSession() guards this internally too
+  // (the real security boundary — see session.ts), but every call site
+  // rejects it explicitly as well, so "not logged in" never silently
+  // depends on that internal guard alone.
+  if (typeof token !== 'string' || token.length === 0) {
     return res.status(401).json({ ok: false, error: 'Log in to continue.' });
   }
 

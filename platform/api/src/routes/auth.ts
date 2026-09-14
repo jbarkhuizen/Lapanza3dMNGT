@@ -210,7 +210,17 @@ export function createAuthRouter() {
 
   authRouter.post('/api/auth/logout', async (req, res) => {
     const token = req.cookies?.[env.sessionCookieName];
-    if (token) {
+    // Not just truthiness: cookie-parser auto-JSON-parses any "j:..."
+    // cookie value into an object. This route carries no auth middleware
+    // (a logout must work even with an expired/invalid session), so an
+    // unguarded `if (token)` here would let an unauthenticated request
+    // send a crafted cookie like `j:{"not":""}` and have destroySession()
+    // pass that OBJECT straight into Prisma's `where: { token }`, which
+    // accepts it as a filter rather than an exact match -- turning "log
+    // this one session out" into "delete every session in the database".
+    // destroySession() guards this internally too (the real boundary, see
+    // session.ts), but this route rejects it explicitly as well.
+    if (typeof token === 'string' && token.length > 0) {
       await destroySession(token);
     }
     res.clearCookie(env.sessionCookieName);

@@ -343,6 +343,44 @@ test('POST /api/auth/logout clears the session', async () => {
   assert.equal(res.status, 401);
 });
 
+// Regression test for a real vulnerability found via security audit:
+// cookie-parser (mounted in app.ts) unconditionally auto-JSON-parses any
+// cookie value starting with "j:" into an object -- so an UNAUTHENTICATED
+// request to this route (it carries no auth middleware, by design: a
+// logout must work even with an expired session) could send
+// `barkie_session=j:{"not":""}` and have that OBJECT reach Prisma's
+// `session.deleteMany({ where: { token } })` as a filter rather than an
+// exact match, deleting every session row in the database -- logging out
+// every tenant, team member, and platform admin on the entire platform in
+// one unauthenticated request. Confirmed exploitable before the
+// typeof-guards in auth.ts/session.ts/requireTenantAuth.ts/
+// requirePlatformAdminAuth.ts/admin.ts were added.
+test('POST /api/auth/logout with a JSON-cookie-encoded Prisma filter does not delete other tenants\' sessions', async () => {
+  const app = buildApp();
+  await registerAndVerify(app, 'victim@acmeprints.co.za');
+  const victimAgent = request.agent(app);
+  await victimAgent.post('/api/auth/login').send({
+    email: 'victim@acmeprints.co.za',
+    password: 'correct horse battery staple',
+  });
+  // Confirm the victim is actually logged in before the attack.
+  const beforeAttack = await victimAgent.get('/api/auth/me');
+  assert.equal(beforeAttack.status, 200);
+
+  // cookie-parser decodes the cookie header value before checking for the
+  // "j:" JSON marker, so the crafted filter must be URL-encoded exactly as
+  // a real browser would send it, not passed as a raw object.
+  const maliciousCookie = `barkie_session=${encodeURIComponent('j:{"not":""}')}`;
+  const attackRes = await request(app).post('/api/auth/logout').set('Cookie', maliciousCookie);
+  assert.equal(attackRes.status, 200, 'the unauthenticated logout call itself must still succeed harmlessly');
+
+  // The real assertion: the victim's genuine, unrelated session must still
+  // be valid afterward -- proving the crafted cookie did not touch it (let
+  // alone every other row in the table).
+  const afterAttack = await victimAgent.get('/api/auth/me');
+  assert.equal(afterAttack.status, 200, 'the victim must still be logged in after the attack request');
+});
+
 test('POST /api/auth/login rejects an unverified tenant', async () => {
   const app = buildApp();
   await request(app).post('/api/auth/register').send({
