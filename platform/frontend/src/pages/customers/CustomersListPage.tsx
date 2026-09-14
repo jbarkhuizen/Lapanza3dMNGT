@@ -173,7 +173,8 @@ export function CustomersListPage() {
       {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
       {!isLoading && !isError && customers?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No customers yet.</p>}
       {!isLoading && !isError && customers && customers.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Name</th>
@@ -257,7 +258,8 @@ export function CustomersListPage() {
               />
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

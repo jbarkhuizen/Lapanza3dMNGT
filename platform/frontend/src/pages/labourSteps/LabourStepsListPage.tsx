@@ -127,7 +127,8 @@ export function LabourStepsListPage() {
       {isError && <p className="text-red-600 dark:text-red-400">Couldn't load labour steps. Try refreshing the page.</p>}
       {!isLoading && !isError && labourSteps?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No labour steps yet.</p>}
       {!isLoading && !isError && labourSteps && labourSteps.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Name</th>
@@ -196,7 +197,8 @@ export function LabourStepsListPage() {
               />
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

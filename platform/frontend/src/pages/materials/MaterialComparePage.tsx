@@ -65,7 +65,8 @@ export function MaterialComparePage() {
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Compare materials</h1>
       {isLoading && <p className="text-slate-500 dark:text-slate-400">Loading…</p>}
       {!isLoading && materialA && materialB && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Point</th>
@@ -82,7 +83,8 @@ export function MaterialComparePage() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

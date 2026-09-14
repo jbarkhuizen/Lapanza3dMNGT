@@ -15,6 +15,7 @@ import {
   type FilamentFormInput,
 } from '../../api/filaments.js';
 import { omitBlankFields } from '../../lib/omitBlankFields.js';
+import { FILAMENT_MATERIAL_CATALOG } from '../../data/filamentCatalog.js';
 
 const emptyForm: FilamentFormInput = {
   brand: '',
@@ -62,6 +63,24 @@ export function FilamentsListPage() {
   }
   function setAddNumber(key: NumericFilamentField, raw: string) {
     setAdd(key, raw ? Number(raw) : undefined);
+  }
+
+  // Pre-fills material type, diameter, and a short printing-notes blurb
+  // from the material catalog (see src/data/filamentCatalog.ts) -- a
+  // convenience, never a data source. Deliberately leaves brand/cost
+  // fields untouched: those are genuinely specific to what the user
+  // actually bought, not something a generic "PETG" preset can know.
+  // Resets its own selection back to the placeholder after applying, same
+  // as the Printers page's catalog dropdown.
+  function applyMaterialPreset(materialType: string) {
+    const entry = FILAMENT_MATERIAL_CATALOG.find((m) => m.materialType === materialType);
+    if (!entry) return;
+    setAddForm((prev) => ({
+      ...prev,
+      materialType: entry.materialType,
+      diameterMm: entry.diameterMm,
+      notes: entry.notes,
+    }));
   }
 
   async function handleAdd(e: FormEvent) {
@@ -150,6 +169,31 @@ export function FilamentsListPage() {
       <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Filaments</h1>
 
       <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded border border-slate-200 p-4 dark:border-slate-700">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="add-material-preset" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Load material type from catalog (optional)
+          </label>
+          <select
+            id="add-material-preset"
+            defaultValue=""
+            onChange={(e) => {
+              if (e.target.value) applyMaterialPreset(e.target.value);
+              e.target.value = '';
+            }}
+            className="w-fit rounded border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          >
+            <option value="">Choose a material…</option>
+            {FILAMENT_MATERIAL_CATALOG.map((entry) => (
+              <option key={entry.materialType} value={entry.materialType}>
+                {entry.materialType}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Fills in material type, diameter, and typical print settings below — you still enter your own brand
+            and cost, since those vary by what you actually bought.
+          </p>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <FormField id="add-brand" label="Brand" value={addForm.brand} onChange={(e) => setAdd('brand', e.target.value)} required />
           <FormField
@@ -230,7 +274,8 @@ export function FilamentsListPage() {
       {isError && <p className="text-red-600 dark:text-red-400">Couldn't load filaments. Try refreshing the page.</p>}
       {!isLoading && !isError && filaments?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No filaments yet.</p>}
       {!isLoading && !isError && filaments && filaments.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Brand</th>
@@ -353,7 +398,8 @@ export function FilamentsListPage() {
               />
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

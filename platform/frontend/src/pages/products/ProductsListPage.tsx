@@ -157,7 +157,8 @@ export function ProductsListPage() {
       {isError && <p className="text-red-600 dark:text-red-400">Couldn't load products. Try refreshing the page.</p>}
       {!isLoading && !isError && products?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No products yet.</p>}
       {!isLoading && !isError && products && products.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Name</th>
@@ -249,7 +250,8 @@ export function ProductsListPage() {
               />
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

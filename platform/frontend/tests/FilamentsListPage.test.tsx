@@ -165,6 +165,32 @@ describe('FilamentsListPage — inline add form', () => {
     expect(screen.getByLabelText('Cost per kg')).toHaveValue(360);
     expect(screen.getByLabelText('Brand')).toHaveValue('');
   });
+
+  it('choosing a material from the catalog dropdown pre-fills material type, diameter, and notes, leaving brand/cost untouched', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, filaments: [] });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('Brand')).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Load material type from catalog/), { target: { value: 'PETG' } });
+
+    expect(screen.getByLabelText('Material type')).toHaveValue('PETG');
+    expect(screen.getByLabelText('Diameter')).toHaveValue('1.75');
+    expect(screen.getByLabelText('Brand')).toHaveValue('');
+
+    fireEvent.click(screen.getByRole('button', { name: '+ More details' }));
+    expect((screen.getByLabelText('Notes') as HTMLTextAreaElement).value).toContain('230-250');
+    expect(screen.getByLabelText('Cost per kg')).toHaveValue(null);
+  });
+
+  it('the material catalog dropdown resets to the placeholder after applying', async () => {
+    vi.spyOn(client, 'apiGet').mockResolvedValue({ ok: true, filaments: [] });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('Brand')).toBeInTheDocument());
+    const catalogSelect = screen.getByLabelText(/Load material type from catalog/) as HTMLSelectElement;
+    fireEvent.change(catalogSelect, { target: { value: 'PETG' } });
+    expect(catalogSelect.value).toBe('');
+  });
 });
 
 describe('FilamentsListPage — edit in place', () => {

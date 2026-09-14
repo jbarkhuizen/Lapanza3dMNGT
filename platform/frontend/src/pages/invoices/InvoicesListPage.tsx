@@ -55,7 +55,8 @@ export function InvoicesListPage() {
       {isError && <p className="text-red-600 dark:text-red-400">Couldn't load invoices. Try refreshing the page.</p>}
       {!isLoading && !isError && filteredInvoices?.length === 0 && <p className="text-slate-500 dark:text-slate-400">No invoices yet.</p>}
       {!isLoading && !isError && filteredInvoices && filteredInvoices.length > 0 && (
-        <table className="w-full text-left text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-slate-500 dark:border-slate-700 dark:text-slate-400">
               <th className="py-2">Number</th>
@@ -84,7 +85,8 @@ export function InvoicesListPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
       )}
     </div>
   );

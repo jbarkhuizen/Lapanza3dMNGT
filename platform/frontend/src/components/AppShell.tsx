@@ -145,6 +145,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { tenant, refetch, actorRole, actorName } = useAuth();
   const { data: subscription } = useSubscription();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Below the `lg` breakpoint the sidebar is an off-canvas drawer (fixed,
+  // slid out of view) instead of always taking up ~60% of a phone-width
+  // screen -- see the design note on NAV_ITEMS/this component for why a
+  // full responsive redesign wasn't needed, just this one structural
+  // change. Closed by default on every screen size; only ever matters
+  // below `lg`, since the `lg:` variants below force it open/static above
+  // that breakpoint regardless of this state.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const visibleNavItems = NAV_ITEMS.filter((item) => !item.adminOnly || actorRole === 'admin');
 
   async function handleLogout() {
@@ -159,13 +167,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
-      <nav className="flex w-56 flex-col gap-1 border-r border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <nav
+        className={`fixed inset-y-0 left-0 z-40 flex w-56 flex-col gap-1 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4 transition-transform duration-200 dark:border-slate-700 dark:bg-slate-900 lg:static lg:translate-x-0 ${
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <span className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-100">Barkie</span>
         {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
+            onClick={() => setMobileNavOpen(false)}
             className={({ isActive }) =>
               `rounded px-3 py-2 text-sm hover:bg-slate-200 dark:hover:bg-slate-600 ${
                 isActive
@@ -178,15 +198,29 @@ export function AppShell({ children }: { children: ReactNode }) {
           </NavLink>
         ))}
       </nav>
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-200 px-6 py-3 dark:border-slate-700">
-          <div className="flex flex-col">
-            <span className="text-sm text-slate-600 dark:text-slate-400">{tenant?.businessName}</span>
-            {actorName && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
-                Signed in as {actorName} ({actorRole === 'admin' ? 'Admin' : 'Sales'})
-              </span>
-            )}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open menu"
+              className="rounded p-1 text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700 lg:hidden"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <div className="flex flex-col">
+              <span className="text-sm text-slate-600 dark:text-slate-400">{tenant?.businessName}</span>
+              {actorName && (
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  Signed in as {actorName} ({actorRole === 'admin' ? 'Admin' : 'Sales'})
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

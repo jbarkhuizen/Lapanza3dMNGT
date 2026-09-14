@@ -56,6 +56,86 @@ describe('AppShell', () => {
     expect(screen.getByText('page content')).toBeInTheDocument();
   });
 
+  it('the sidebar drawer is closed by default and opens via the mobile menu button', async () => {
+    const queryClient = createTestQueryClient();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    // Closed by default: the nav is translated off-screen. `lg:` classes
+    // aren't evaluated by jsdom (no real viewport), so this checks the
+    // mobile-relevant class directly rather than visibility, which jsdom
+    // would report as visible regardless (CSS transforms don't hide
+    // content from testing-library's notion of "visible").
+    const nav = screen.getByText('Barkie').closest('nav')!;
+    expect(nav.className).toContain('-translate-x-full');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    expect(nav.className).toContain('translate-x-0');
+  });
+
+  it('clicking a nav link closes the mobile drawer', async () => {
+    const queryClient = createTestQueryClient();
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    const nav = screen.getByText('Barkie').closest('nav')!;
+    expect(nav.className).toContain('translate-x-0');
+
+    fireEvent.click(screen.getByRole('link', { name: 'Filaments' }));
+    expect(nav.className).toContain('-translate-x-full');
+  });
+
+  it('clicking the backdrop closes the mobile drawer', async () => {
+    const queryClient = createTestQueryClient();
+    const { container } = render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <ThemeProvider>
+              <AppShell>
+                <div>page content</div>
+              </AppShell>
+            </ThemeProvider>
+          </AuthProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Acme Prints')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    const backdrop = container.querySelector('.bg-black\\/30')!;
+    expect(backdrop).toBeInTheDocument();
+    fireEvent.click(backdrop);
+
+    const nav = screen.getByText('Barkie').closest('nav')!;
+    expect(nav.className).toContain('-translate-x-full');
+  });
+
   it('renders a theme toggle in the header and cycles its label when clicked', async () => {
     const queryClient = createTestQueryClient();
     render(
