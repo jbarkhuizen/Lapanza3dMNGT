@@ -57,9 +57,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg bg-white p-8 shadow">
-        <h1 className="text-xl font-semibold text-slate-900">Log in to Barkie</h1>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg bg-white p-8 shadow dark:bg-slate-800">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Log in to Barkie</h1>
         <FormField
           id="email"
           label="Email"
@@ -76,33 +76,33 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         {needsVerification && (
           <div className="flex flex-col gap-1">
             <button
               type="button"
               onClick={handleResend}
               disabled={resendStatus === 'sending'}
-              className="text-left text-sm text-slate-600 underline disabled:opacity-50"
+              className="text-left text-sm text-slate-600 underline disabled:opacity-50 dark:text-slate-400"
             >
               Resend verification email
             </button>
             {resendStatus === 'sent' && (
-              <p className="text-sm text-green-700">Verification email sent — check your inbox.</p>
+              <p className="text-sm text-green-700 dark:text-green-400">Verification email sent — check your inbox.</p>
             )}
             {resendStatus === 'error' && (
-              <p className="text-sm text-red-600">{resendError}</p>
+              <p className="text-sm text-red-600 dark:text-red-400">{resendError}</p>
             )}
           </div>
         )}
         <button
           type="submit"
           disabled={submitting}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Log in
         </button>
-        <Link to="/register" className="text-center text-sm text-slate-500 underline">
+        <Link to="/register" className="text-center text-sm text-slate-500 underline dark:text-slate-400">
           Need an account? Register
         </Link>
       </form>

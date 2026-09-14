@@ -34,21 +34,21 @@ export function VerifyEmailPage() {
   }, [token]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <div className="w-96 rounded-lg bg-white p-8 text-center shadow">
-        {status === 'verifying' && <p className="text-slate-600">Verifying your email…</p>}
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <div className="w-96 rounded-lg bg-white p-8 text-center shadow dark:bg-slate-800">
+        {status === 'verifying' && <p className="text-slate-600 dark:text-slate-400">Verifying your email…</p>}
         {status === 'verified' && (
           <>
-            <h1 className="text-xl font-semibold text-slate-900">Email verified</h1>
-            <Link to="/login" className="mt-2 inline-block text-sm text-slate-500 underline">
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Email verified</h1>
+            <Link to="/login" className="mt-2 inline-block text-sm text-slate-500 underline dark:text-slate-400">
               Log in to continue
             </Link>
           </>
         )}
         {status === 'error' && (
           <>
-            <p className="text-red-600">{error}</p>
-            <Link to="/login" className="mt-2 inline-block text-sm text-slate-500 underline">
+            <p className="text-red-600 dark:text-red-400">{error}</p>
+            <Link to="/login" className="mt-2 inline-block text-sm text-slate-500 underline dark:text-slate-400">
               Go to login
             </Link>
           </>

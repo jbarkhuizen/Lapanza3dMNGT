@@ -28,10 +28,10 @@ export function PlanSelectionPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isError || !plans) {
-    return <p className="text-red-600">Couldn't load plans.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load plans.</p>;
   }
 
   async function handleStart(plan: Plan) {
@@ -45,18 +45,18 @@ export function PlanSelectionPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-8 bg-slate-50 p-8">
+    <div className="flex min-h-screen flex-col items-center gap-8 bg-slate-50 p-8 dark:bg-slate-900">
       <div className="max-w-md text-center">
-        <h1 className="text-2xl font-semibold text-slate-900">{isUpdateMode ? 'Update payment method' : 'Choose a plan'}</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">{isUpdateMode ? 'Update payment method' : 'Choose a plan'}</h1>
         {isUpdateMode && (
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             We'll set up a fresh subscription with your new card — your current one is canceled automatically as part of this.
           </p>
         )}
       </div>
 
       <div className="flex gap-2">
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-slate-900 dark:text-slate-100">
           <input
             type="radio"
             name="provider"
@@ -65,7 +65,7 @@ export function PlanSelectionPage() {
           />
           PayFast
         </label>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex items-center gap-2 text-sm text-slate-900 dark:text-slate-100">
           <input
             type="radio"
             name="provider"
@@ -76,7 +76,7 @@ export function PlanSelectionPage() {
         </label>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       <div className="grid grid-cols-3 gap-6">
         {plans.map((plan) => {
@@ -84,16 +84,16 @@ export function PlanSelectionPage() {
           return (
             <div
               key={plan.id}
-              className={`flex w-64 flex-col gap-3 rounded-lg bg-white p-6 shadow ${isCurrentPlan ? 'ring-2 ring-slate-900' : ''}`}
+              className={`flex w-64 flex-col gap-3 rounded-lg bg-white p-6 shadow dark:bg-slate-800 ${isCurrentPlan ? 'ring-2 ring-slate-900 dark:ring-slate-100' : ''}`}
             >
-              {isCurrentPlan && <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your current plan</span>}
-              <h2 className="text-lg font-semibold text-slate-900">{plan.name}</h2>
-              <p className="text-2xl font-bold text-slate-900">R {plan.monthlyPrice}<span className="text-sm font-normal text-slate-500">/mo</span></p>
-              {!isUpdateMode && <p className="text-sm text-slate-500">14-day free trial</p>}
+              {isCurrentPlan && <span className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Your current plan</span>}
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.name}</h2>
+              <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">R {plan.monthlyPrice}<span className="text-sm font-normal text-slate-500 dark:text-slate-400">/mo</span></p>
+              {!isUpdateMode && <p className="text-sm text-slate-500 dark:text-slate-400">14-day free trial</p>}
               <button
                 onClick={() => handleStart(plan)}
                 disabled={checkoutMutation.isPending}
-                className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
               >
                 {isUpdateMode ? 'Update payment method' : 'Start free trial'}
               </button>

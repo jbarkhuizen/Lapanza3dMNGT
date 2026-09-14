@@ -14,24 +14,24 @@ export function BillingSettingsPage() {
   const cancelMutation = useCancelSubscription();
 
   if (isLoading) {
-    return <p className="text-slate-500">Loading…</p>;
+    return <p className="text-slate-500 dark:text-slate-400">Loading…</p>;
   }
   if (isError || !subscription) {
-    return <p className="text-red-600">Couldn't load your subscription.</p>;
+    return <p className="text-red-600 dark:text-red-400">Couldn't load your subscription.</p>;
   }
 
   return (
     <div className="flex max-w-md flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Billing</h1>
-      <div className="rounded-lg bg-white p-4 shadow">
-        <div className="text-lg font-medium text-slate-900">{subscription.plan.name}</div>
-        <div className="text-sm text-slate-500">R {subscription.plan.monthlyPrice}/mo</div>
-        <div className="mt-2 text-sm">{STATUS_LABELS[subscription.status] ?? subscription.status}</div>
+      <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">Billing</h1>
+      <div className="rounded-lg bg-white p-4 shadow dark:bg-slate-800">
+        <div className="text-lg font-medium text-slate-900 dark:text-slate-100">{subscription.plan.name}</div>
+        <div className="text-sm text-slate-500 dark:text-slate-400">R {subscription.plan.monthlyPrice}/mo</div>
+        <div className="mt-2 text-sm text-slate-900 dark:text-slate-100">{STATUS_LABELS[subscription.status] ?? subscription.status}</div>
       </div>
       {(subscription.status === 'active' || subscription.status === 'trialing' || subscription.status === 'past_due') && (
         <Link
           to="/plans?mode=update"
-          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
+          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-900"
         >
           Update payment method
         </Link>
@@ -40,7 +40,7 @@ export function BillingSettingsPage() {
         <button
           onClick={() => cancelMutation.mutate()}
           disabled={cancelMutation.isPending}
-          className="rounded bg-slate-100 px-4 py-2 text-sm text-slate-700 disabled:opacity-50"
+          className="rounded bg-slate-100 px-4 py-2 text-sm text-slate-700 disabled:opacity-50 dark:bg-slate-700 dark:text-slate-100"
         >
           Cancel subscription
         </button>
@@ -48,7 +48,7 @@ export function BillingSettingsPage() {
       {(subscription.status === 'canceled' || subscription.status === 'lapsed') && (
         <Link
           to="/plans"
-          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white"
+          className="rounded bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white dark:bg-slate-100 dark:text-slate-900"
         >
           Choose a plan
         </Link>

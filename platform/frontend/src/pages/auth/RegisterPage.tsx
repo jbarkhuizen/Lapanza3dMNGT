@@ -28,10 +28,10 @@ export function RegisterPage() {
 
   if (registered) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="w-96 rounded-lg bg-white p-8 text-center shadow">
-          <h1 className="text-xl font-semibold text-slate-900">Almost there</h1>
-          <p className="mt-2 text-sm text-slate-600">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+        <div className="w-96 rounded-lg bg-white p-8 text-center shadow dark:bg-slate-800">
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Almost there</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
             Check your email for a verification link to activate your account.
           </p>
         </div>
@@ -40,9 +40,9 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg bg-white p-8 shadow">
-        <h1 className="text-xl font-semibold text-slate-900">Create your account</h1>
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <form onSubmit={handleSubmit} className="flex w-80 flex-col gap-4 rounded-lg bg-white p-8 shadow dark:bg-slate-800">
+        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Create your account</h1>
         <FormField
           id="businessName"
           label="Business name"
@@ -74,15 +74,15 @@ export function RegisterPage() {
           minLength={10}
           required
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={submitting}
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
         >
           Register
         </button>
-        <Link to="/login" className="text-center text-sm text-slate-500 underline">
+        <Link to="/login" className="text-center text-sm text-slate-500 underline dark:text-slate-400">
           Already have an account? Log in
         </Link>
       </form>
